@@ -8,8 +8,8 @@ import { Button, GentleWarning, SourceChip } from "./primitives";
 export type AskEntry = { question: string; res: AskResponse; added?: boolean };
 
 const STEP_NAME: Record<RoadStep, string> = {
-  week1: "This week", week2: "Week 2", week4: "Week 4", week8: "Week 8",
-  final: "Plan B", deadline: "Your deadline",
+  week1: "Your steps", week2: "Your steps", week4: "Your steps", week8: "Your steps",
+  final: "Plan B", deadline: "How long you can stay",
 };
 
 /** Ask tab: one input. Exa answers from live sources; answers can be pinned to a roadmap step. */
@@ -40,7 +40,7 @@ export function AskPanel({
     <section aria-labelledby="ask-title" className="space-y-4 rounded-3xl border border-rule bg-card p-5 shadow-[0_6px_24px_rgba(28,42,69,0.06)] sm:p-7">
       <div>
         <h2 id="ask-title" className="font-serif text-2xl font-semibold">Ask, or tell us something new</h2>
-        <p className="mt-1 text-ink-soft">Exa looks answers up live (permits and benefits only from Migri, Kela, InfoFinland and Työmarkkinatori). If you mention something new, like “I&apos;ve been here 3 years”, your roadmap updates.</p>
+        <p className="mt-1 text-ink-soft">Exa looks answers up live (permits and benefits only from Migri, Kela, InfoFinland and Työmarkkinatori). If you mention something new, like “I&apos;ve been here 3 years”, your steps update.</p>
       </div>
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex flex-wrap gap-3">
         <label htmlFor="ask-input" className="sr-only">Your question</label>
@@ -61,7 +61,7 @@ export function AskPanel({
               {e.res.facts_update && Object.keys(e.res.facts_update).length > 0 && (
                 <p className="mt-2 rounded-lg bg-accent-soft px-3 py-2 text-accent-ink">
                   Updated your situation: {Object.keys(e.res.facts_update).map((k) => k.replaceAll("_", " ")).join(", ")}.
-                  Your roadmap was rebuilt.
+                  Your steps were updated.
                 </p>
               )}
               {e.res.sources.length > 0 && (
@@ -74,7 +74,7 @@ export function AskPanel({
                   {e.added ? (
                     <p className="text-sm font-bold text-verified">✓ Added to {STEP_NAME[e.res.suggested_roadmap_step]}</p>
                   ) : (
-                    <Button variant="chip" onClick={() => onAdd(i)}>Add to my roadmap · {STEP_NAME[e.res.suggested_roadmap_step]}</Button>
+                    <Button variant="chip" onClick={() => onAdd(i)}>Add to my steps · {STEP_NAME[e.res.suggested_roadmap_step]}</Button>
                   )}
                 </div>
               )}

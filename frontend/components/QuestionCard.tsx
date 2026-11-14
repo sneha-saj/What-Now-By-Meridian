@@ -82,7 +82,7 @@ export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete, phrases 
         <span aria-hidden="true" className="block">Let&apos;s figure out what&apos;s next.</span>
       </h1>
       <p className="text-xl text-ink-soft">
-        Tell me in a sentence or two what happened. I&apos;ll ask only what&apos;s missing, then build your roadmap from
+        Tell me in a sentence or two what happened. I&apos;ll ask only what&apos;s missing, then give you your steps, in order, from
         official Finnish sources, found live.
       </p>
       <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) onSubmit(text.trim()); }} className="space-y-4">
@@ -92,13 +92,13 @@ export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete, phrases 
           placeholder="For example: I worked as a cook in Helsinki for a year on a work permit. I was laid off last Friday."
           className="w-full rounded-2xl border border-ink/25 bg-card p-5 text-lg shadow-sm outline-none placeholder:text-ink-soft/80 focus:border-ink" />
         <div className="flex flex-wrap items-center gap-4">
-          <Button type="submit" disabled={busy || !text.trim()} className="text-lg">Build my roadmap</Button>
+          <Button type="submit" disabled={busy || !text.trim()} className="text-lg">Show my steps</Button>
           <span className="text-sm text-ink-soft">No account. Stays in this browser. Never asks for permit or passport numbers.</span>
         </div>
       </form>
       {saved.length > 0 && (
         <section aria-labelledby="saved-title" className="space-y-3 border-t border-rule pt-6">
-          <h2 id="saved-title" className="font-serif text-2xl font-semibold">Your saved roadmaps</h2>
+          <h2 id="saved-title" className="font-serif text-2xl font-semibold">Your saved steps</h2>
           <ul className="space-y-2">
             {saved.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rule bg-card px-4 py-3">

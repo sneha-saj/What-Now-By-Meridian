@@ -4,7 +4,7 @@ export type Phase = "tell" | "finding" | "roadmap";
 const PHASES: { id: Phase; label: string }[] = [
   { id: "tell", label: "Tell us" },
   { id: "finding", label: "Finding facts" },
-  { id: "roadmap", label: "Your roadmap" },
+  { id: "roadmap", label: "Your steps" },
 ];
 
 /** Shown only while the roadmap is being set up. Once it's built, the page switches to tabs. */

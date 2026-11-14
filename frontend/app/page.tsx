@@ -3,23 +3,19 @@ import { CheckIcon, GlobeIcon, PersonIcon } from "@/components/icons";
 const SOURCES = ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"];
 
 const GET = [
-  { n: "1", title: "Your exact deadline", text: "3 or 6 months, checked against Migri today." },
-  { n: "2", title: "3 steps this week", text: "Each one linked to its official source." },
+  { n: "1", title: "How long you can stay", text: "3 or 6 months, checked against Migri today." },
+  { n: "2", title: "Your next steps, in order", text: "Each one linked to its official source." },
   { n: "3", title: "Perks and support", text: "Job search certificate, city discounts and hiring incentives." },
 ];
 
-/** A small, labelled example of the roadmap: the signature amber "meridian" line from today to the deadline. */
-function RoadmapPreview() {
+/** A small, labelled example of the first steps, joined by the signature amber "meridian" line. */
+function StepsPreview() {
   return (
-    <figure aria-label="Example roadmap" className="relative rounded-[2rem] border border-rule bg-card p-6 shadow-[0_24px_60px_-24px_rgba(28,42,69,0.25)] sm:p-8">
-      <figcaption className="absolute -top-3 left-6 rounded-full bg-ink px-3 py-1 text-xs font-bold text-paper">Example roadmap</figcaption>
-      <p className="text-sm text-ink-soft">Your deadline</p>
-      <p className="font-serif text-4xl font-semibold leading-tight sm:text-5xl">1 February 2027</p>
-      <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-verified-soft px-3 py-1 text-sm font-bold text-verified">
-        <CheckIcon /> Checked against migri.fi today
-      </p>
+    <figure aria-label="Example steps" className="relative rounded-[2rem] border border-rule bg-card p-6 shadow-[0_24px_60px_-24px_rgba(28,42,69,0.25)] sm:p-8">
+      <figcaption className="absolute -top-3 left-6 rounded-full bg-ink px-3 py-1 text-xs font-bold text-paper">Example steps</figcaption>
+      <p className="font-serif text-3xl font-semibold leading-tight sm:text-4xl">Your first steps</p>
 
-      <ol className="relative mt-7 space-y-5">
+      <ol className="relative mt-6 space-y-5">
         <span aria-hidden className="animate-draw-down absolute bottom-2 left-[9px] top-2 w-[2px] rounded bg-accent" />
         {[
           { t: "Register as a jobseeker", s: "tyomarkkinatori.fi" },
@@ -54,7 +50,7 @@ export default function Home() {
             <span className="text-accent-ink">Let&apos;s figure out</span> what&apos;s next.
           </h1>
           <p className="mt-6 max-w-md text-xl text-ink-soft">
-            How long you can stay, what to do this week, and the perks and support you can get.
+            How long you can stay, your next steps in order, and the perks and support you can get.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
             <a href="/start" className="inline-flex min-h-14 items-center gap-2 rounded-2xl bg-ink px-7 text-lg font-bold text-paper shadow-sm hover:bg-ink/90">
@@ -66,7 +62,7 @@ export default function Home() {
             <span aria-hidden>🇫🇮</span> For people in Finland. More countries coming.
           </p>
         </div>
-        <RoadmapPreview />
+        <StepsPreview />
       </section>
 
       {/* What you get: three short tiles */}
@@ -82,18 +78,6 @@ export default function Home() {
         </ul>
       </section>
 
-      {/* Coming soon: not built yet, so no button and no backend */}
-      <section aria-labelledby="soon-title" className="mx-auto max-w-6xl px-5 pt-14 sm:px-8">
-        <div className="rounded-3xl border border-dashed border-rule bg-card p-6 sm:p-8">
-          <span className="rounded-full bg-accent-soft px-3 py-1 text-sm font-bold text-accent-ink">Coming soon</span>
-          <h2 id="soon-title" className="mt-3 font-serif text-2xl font-semibold">Find your way in</h2>
-          <p className="mt-1 max-w-2xl text-ink-soft">
-            Many jobs in Finland are filled through people you know. Soon What Now? will find growing companies and the
-            people who can refer you, with a message ready to send.
-          </p>
-        </div>
-      </section>
-
       {/* How it works: one line */}
       <section aria-label="How it works" className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
         <ol className="flex flex-col gap-4 text-lg sm:flex-row sm:items-center sm:gap-3">
@@ -101,7 +85,7 @@ export default function Home() {
           <li aria-hidden className="hidden h-px flex-1 bg-accent sm:block" />
           <li className="flex items-center gap-2"><GlobeIcon className="h-5 w-5 text-verified" /> Exa searches official sites live</li>
           <li aria-hidden className="hidden h-px flex-1 bg-accent sm:block" />
-          <li className="flex items-center gap-2"><CheckIcon className="h-5 w-5 text-verified" /> Your roadmap, every fact sourced</li>
+          <li className="flex items-center gap-2"><CheckIcon className="h-5 w-5 text-verified" /> Your next steps, every fact sourced</li>
         </ol>
 
         <div className="mt-12 flex flex-col gap-3 border-t border-rule pt-6 text-sm text-ink-soft sm:flex-row sm:items-center sm:justify-between">

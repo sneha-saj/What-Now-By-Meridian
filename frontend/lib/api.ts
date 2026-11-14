@@ -10,6 +10,10 @@ export type Facts = {
   field?: string | null;
   studied_in_finland?: boolean | null;
   family_in_finland?: boolean | null;
+  unemployment_fund?: "yes" | "no" | "not_sure" | null;
+  registered_jobseeker?: "yes" | "no" | null;
+  /** Personal questions Gemini picked for this person, asked before the steps. */
+  to_ask?: string[] | null;
 };
 
 export type Source = { title: string; url: string; highlight?: string | null; published?: string | null };
@@ -168,6 +172,25 @@ export async function chatStream(req: ChatRequest, onEvent: (e: StreamEvent) => 
     return await streamPost<ChatResponse>("/chat/stream", req, onEvent);
   } catch {
     return api.chat(req);
+  }
+}
+
+export type StepsUpdateRequest = { facts: Facts; plan: PlanResponse; step: number; note: string };
+export type StepsUpdateResponse = {
+  plan: PlanResponse;
+  facts: Facts;
+  facts_update: Partial<Facts>;
+  updated_from: number;
+  mock: boolean;
+  message?: string;
+};
+
+/** POST /steps/update/stream: add info to one step; it and the steps after it are rewritten (live Exa events first). */
+export async function stepsUpdateStream(req: StepsUpdateRequest, onEvent: (e: StreamEvent) => void): Promise<StepsUpdateResponse> {
+  try {
+    return await streamPost<StepsUpdateResponse>("/steps/update/stream", req, onEvent);
+  } catch {
+    return post<StepsUpdateResponse>("/steps/update", req);
   }
 }
 

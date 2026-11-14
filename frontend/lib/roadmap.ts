@@ -1,32 +1,7 @@
-import type { Deadline, ExaEvent, PlanResponse, RoadStep, Source, TimelineStep } from "./api";
+import type { ExaEvent, RoadStep } from "./api";
 
+/** Where an Exa search belongs: a step group, or the "how long you can stay" header ("deadline"). */
 export type NodeId = "today" | RoadStep;
-export type NodeState = "searching" | "found" | "done";
-
-/** The one live, specific thing Exa found for a step (name/date/link): what judges should notice. */
-export type LiveFind = { label: string; url: string; date?: string | null; note?: string };
-
-export type RoadNode = {
-  id: NodeId;
-  label: string;
-  startsOn?: Date;
-  title: string;
-  state: NodeState;
-  live: boolean; // has a live find from Exa (otherwise "saved guide")
-  liveFind?: LiveFind;
-  searchingText?: string;
-  source?: Source;
-};
-
-export type RoadmapInput = {
-  today: Date;
-  ready: boolean;
-  deadline?: Deadline;
-  plan?: PlanResponse;
-  searching: Searching;
-  doneActions: Record<number, boolean>;
-  doneNodes: Partial<Record<NodeId, boolean>>;
-};
 
 /** Which roadmap node each kind of Exa search feeds. */
 const PURPOSE_NODE: Record<string, NodeId> = {
@@ -55,93 +30,6 @@ export function applyExaEvent(s: Searching, e: ExaEvent): Searching {
     return { ...s, [node]: { pending: cur.pending + 1, text } };
   }
   return { ...s, [node]: { ...cur, pending: Math.max(0, cur.pending - 1) } };
-}
-
-export function timelineFor(plan: PlanResponse | undefined, label: string): TimelineStep | undefined {
-  return plan?.timeline.find((t) => t.week.toLowerCase() === label.toLowerCase());
-}
-
-const asFind = (s?: Source, note?: string): LiveFind | undefined =>
-  s ? { label: s.title, url: s.url, date: s.published, note } : undefined;
-
-/** The live, specific item for each step, only when it really came from Exa (not the saved guide). */
-export function liveFindFor(id: NodeId, i: RoadmapInput): LiveFind | undefined {
-  const planLive = !!i.plan && !i.plan.mock;
-  if (id === "deadline")
-    return i.deadline?.check_status === "verified"
-      ? { label: "Migri: protection period after your job ends", url: i.deadline.source.url, note: "Checked against migri.fi today" }
-      : undefined;
-  if (!planLive) return undefined;
-  if (id === "week1") return asFind(i.plan!.this_week[0]?.sources[0]);
-  if (id === "final") return asFind(i.plan!.plan_b[0]?.sources[0]);
-  const label = { week2: "Week 2", week4: "Week 4", week8: "Week 8" }[id as "week2" | "week4" | "week8"];
-  return label ? asFind(timelineFor(i.plan, label)?.sources[0]) : undefined;
-}
-
-const DAY = 86_400_000;
-// The roadmap stays short: Today → this week's 3 steps → your deadline (Plan B lives in the deadline step).
-// Perks and support are on the Opportunities tab.
-const WEEKS: { id: NodeId; week: number; label: string }[] = [
-  { id: "week1", week: 1, label: "This week" },
-];
-
-export function buildNodes(i: RoadmapInput): RoadNode[] {
-  const { today, ready, deadline, plan, searching, doneActions, doneNodes } = i;
-  if (!ready) return [];
-  const end = deadline?.deadline_date ? new Date(deadline.deadline_date + "T00:00:00") : null;
-  const nodes: RoadNode[] = [{ id: "today", label: "Today", startsOn: today, title: "Where you are now", state: "found", live: false }];
-
-  for (const w of WEEKS) {
-    const startsOn = w.week ? new Date(today.getTime() + (w.week - 1) * 7 * DAY) : end ? new Date(end.getTime() - 14 * DAY) : undefined;
-    if (end && startsOn && w.week > 1 && startsOn > end) continue; // after the deadline
-    const busy = (searching[w.id]?.pending ?? 0) > 0;
-    let has = false;
-    let title: string = w.label;
-    let source: Source | undefined;
-    if (w.id === "week1") {
-      has = !!plan?.this_week.length;
-      title = "3 things to do this week";
-      source = plan?.this_week[0]?.sources[0];
-    } else if (w.id === "final") {
-      const t = timelineFor(plan, "Final weeks");
-      has = !!t || !!plan?.plan_b.length || !!plan?.plan_b_note;
-      title = plan?.plan_b.length ? "Your Plan B, if no job comes in time" : t?.steps[0] ?? "Final weeks";
-      source = plan?.plan_b[0]?.sources[0] ?? t?.sources[0];
-    } else {
-      const t = timelineFor(plan, w.label);
-      has = !!t;
-      title = t?.steps[0] ?? w.label;
-      source = t?.sources[0];
-    }
-    if (!has && !busy) continue;
-    const find = has ? liveFindFor(w.id, i) : undefined;
-    const allDone = w.id === "week1" ? !!plan && plan.this_week.every((_, k) => doneActions[k]) : !!doneNodes[w.id];
-    nodes.push({
-      id: w.id, label: w.label, startsOn, title,
-      state: busy && !has ? "searching" : allDone ? "done" : "found",
-      live: !!find, liveFind: find, searchingText: searching[w.id]?.text, source,
-    });
-  }
-
-  const deadlineBusy = (searching.deadline?.pending ?? 0) > 0;
-  if (deadline || deadlineBusy) {
-    const find = liveFindFor("deadline", i);
-    nodes.push({
-      id: "deadline", label: "Your deadline", startsOn: end ?? undefined,
-      title: deadline?.deadline_date ? "Your deadline" : "Your permit",
-      state: deadline ? "found" : "searching",
-      live: !!find, liveFind: find,
-      searchingText: searching.deadline?.text ?? "Reading migri.fi",
-      source: deadline?.source,
-    });
-  }
-  return nodes;
-}
-
-/** True when every step after "Today" has a live find. */
-export function allLive(nodes: RoadNode[]) {
-  const steps = nodes.filter((n) => n.id !== "today");
-  return steps.length > 0 && steps.every((n) => n.live);
 }
 
 export function firstSentence(text?: string | null, max = 220): string | null {

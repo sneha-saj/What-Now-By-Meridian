@@ -25,7 +25,7 @@ export function HowWeKnow({ embedded = false }: { embedded?: boolean }) {
         <p className="text-calm-700">We store each rule with its official source. Once a day, Exa reads the official Migri page and Gemini checks that it still says the same thing. If something looks different, we warn you instead of guessing.</p>
       </header>
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Finland deadline rules</h2>
+        <h2 className="text-xl font-semibold">How long you can stay: Finland's rules</h2>
         {error && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">We couldn’t load the latest rule checks. Please check Migri directly.</p>}
         <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-calm-100">
           <table className="w-full min-w-[720px] text-left text-sm">

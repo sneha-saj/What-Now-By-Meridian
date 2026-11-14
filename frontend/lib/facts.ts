@@ -1,6 +1,6 @@
 import type { Facts } from "./api";
 
-export type Field = keyof Facts;
+export type Field = Exclude<keyof Facts, "to_ask" | "job_end_date_approximate">;
 export type Choice = { value: string; label: string };
 export type FieldDef = { id: Field; label: string; required?: boolean; kind: "choice" | "date" | "text"; choices?: Choice[] };
 
@@ -23,7 +23,15 @@ export const FIELDS: FieldDef[] = [
   { id: "field", label: "Work", kind: "text" },
   { id: "studied_in_finland", label: "Studied in Finland", kind: "choice", choices: YES_NO },
   { id: "family_in_finland", label: "Family in Finland", kind: "choice", choices: YES_NO },
+  { id: "unemployment_fund", label: "Unemployment fund", kind: "choice", choices: [
+    { value: "yes", label: "In an unemployment fund" }, { value: "no", label: "Not in an unemployment fund" },
+    { value: "not_sure", label: "Unemployment fund: not sure" }] },
+  { id: "registered_jobseeker", label: "Registered as a jobseeker", kind: "choice", choices: [
+    { value: "yes", label: "Registered as a jobseeker" }, { value: "no", label: "Not registered yet" }] },
 ];
+
+/** Personal questions asked when Gemini didn't pick any (same as DEFAULT_PERSONAL in the backend config). */
+export const DEFAULT_PERSONAL: Field[] = ["city", "field", "unemployment_fund"];
 
 export function formatShortDate(iso: string) {
   const d = new Date(iso + (iso.length === 10 ? "T00:00:00" : ""));

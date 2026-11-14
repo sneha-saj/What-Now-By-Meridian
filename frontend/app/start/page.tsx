@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  chatStream, opportunitiesStream, type ChatRequest, type OpportunitiesResponse, type Deadline, type Facts, type PlanResponse, type Question,
+  chatStream, opportunitiesStream, stepsUpdateStream, type ChatRequest, type OpportunitiesResponse, type Deadline, type Facts, type PlanResponse, type Question,
   type StreamEvent,
 } from "@/lib/api";
 import type { Field } from "@/lib/facts";
 import { toLogLine, type LogLine } from "@/lib/activity";
-import { allLive, applyExaEvent, buildNodes, type NodeId, type Searching } from "@/lib/roadmap";
+import { applyExaEvent, type Searching } from "@/lib/roadmap";
 import { ActivityLog } from "@/components/ActivityLog";
 import { Checklist } from "@/components/Checklist";
 import { AskPanel, type AskEntry } from "@/components/AskPanel";
@@ -15,8 +15,7 @@ import { FlowProgress } from "@/components/FlowProgress";
 import { HowWeKnow } from "@/components/HowWeKnow";
 import { Opportunities } from "@/components/Opportunities";
 import { QuestionCard, Welcome } from "@/components/QuestionCard";
-import { Legend, Roadmap, type AddedItem } from "@/components/Roadmap";
-import { SituationStrip } from "@/components/SituationStrip";
+import { Legend, Steps, type AddedItem } from "@/components/Steps";
 import { deleteSaved, listSaved, saveRoadmap, type SavedRoadmap } from "@/lib/saved";
 import { FIELDS, display } from "@/lib/facts";
 import { Button, GentleWarning, cx } from "@/components/primitives";
@@ -32,6 +31,7 @@ const HEADLINE_PHRASES = [
   "Made redundant?",
 ];
 
+type StepAnchor = "week1" | "deadline";
 type Tab = "roadmap" | "opportunities" | "how";
 
 /** Everything about this person lives in this browser tab only (sessionStorage). No accounts. */
@@ -44,10 +44,9 @@ type Saved = {
   deadline?: Deadline;
   plan?: PlanResponse;
   outOfScope?: { message: string; link?: string; links?: { title: string; url: string }[] };
-  doneActions: Record<number, boolean>;
-  doneNodes: Partial<Record<NodeId, boolean>>;
+  doneSteps: Record<string, boolean>;
   asks: AskEntry[];
-  added: Partial<Record<NodeId, AddedItem[]>>;
+  added: Partial<Record<StepAnchor, AddedItem[]>>;
   opp?: Partial<OpportunitiesResponse>;
   oppFor?: string; // the facts the opportunities were found for
   savedId?: string; // set when this roadmap came from (or was saved to) the saved list
@@ -55,7 +54,7 @@ type Saved = {
 
 const KEY = "what-now-roadmap-v2";
 const empty = (): Saved => ({
-  started: false, facts: {}, built: false, tab: "roadmap", doneActions: {}, doneNodes: {}, asks: [], added: {},
+  started: false, facts: {}, built: false, tab: "roadmap", doneSteps: {}, asks: [], added: {},
 });
 
 function load(): Saved {
@@ -68,7 +67,7 @@ function load(): Saved {
 }
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "roadmap", label: "Roadmap" },
+  { id: "roadmap", label: "Steps" },
   { id: "opportunities", label: "Opportunities" },
   { id: "how", label: "How we know this" },
 ];
@@ -84,10 +83,13 @@ export default function StartPage() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [editing, setEditing] = useState<Field | null>(null);
   const [qVersion, setQVersion] = useState(0);
-  const [focus, setFocus] = useState<{ id: NodeId; at: number } | null>(null);
+  const [focus, setFocus] = useState<{ id: StepAnchor; at: number } | null>(null);
+  const [updatingFrom, setUpdatingFrom] = useState<number | null>(null);
+  const [stepMsg, setStepMsg] = useState<{ n: number; text: string } | null>(null);
   const [saved, setSaved] = useState<SavedRoadmap<Saved>[]>([]);
   useEffect(() => { setSaved(listSaved<Saved>()); }, []);
   const stripRef = useRef<HTMLDivElement>(null);
+  const sideRef = useRef<HTMLDivElement>(null); // the checklist beside the steps
 
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("tab") as Tab | null;
@@ -171,10 +173,26 @@ export default function StartPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, s.tab, s.built, factsKey]);
 
-  const nodes = useMemo(() => buildNodes({
-    today: new Date(), ready: s.built || !!s.deadline, deadline: s.deadline, plan: s.plan,
-    searching, doneActions: s.doneActions, doneNodes: s.doneNodes,
-  }), [s, searching]);
+  /** Add info to step n: that step and the ones after it are rewritten live; earlier steps stay. */
+  async function addInfo(n: number, note: string) {
+    if (!s.plan) return;
+    setUpdatingFrom(n);
+    setStepMsg(null);
+    setError(null);
+    setSearching({});
+    try {
+      const res = await stepsUpdateStream({ facts: s.facts, plan: s.plan, step: n, note }, (e) => {
+        const line = toLogLine(e);
+        if (line) setLog((cur) => [...cur, line].slice(-60));
+      });
+      update({ plan: res.plan, deadline: res.plan.deadline, facts: res.facts });
+      setStepMsg({ n, text: res.message ?? "Updated with what you added." });
+    } catch {
+      setError("Couldn't update your steps right now. Please try again in a moment.");
+    } finally {
+      setUpdatingFrom(null);
+    }
+  }
 
   function clearAll() {
     try { window.sessionStorage.removeItem(KEY); } catch {}
@@ -188,7 +206,7 @@ export default function StartPage() {
 
   function pickExactDate() {
     setEditing("job_end_date");
-    stripRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    (sideRef.current ?? stripRef.current)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   if (!loaded) return null;
@@ -204,6 +222,8 @@ export default function StartPage() {
     );
 
   const phase = s.built ? "roadmap" : finding ? "finding" : "tell";
+  const askingQuestion = !s.outOfScope && !s.built && !finding && !!s.question;
+  const editFact = (field: Field, value: Facts[Field]) => send({ edited_facts: { [field]: value } as Partial<Facts> });
   const tab: Tab = (TABS.some((t) => t.id === s.tab) ? s.tab : "roadmap") as Tab;
 
   // Ask lives inside the Roadmap and Opportunities tabs, so answers appear where you are.
@@ -219,7 +239,7 @@ export default function StartPage() {
       onAdd={(i) => {
         const e = s.asks[i];
         const suggested = e.res.suggested_roadmap_step!;
-        const step: NodeId = suggested === "deadline" || suggested === "final" ? "deadline" : "week1";
+        const step: StepAnchor = suggested === "deadline" || suggested === "final" ? "deadline" : "week1";
         goTab("roadmap");
         update({
           asks: s.asks.map((x, k) => (k === i ? { ...x, added: true } : x)),
@@ -234,7 +254,7 @@ export default function StartPage() {
     const when = s.deadline?.deadline_date
       ? new Date(s.deadline.deadline_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
       : null;
-    return [permit, s.facts.city, when && `deadline ${when}`].filter(Boolean).join(" · ");
+    return [permit, s.facts.city, when && `stay until ${when}`].filter(Boolean).join(" · ");
   };
   const newSituation = (
     <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
@@ -248,7 +268,7 @@ export default function StartPage() {
               setSaved(listSaved<Saved>());
               clearAll();
             }}>
-              {s.savedId ? "Save changes" : "Save this roadmap"}
+              {s.savedId ? "Save changes" : "Save these steps"}
             </Button>
           )}
           <Button variant="chip" onClick={clearAll}>Discard</Button>
@@ -265,15 +285,14 @@ export default function StartPage() {
       Next: perks and support for jobseekers <span aria-hidden>→</span>
     </button>
   );
-  const live = allLive(nodes);
-  const anyLive = nodes.some((n) => n.live);
+  const live = !!s.plan && !s.plan.mock;
 
   return (
     <main id="main" className="mx-auto max-w-6xl space-y-8 px-5 pb-16 pt-8 sm:px-8 sm:pt-10">
       {/* Row 1: setup progress, or tabs once the roadmap exists; "New situation" is always here */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         {s.built ? (
-          <nav aria-label="Your roadmap sections" className="min-w-0 flex-1 border-b border-rule">
+          <nav aria-label="Your sections" className="min-w-0 flex-1 border-b border-rule">
             <ul className="-mb-px flex flex-wrap gap-1 sm:gap-2">
               {TABS.map((t) => {
                 const current = tab === t.id;
@@ -317,7 +336,7 @@ export default function StartPage() {
                 </li>
               ))}
             </ul>
-            <p className="text-ink-soft">Got something wrong? Tap a detail below to change it, or start over.</p>
+            <p className="text-ink-soft">Got something wrong? Edit a detail below, or start over.</p>
           </section>
         ) : !s.built ? (
           finding ? (
@@ -336,7 +355,7 @@ export default function StartPage() {
                   onText={(text) => send({ messages: [{ role: "user", text }] })} />
                 <ActivityLog lines={log} busy={busy} last={3} />
               </div>
-              <Checklist facts={s.facts} />
+              <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact} />
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-4">
@@ -348,28 +367,39 @@ export default function StartPage() {
           <div className="space-y-6">
             <div id={`panel-${tab}`}>
               {tab === "roadmap" && (
-                <div className="space-y-6">
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <div className="min-w-0 space-y-6">
                   <div>
-                    <h2 className="font-serif text-3xl font-semibold sm:text-4xl">Your roadmap</h2>
+                    <h2 className="font-serif text-3xl font-semibold sm:text-4xl">Your steps</h2>
                     <p className="mt-2 text-lg text-ink-soft">
                       {busy ? "Updating with your change…"
-                        : live ? "Everything here was found live today."
-                        : anyLive ? "Most of this was found live today. Steps marked “saved guide” use our checked fallback."
+                        : live ? "In order, found live today. Add info to any step and it updates, with the steps after it."
                         : "Live data isn't available right now, so these steps use our checked saved guide."}
                     </p>
                   </div>
                   {ask}
-                  {busy && <ActivityLog lines={log} busy={busy} last={3} />}
-                  <Roadmap
-                    nodes={nodes}
-                    data={s}
-                    onToggleAction={(i) => update({ doneActions: { ...s.doneActions, [i]: !s.doneActions[i] } })}
-                    onToggleNode={(id) => update({ doneNodes: { ...s.doneNodes, [id]: !s.doneNodes[id] } })}
+                  {(busy || updatingFrom !== null) && <ActivityLog lines={log} busy last={3} />}
+                  <Steps
+                    plan={s.plan}
+                    deadline={s.deadline}
+                    live={live}
+                    done={s.doneSteps ?? {}}
+                    added={s.added}
+                    updatingFrom={updatingFrom}
+                    message={stepMsg}
+                    searchingText={updatingFrom !== null ? log.at(-1)?.text : undefined}
+                    onToggleDone={(key) => update({ doneSteps: { ...s.doneSteps, [key]: !s.doneSteps?.[key] } })}
+                    onAddInfo={addInfo}
                     onPickExactDate={pickExactDate}
                     focus={focus}
                   />
                   {opportunitiesHint}
                   <Legend />
+                </div>
+                {/* What we know so far: on the right of the steps (below them on small screens) */}
+                <div ref={sideRef} className="scroll-mt-24 lg:sticky lg:top-6">
+                  <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact} />
+                </div>
                 </div>
               )}
               {tab === "opportunities" && (
@@ -397,10 +427,12 @@ export default function StartPage() {
         )}
       </div>
 
-      {/* Row 3: your situation, one line, tap to edit */}
+      {/* Row 3: what we know so far, editable (beside the question instead while questions are being asked) */}
       <div ref={stripRef} className="space-y-3">
-        <SituationStrip facts={s.facts} open={editing} onOpen={setEditing} showSearchFields={s.built && tab === "opportunities"}
-          onEdit={(field: Field, value) => send({ edited_facts: { [field]: value } as Partial<Facts> })} />
+        {!askingQuestion && !(s.built && tab === "roadmap") && (
+          <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact} wide
+            also={s.built && tab === "opportunities" ? ["city"] : []} />
+        )}
         {error && <GentleWarning>{error}</GentleWarning>}
       </div>
     </main>

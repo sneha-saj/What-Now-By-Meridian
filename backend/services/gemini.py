@@ -112,8 +112,7 @@ class Extracted(BaseModel):
 
 EXTRACT_PROMPT = """You read a short message from someone who lost (or is losing) their job and extract facts.
 Use null whenever something is not stated or unclear. Never guess. Today is {today}.
-- lost_job: true if they lost their job or are about to (laid off, let go, fired, dismissed, terminated,
-  made redundant, position eliminated, contract ending, notice); false if the
+- lost_job: true if they lost their job or are about to (laid off, fired, contract ending, notice); false if the
   message is clearly about something else; null if it doesn't say
 - job_was_in_finland: false only if they clearly say the job was outside Finland
 - citizenship_group: "eu_eea" (EU/EEA/Swiss citizen) | "other" (any other country) | "unknown"
@@ -211,35 +210,6 @@ def write_plan(facts: dict, deadline: dict, sources: list[dict], today: str, can
 
 # ---------- /opportunities ----------
 
-class _OppJob(BaseModel):
-    row_id: str
-    company: str
-    signal: str
-    why_it_fits: str
-    title_short: Optional[str] = None
-    why_short: Optional[str] = None
-
-
-class _OppSupport(BaseModel):
-    row_id: str
-    name: str
-    what_it_is: str
-    why_it_may_apply: str
-    plausible: bool
-    title_short: Optional[str] = None
-    why_short: Optional[str] = None
-
-
-class _OppEvent(BaseModel):
-    row_id: str
-    name: str
-    date: Optional[str] = None
-    place: Optional[str] = None
-    why_relevant: str
-    title_short: Optional[str] = None
-    why_short: Optional[str] = None
-
-
 class _OppCertificate(BaseModel):
     row_id: str
     how_to_get: str
@@ -266,25 +236,16 @@ class _OppIncentive(BaseModel):
 
 
 class OpportunityNotes(BaseModel):
-    hidden_jobs: list[_OppJob]
-    support: list[_OppSupport]
-    events: list[_OppEvent]
     certificate: Optional[_OppCertificate] = None
     discounts: list[_OppDiscount]
     incentives: list[_OppIncentive]
 
 
-OPPORTUNITIES_PROMPT = """You help a person in Finland who lost their job find opportunities. Use ONLY the rows below.
+OPPORTUNITIES_PROMPT = """You help a person in Finland who lost their job find perks and support. Use ONLY the rows below.
 Cite each item by its row id. Leave a row out if it doesn't clearly fit. Never invent names, dates or discounts.
 Today is {today}. Plain language, one sentence per field, no markdown.
 For every item also give title_short (max 6 words) and why_short (max 12 words): complete phrases for a compact card.
 
-hidden_jobs: rows marked [hiring] that describe a real hiring signal (new opening, expansion, new location,
-  funding) at a company that could hire this person. company, signal (what changed), why_it_fits.
-support: rows marked [support]. plausible=true only if the eligibility text plausibly matches the person.
-  why_it_may_apply must say "may apply" and never claim they are eligible.
-events: rows marked [event] that are an event within 30 days of today. date as YYYY-MM-DD only if the row
-  states it, place if stated, why_relevant.
 certificate: the [perks] row that explains how to get a job search certificate / proof of jobseeker status,
   with how_to_get in plain steps. null if no row explains it.
 discounts: [perks] rows that state a concrete discount for unemployed jobseekers (sports, swimming, museums,
@@ -300,11 +261,10 @@ ROWS:
 
 
 def write_opportunities(facts: dict, deadline_months, rows: list[dict], today: str) -> dict | None:
-    tag = {"hiring signals": "hiring", "support": "support", "events": "event", "perks": "perks"}
-    lines = "\n".join(f"[{r['id']}] [{tag.get(r['purpose'], r['purpose'])}] {r['title']} ({r['url']}"
+    lines = "\n".join(f"[{r['id']}] [{r['purpose']}] {r['title']} ({r['url']}"
                       f"{', ' + r['published'] if r.get('published') else ''})\n{(r.get('highlight') or '')[:500]}"
                       for r in rows)
     return structured_call(
         OPPORTUNITIES_PROMPT.format(today=today, facts=facts, rows=lines or "(none)",
                                     deadline_months=deadline_months or "unknown"),
-        OpportunityNotes, f"sorting {len(rows)} live finds into opportunities")
+        OpportunityNotes, f"sorting {len(rows)} live finds into perks and support")

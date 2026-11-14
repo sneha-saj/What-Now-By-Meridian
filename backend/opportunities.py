@@ -1,19 +1,19 @@
-"""Opportunities: hiring signals, support, events, and perks. Separate from the roadmap.
+"""Opportunities: Perks and support. Separate from the roadmap.
 
-Exa finds (about 11 searches per city+field, cached 24h), Gemini sorts and writes (2 calls), plain code enforces
-the rules: every item has an Exa source, hiring signals are from the last 60 days, events are in the next 30 days,
-support "may apply" (never claims eligibility), and incentive conditions that clash with the deadline are flagged.
+Exa finds (3 searches per city, cached 24h) on official and city sites, Gemini sorts and writes (1 call), plain
+code enforces the rules: every item has an Exa source and its page date, the job search certificate comes first,
+incentives only "may apply" (never claims eligibility), and incentive conditions that clash with the deadline are
+flagged.
 """
 
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import date
 
 import activity
-from countries.finland import CITY_DOMAINS, PERK_QUERIES, SUPPORT_TYPES
-from models import (Certificate, Discount, EventItem, Facts, HiddenJob, Incentive,
-                    OpportunitiesResponse, PerksAndSupport, SupportItem)
+from countries.finland import CITY_DOMAINS, PERK_QUERIES
+from models import Certificate, Discount, Facts, Incentive, OpportunitiesResponse, PerksAndSupport
 from services import exa_search, gemini
 
 MAX_ITEMS = 6  # the UI shows 3 and "Show more"
@@ -21,8 +21,7 @@ MAY_APPLY = "May apply, check the conditions."
 
 
 def _partial(key: str, value) -> None:
-    data = value.model_dump(mode="json") if hasattr(value, "model_dump") else [v.model_dump(mode="json") for v in value]
-    activity.emit({"type": "partial", "key": key, "data": data})
+    activity.emit({"type": "partial", "key": key, "data": value.model_dump(mode="json")})
 
 
 def _short(n: dict) -> dict:
@@ -45,7 +44,7 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
     today = today or date.today()
     field, city = f.field or "professional", f.city or "Helsinki"
     raw = exa_search.search_opportunities(field, city, today.isoformat(), CITY_DOMAINS.get(city.lower(), []),
-                                          SUPPORT_TYPES, PERK_QUERIES)
+                                          PERK_QUERIES)
     if not raw:
         return OpportunitiesResponse(mock=True)  # never invent opportunities
 
@@ -58,35 +57,6 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
 
     def row(n):
         return by_id.get(n.get("row_id") or "")
-
-    since, until = today - timedelta(days=60), today + timedelta(days=30)
-    hidden = []
-    for n in notes.get("hidden_jobs", []):
-        r = row(n)
-        if r and r["section"] == "hidden_jobs" and r.get("published") and date.fromisoformat(r["published"]) >= since:
-            hidden.append(HiddenJob(company=n["company"], signal=n["signal"], signal_date=r["published"],
-                                    source_url=r["url"], why_it_fits=n["why_it_fits"], **_short(n)))
-    hidden = hidden[:MAX_ITEMS]
-    _partial("hidden_jobs", hidden)
-
-    support = [SupportItem(name=n["name"], what_it_is=n["what_it_is"], why_it_may_apply=n["why_it_may_apply"],
-                           eligibility_note=MAY_APPLY, source_url=r["url"], source_date=r.get("published"), **_short(n))
-               for n in notes.get("support", []) if n.get("plausible") and (r := row(n)) and r["section"].startswith("support:")]
-    support = support[:MAX_ITEMS]
-    _partial("support", support)
-
-    events = []
-    for n in notes.get("events", []):
-        r = row(n)
-        try:
-            when = date.fromisoformat(n.get("date") or "")
-        except ValueError:
-            continue  # no stated date, no event
-        if r and r["section"] == "events" and today <= when <= until:
-            events.append(EventItem(name=n["name"], date=when.isoformat(), place=n.get("place"), url=r["url"],
-                                    why_relevant=n["why_relevant"], **_short(n)))
-    events = sorted(events, key=lambda e: e.date)[:MAX_ITEMS]
-    _partial("events", events)
 
     perks = PerksAndSupport()
     if (c := notes.get("certificate")) and (r := row(c)) and r["section"] == "perks:certificate":
@@ -107,5 +77,4 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
     perks.incentives = perks.incentives[:MAX_ITEMS]
     _partial("perks_and_support", perks)
 
-    return OpportunitiesResponse(hidden_jobs=hidden, support=support, events=events,
-                                 perks_and_support=perks, mock=not notes)
+    return OpportunitiesResponse(perks_and_support=perks, mock=not notes)

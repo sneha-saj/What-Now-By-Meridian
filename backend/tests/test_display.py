@@ -17,8 +17,6 @@ def _items(plan: dict, opp: dict | None = None):
     for key in ("this_week", "timeline", "plan_b"):
         yield from plan.get(key, [])
     if opp:
-        for key in ("hidden_jobs", "support", "events"):
-            yield from opp[key]
         perks = opp["perks_and_support"]
         yield from perks["discounts"]
         yield from perks["incentives"]
@@ -65,5 +63,6 @@ def test_incentive_short_why_is_the_caveat():
 def test_opportunities_counts_sections():
     body = OpportunitiesResponse(**mocks.example("opportunities")).model_dump()
     c = body["counts"]
-    assert (c["hidden_jobs"], c["support"], c["events"], c["certificate"], c["discounts"]) == (1, 1, 1, 1, 1)
-    assert c["total"] == 5
+    assert set(c) == {"certificate", "discounts", "incentives", "total"}
+    assert (c["certificate"], c["discounts"], c["incentives"]) == (1, 1, 1)
+    assert c["total"] == 3

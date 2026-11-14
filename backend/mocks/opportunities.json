@@ -10,41 +10,12 @@
     }
   },
   "response": {
-    "hidden_jobs": [
-      {
-        "company": "Example Bistro Group (sample)",
-        "signal": "Sample: opening a new restaurant in Kallio in December.",
-        "signal_date": "2026-10-28",
-        "source_url": "https://example.com/news/new-restaurant",
-        "why_it_fits": "New restaurants need kitchen and floor staff.",
-        "action": "reach_out"
-      }
-    ],
-    "support": [
-      {
-        "name": "Finnish language course (sample)",
-        "what_it_is": "Sample: a free Finnish course for jobseekers.",
-        "why_it_may_apply": "It may apply because you're an unemployed jobseeker in Helsinki.",
-        "eligibility_note": "May apply, check the conditions.",
-        "source_url": "https://example.com/finnish-course",
-        "source_date": null
-      }
-    ],
-    "events": [
-      {
-        "name": "Sample recruitment fair",
-        "date": "2026-11-26",
-        "place": "Helsinki",
-        "url": "https://example.com/fair",
-        "why_relevant": "Restaurants recruit at this fair."
-      }
-    ],
     "perks_and_support": {
       "certificate": {
         "name": "Job search certificate (proof you're a jobseeker)",
         "how_to_get": "Sample: download it from your Job Market Finland account.",
         "source_url": "https://example.com/certificate",
-        "source_date": null
+        "source_date": "2026-10-20"
       },
       "discounts": [
         {
@@ -53,10 +24,20 @@
           "proof_needed": "Job search certificate",
           "city": "Helsinki",
           "source_url": "https://example.com/swimming",
-          "source_date": null
+          "source_date": "2026-09-15"
         }
       ],
-      "incentives": []
+      "incentives": [
+        {
+          "name": "Pay subsidy for employers (sample)",
+          "what_it_is": "Sample: an employer can get part of your wages covered for a while if they hire you.",
+          "conditions_plain": "Sample: usually for people who have been unemployed for some time; the employment services decide.",
+          "may_apply": true,
+          "caveat": "May apply, check the conditions.",
+          "source_url": "https://example.com/pay-subsidy",
+          "source_date": "2026-10-05"
+        }
+      ]
     },
     "mock": true
   }

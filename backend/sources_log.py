@@ -22,13 +22,6 @@ STEP_FOR_PURPOSE = {
     "unemployment benefits": "This week",
     "labour-shortage sectors": "Week 4",
     "other permits": "Plan B",
-    "companies": "Opportunities",
-    "job posts": "Opportunities",
-    "people": "Opportunities",
-    "events": "Opportunities",
-    "unions": "Opportunities",
-    "hiring signals": "Opportunities",
-    "support": "Opportunities",
     "perks": "Opportunities",
     "ask": "Ask",
 }

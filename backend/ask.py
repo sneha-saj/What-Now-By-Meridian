@@ -22,13 +22,12 @@ STEPS = [
     ("deadline", r"\b(deadline|how long|stay|protection period|months?)\b"),
     ("final", r"\b(another permit|other permit|new permit|entrepreneur|family|spouse|student permit|plan b|leave)\b"),
     ("week1", r"\b(register\w*|jobseeker|kela|benefit\w*|allowance|subsidy|unemployment fund|te[- ]?(office|services))\b"),
-    ("wayin", r"\b(compan\w+|hiring|refer\w*|network\w*|recruit\w*|contact|meetup|event|linkedin)\b"),
     ("week2", r"\b(cv|resume|interview|apply|application|job search)\b"),
     ("week4", r"\b(shortage|sector|retrain\w*|course|training|language)\b"),
 ]
 
 OFF_TOPIC_REPLY = ("I can only help with questions about losing a job in Finland: your permit, benefits, "
-                   "job search and local opportunities. Try asking about one of those.")
+                   "job search, perks and support. Try asking about one of those.")
 
 
 def on_topic(q: str) -> bool:

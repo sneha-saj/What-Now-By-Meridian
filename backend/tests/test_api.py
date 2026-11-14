@@ -207,7 +207,7 @@ def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
     def unexpected(*_args, **_kwargs):
         raise AssertionError("External service called while USE_MOCK is enabled")
 
-    for name in ("extract_facts", "write_plan"):
+    for name in ("extract_facts", "write_plan", "write_opportunities"):
         monkeypatch.setattr(main.gemini, name, unexpected)
     for name in ("search_plan_sources", "search_opportunities"):
         monkeypatch.setattr(main.exa_search, name, unexpected)
@@ -220,6 +220,9 @@ def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
     assert plan_body["mock"] is True
     assert plan_body["deadline"]["deadline_date"] == "2027-02-01"
     assert len(plan_body["this_week"]) == 3
+    opp_body = client.post("/opportunities", json={"facts": intake_body["facts"]}).json()
+    assert set(opp_body) == {"perks_and_support", "counts", "mock"}
+    assert opp_body["mock"] is True and opp_body["perks_and_support"]["certificate"]
     assert client.get("/rules").json()["trusted_domains"]
 
 
@@ -247,6 +250,7 @@ def test_saved_plan_example_matches_the_rules_engine(monkeypatch):
 def test_openapi_docs_page_works():
     spec = client.get("/openapi.json").json()
     assert {"/intake", "/plan", "/rules", "/opportunities"} <= spec["paths"].keys()
+    assert "/referrals" not in spec["paths"]
     assert "intake" in spec["paths"]["/intake"]["post"]["requestBody"]["content"]["application/json"]["examples"]
     assert client.get("/docs").status_code == 200
 
@@ -293,11 +297,11 @@ def test_chat_moves_through_the_steps(verified, live_services):
 
     w = client.post("/chat", json={**session, "step": "deadline", "action": "next"}).json()
     assert w["step"] == "this_week" and len(w["plan"]["this_week"]) == 3
+    assert w["quick_replies"] == [] and "referrals" not in w  # this week is the last step
 
-    # The roadmap ends at this week's plan; contacts are outside the current scope.
+    # Staying on the last step doesn't overflow.
     again = client.post("/chat", json={**session, "step": "this_week", "action": "next"}).json()
-    assert again["step"] == "this_week" and "referrals" not in again
-    assert client.post("/referrals", json={"facts": WORK_FACTS}).status_code == 404
+    assert again["step"] == "this_week"
 
 
 def test_chat_goes_back_to_questions_if_an_edit_makes_a_fact_unknown(verified):
@@ -418,8 +422,8 @@ def test_ask_rules_question_without_official_citations_says_so(monkeypatch):
 
 def test_ask_without_exa_falls_back(monkeypatch):
     monkeypatch.setattr(main.exa_search, "ask", lambda *a: None)
-    body = client.post("/ask", json={"question": "How do I find companies hiring cooks?"}).json()
-    assert body["mock"] is True and body["suggested_roadmap_step"] == "wayin"
+    body = client.post("/ask", json={"question": "How do I write a CV for jobs in Finland?"}).json()
+    assert body["mock"] is True and body["suggested_roadmap_step"] == "week2"
 
 
 def test_exa_ask_filters_citations_to_official_domains(monkeypatch):

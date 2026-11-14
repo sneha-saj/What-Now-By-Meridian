@@ -82,7 +82,7 @@ def _domain(url: str | None) -> str:
 
 
 class PrimaryAction(BaseModel):
-    kind: Literal["open_link", "reach_out", "check_conditions"]
+    kind: Literal["open_link", "check_conditions"]
     label: str
     url: Optional[str] = None
 
@@ -237,7 +237,7 @@ class AskSource(BaseModel):
 class AskResponse(BaseModel):
     answer: str
     sources: list[AskSource] = Field(default_factory=list)
-    suggested_roadmap_step: Optional[Literal["week1", "wayin", "week2", "week4", "week8", "final", "deadline"]] = None
+    suggested_roadmap_step: Optional[Literal["week1", "week2", "week4", "week8", "final", "deadline"]] = None
     off_topic: bool = False
     official_only: bool = False
     facts_update: dict = Field(default_factory=dict)  # new facts found in the question; the roadmap rebuilds
@@ -245,42 +245,6 @@ class AskResponse(BaseModel):
 
 
 # ---------- /opportunities ----------
-
-class HiddenJob(Display):
-    company: str
-    signal: str
-    signal_date: str
-    source_url: str
-    why_it_fits: str
-    action: Literal["reach_out"] = "reach_out"
-
-    def _defaults(self):
-        return self.company, self.signal, PrimaryAction(kind="reach_out", label="Reach out", url=self.source_url)
-
-
-class SupportItem(Display):
-    name: str
-    what_it_is: str
-    why_it_may_apply: str
-    eligibility_note: str = "May apply, check the conditions."
-    source_url: str
-    source_date: Optional[str] = None
-
-    def _defaults(self):
-        return self.name, self.why_it_may_apply, PrimaryAction(kind="check_conditions", label="Check the conditions",
-                                                                url=self.source_url)
-
-
-class EventItem(Display):
-    name: str
-    date: str
-    place: Optional[str] = None
-    url: str
-    why_relevant: str
-
-    def _defaults(self):
-        return self.name, self.why_relevant, PrimaryAction(kind="open_link", label="See the event", url=self.url)
-
 
 class Certificate(Display):
     name: str
@@ -330,9 +294,6 @@ class OpportunitiesRequest(BaseModel):
 
 
 class OpportunityCounts(BaseModel):
-    hidden_jobs: int = 0
-    support: int = 0
-    events: int = 0
     certificate: int = 0
     discounts: int = 0
     incentives: int = 0
@@ -340,9 +301,6 @@ class OpportunityCounts(BaseModel):
 
 
 class OpportunitiesResponse(BaseModel):
-    hidden_jobs: list[HiddenJob] = Field(default_factory=list)
-    support: list[SupportItem] = Field(default_factory=list)
-    events: list[EventItem] = Field(default_factory=list)
     perks_and_support: PerksAndSupport = Field(default_factory=PerksAndSupport)
     counts: OpportunityCounts = Field(default_factory=OpportunityCounts)
     mock: bool = False
@@ -350,9 +308,8 @@ class OpportunitiesResponse(BaseModel):
     @model_validator(mode="after")
     def _count_sections(self):
         p = self.perks_and_support
-        c = OpportunityCounts(hidden_jobs=len(self.hidden_jobs), support=len(self.support),
-                              events=len(self.events), certificate=int(p.certificate is not None),
-                              discounts=len(p.discounts), incentives=len(p.incentives))
-        c.total = c.hidden_jobs + c.support + c.events + c.certificate + c.discounts + c.incentives
+        c = OpportunityCounts(certificate=int(p.certificate is not None), discounts=len(p.discounts),
+                              incentives=len(p.incentives))
+        c.total = c.certificate + c.discounts + c.incentives
         self.counts = c
         return self

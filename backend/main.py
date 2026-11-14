@@ -1,11 +1,10 @@
 """What Now? by Meridian — agent backend."""
 
-from datetime import date, timedelta
+from datetime import date
 
 import json
 import logging
 import queue
-import re
 import threading
 
 from fastapi import Body, FastAPI
@@ -15,9 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import activity
 import config
 import sources_log
-from models import (STEPS, OpportunitiesRequest, OpportunitiesResponse, Action, AskRequest, AskResponse, AskSource, ChatRequest, ChatResponse, Deadline, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
-                    PlanResponse, PossibleDate, Source,
-                    TimelineStep)
+from models import (STEPS, OpportunitiesRequest, OpportunitiesResponse, Action, AskRequest, AskResponse, AskSource,
+                    ChatRequest, ChatResponse, Deadline, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption,
+                    PlanRequest, PlanResponse, PossibleDate, Source, TimelineStep)
 import ask as ask_rules
 import opportunities as opps
 import plan_b
@@ -35,7 +34,7 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS,
 @app.get("/health")
 def health():
     return {"ok": True, "gemini": bool(config.gemini_key()), "exa": bool(config.exa_key()),
-            "oxylabs": config.ENABLE_OXYLABS, "elevenlabs": config.ENABLE_ELEVENLABS}
+            "elevenlabs": config.ENABLE_ELEVENLABS}
 
 
 @app.get("/rules", summary="Deadline rules, their latest live check and trusted domains")
@@ -279,7 +278,7 @@ PROGRESS = ("reading_situation", "checking_rules", "finding_steps")
 
 @app.post("/chat/stream", summary="Same as /chat, streamed as server-sent events with progress")
 def chat_stream(req: ChatRequest):
-    """Events: `{"type": "progress", "stage": ...}` for each of reading_situation, checking_rules,
+    """Events: `{"type": "progress", "stage": ...}` for each of reading_situation, checking_rules and
     finding_steps (only the ones this step needs), then `{"type": "result", "data": <ChatResponse>}`
     or `{"type": "error"}`."""
     events: queue.Queue = queue.Queue()
@@ -450,16 +449,18 @@ def _deadline_months(f: Facts) -> int | None:
 
 
 @app.post("/opportunities", response_model=OpportunitiesResponse,
-          summary="Hiring signals, support, events and perks, found live")
+          summary="Perks and support, found live")
 def opportunities(req: OpportunitiesRequest):
-    """Separate from the roadmap. Every item comes from an Exa source. About 11 Exa searches and 2 Gemini calls
-    per city + field, cached 24h. `/opportunities/stream` streams each section as it's ready."""
+    """Separate from the roadmap: the job search certificate, city discounts for unemployed jobseekers and employer
+    hiring incentives ("may apply", with conditions). Every item comes from an Exa source on an official or city
+    site, with the page date. 3 Exa searches and 1 Gemini call per city, cached 24h.
+    `/opportunities/stream` streams the result with live activity."""
     if config.USE_MOCK:
         return OpportunitiesResponse(**mocks.example("opportunities"))
     return opps.build(req.facts, _deadline_months(req.facts))
 
 
-@app.post("/opportunities/stream", summary="Same as /opportunities, streamed with live activity and partial sections")
+@app.post("/opportunities/stream", summary="Same as /opportunities, streamed with live activity")
 def opportunities_stream(req: OpportunitiesRequest):
     events: queue.Queue = queue.Queue()
 

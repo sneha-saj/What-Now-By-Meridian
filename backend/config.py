@@ -32,7 +32,6 @@ def gemini_key() -> str | None:
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
-ENABLE_OXYLABS = _flag("ENABLE_OXYLABS")
 ENABLE_ELEVENLABS = _flag("ENABLE_ELEVENLABS")
 
 OFFICIAL_DOMAINS = TRUSTED_DOMAINS

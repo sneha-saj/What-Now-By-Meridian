@@ -5,11 +5,11 @@ from __future__ import annotations
 import re
 
 ON_TOPIC = re.compile(
-    r"\b(job|jobs|work|working|employ\w*|unemploy\w*|laid off|layoff|let go|fired|dismiss\w*|terminat\w*|redundan\w*|notice|contract|salary|pay|"
+    r"\b(job|jobs|work|working|employ\w*|unemploy\w*|laid off|layoff|let go|fired|dismiss\w*|terminat\w*|redundan\w*|probation|bankrupt\w*|closed down|shut down|compan\w*|notice|contract|salary|pay|"
     r"permit|visa|residence|migri|kela|te[- ]?(office|services)|benefit\w*|allowance|subsidy|fund|union|"
     r"register\w*|jobseeker|cv|resume|interview|apply|application|employer|recruit\w*|career|hiring|refer\w*|"
     r"tax|vero|insurance|healthcare|housing|rent|deadline|months?|extend|renew|stay|leave finland|"
-    r"study|student|degree|family|spouse|entrepreneur|business|finnish|language|course|training|finland)\b",
+    r"study|student|degree|family|spouse|partner|relationship|broke up|divorc\w*|separat\w*|entrepreneur|business|finnish|language|course|training|finland)\b",
     re.I,
 )
 RULES = re.compile(

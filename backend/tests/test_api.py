@@ -489,3 +489,19 @@ def test_ask_question_with_no_new_facts_has_empty_update(monkeypatch):
         {"title": "Kela", "url": "https://www.kela.fi/x", "published": None}]})
     body = client.post("/ask", json={"question": "Can I get Kela benefit?", "facts": WORK_FACTS}).json()
     assert body["facts_update"] == {} and body["sources"]
+
+
+@pytest.mark.parametrize("use_mock", [True, False])
+def test_off_topic_first_message_gets_a_polite_no_not_a_roadmap(monkeypatch, use_mock):
+    monkeypatch.setattr(main.config, "USE_MOCK", use_mock)
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"lost_job": False})
+    body = client.post("/chat", json={"messages": _msg("What's the best pizza place in Helsinki?")}).json()
+    assert body["out_of_scope"] is True and "job loss in Finland" in body["reply"]
+    assert "relationship" not in body["reply"] and "deadline" not in body and body["facts"] == {}
+
+
+@pytest.mark.parametrize("text", ["My company closed down", "Probation ended last week", "I was made redundant"])
+def test_job_loss_wording_is_not_mistaken_for_off_topic(monkeypatch, text):
+    monkeypatch.setattr(main.config, "USE_MOCK", True)
+    body = client.post("/chat", json={"messages": _msg(text)}).json()
+    assert body.get("out_of_scope") is not True

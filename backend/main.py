@@ -236,6 +236,8 @@ CITIZEN_REPLY = ("Good news: as an EU/EEA or Finnish citizen, your right to stay
 NOT_JOB_LOSS_REPLY = ("I'm sorry you're going through this. What Now? only helps with losing a job in Finland and "
                       "what it means for your residence permit. If your permit is based on a relationship that has "
                       "ended, Migri explains what happens next.")
+OFF_TOPIC_START_REPLY = ("I focus on job loss in Finland, so I can't help with that one. If you've lost your job or "
+                         "are about to, tell me what happened and I'll work out your deadline and next steps.")
 NOT_JOB_LOSS_LINKS = [
     Source(title="Residence permits and changes in your situation (Migri)", url="https://migri.fi/en/home"),
     Source(title="Living in Finland (InfoFinland)", url="https://www.infofinland.fi/en"),
@@ -311,11 +313,21 @@ def _partial(key: str, value) -> None:
     activity.emit({"type": "partial", "key": key, "data": value.model_dump(mode="json", exclude_none=True)})
 
 
+def _off_topic_start(mock: bool) -> ChatResponse:
+    activity.emit({"type": "app", "who": "code", "text": "Not about losing a job: kindly saying what we help with"})
+    return ChatResponse(reply=OFF_TOPIC_START_REPLY, step="about_you", facts=Facts(), out_of_scope=True, mock=mock)
+
+
 def run_chat(req: ChatRequest) -> ChatResponse:
     today = date.today()
     latest = req.messages[-1] if req.messages else None
     extracted, mock = {}, config.USE_MOCK
     if latest and latest.role == "user" and latest.text.strip():
+        # A first message that's clearly not about losing a job (e.g. "best pizza in Helsinki?") gets a polite no.
+        starting = not req.facts and not req.answers and not req.edited_facts
+        off_topic = starting and not ask_rules.on_topic(latest.text) and not mocks.JOB_LOSS.search(latest.text.lower())
+        if off_topic and config.USE_MOCK:
+            return _off_topic_start(mock)
         _progress("reading_situation")
         if config.USE_MOCK:
             extracted = mocks.example_facts()
@@ -329,6 +341,9 @@ def run_chat(req: ChatRequest) -> ChatResponse:
                                 step="about_you", facts=Facts(), out_of_scope=True, link=OUT_OF_SCOPE_LINK,
                                 links=[Source(title="Moving and working in Finland (InfoFinland)", url=OUT_OF_SCOPE_LINK)],
                                 mock=mock)
+
+        if off_topic and extracted.get("lost_job") is False:
+            return _off_topic_start(mock)
 
     facts, confirmed = _merge_chat_facts(req, extracted)
     if facts.lost_job is False:

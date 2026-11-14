@@ -10,6 +10,8 @@ from pydantic import BaseModel
 
 import activity
 import config
+import filecache
+import limits
 from countries.finland import DEADLINE_RULES
 
 log = logging.getLogger(__name__)
@@ -21,6 +23,8 @@ if not log.handlers:  # show live-check debugging (page snippet, Gemini's reason
     log.propagate = False
 CACHE_PATH = Path(__file__).with_name(".live_check_cache.json")
 CACHE_TTL = timedelta(hours=24)
+ERROR_TTL = timedelta(minutes=15)  # after a failed API call, don't call again on every request
+PAGE_CACHE_PATH = Path(__file__).with_name(".live_check_pages.json")
 
 def _read_cache() -> dict:
     try:
@@ -35,12 +39,20 @@ def _write_cache(cache: dict) -> None:
         log.warning("Could not save live-check cache: %s", exc)
 
 def _fetch_page(url: str) -> str:
+    """Page text via Exa contents. Cached 24h by URL: the rules share one Migri page, so one Exa call."""
+    k = filecache.key("page", url)
+    cached = filecache.read(PAGE_CACHE_PATH, k)
+    if cached is not None:
+        return cached
     from exa_py import Exa
     client = Exa(api_key=config.exa_key())
     result = client.get_contents([url], text=True)
     results = getattr(result, "results", result)
     page = results[0]
-    return (getattr(page, "text", None) or getattr(page, "content", None) or "")[:20000]
+    text = (getattr(page, "text", None) or getattr(page, "content", None) or "")[:20000]
+    if text:
+        filecache.write(PAGE_CACHE_PATH, k, text, CACHE_TTL)
+    return text
 
 class _Verdict(BaseModel):
     reasoning: str
@@ -78,14 +90,21 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
             checked = datetime.fromisoformat(entry["checked_at"])
             if checked.tzinfo is None:
                 checked = checked.replace(tzinfo=timezone.utc)
-            if now - checked < CACHE_TTL:
+            ttl = ERROR_TTL if entry.get("status") == "error" else CACHE_TTL
+            if now - checked < ttl:
                 return {"rule_id": rule["id"], **entry}
         except (KeyError, ValueError, TypeError):
             pass
     checked_at = now.isoformat()
+    if not config.exa_key() or not config.gemini_key():
+        # No call was made, so nothing to cache: adding keys works on the next request.
+        return {"rule_id": rule["id"], "status": "error", "checked_at": checked_at,
+                "evidence_snippet": "Live-check API keys are not configured"}
+    if limits.paused("Exa") or limits.paused("Gemini"):
+        return {"rule_id": rule["id"], "status": "error", "checked_at": checked_at,
+                "evidence_snippet": "Paused after a rate limit"}
+    service = "Exa"
     try:
-        if not config.exa_key() or not config.gemini_key():
-            raise RuntimeError("Live-check API keys are not configured")
         activity.emit({"type": "exa", "status": "searching", "purpose": "rule check", "query": rule["source_url"],
                        "domains": ["migri.fi"]})
         page = _fetch_page(rule["source_url"])
@@ -94,12 +113,14 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
         if not page:
             raise RuntimeError("Exa returned no page text")
         log.info("Live check %s: fetched %d chars, starts %r", rule["id"], len(page), page[:300])
+        service = "Gemini"
         verified, evidence = _ask_gemini(rule, page)
         entry = {"rule_id": rule["id"], "status": "verified" if verified else "mismatch", "checked_at": checked_at, "evidence_snippet": evidence}
     except Exception as exc:  # graceful degradation for unavailable upstreams
-        log.warning("Live check failed for %s: %s", rule["id"], exc)
-        # Errors are not cached, so adding API keys or a network blip recovers on the next request.
-        return {"rule_id": rule["id"], "status": "error", "checked_at": checked_at, "evidence_snippet": str(exc)[:500]}
+        limits.note_failure(service, exc)
+        log.warning("Live check failed for %s: %s", rule["id"], type(exc).__name__)
+        entry = {"rule_id": rule["id"], "status": "error", "checked_at": checked_at,
+                 "evidence_snippet": "Couldn't check right now"}
     cache[rule["id"]] = entry
     _write_cache(cache)
     return entry

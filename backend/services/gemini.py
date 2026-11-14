@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
+from pathlib import Path
 import logging
 from typing import Any, Optional
 
 from pydantic import BaseModel
 
 import config
+import filecache
+import limits
 
 log = logging.getLogger(__name__)
+CACHE_PATH = Path(__file__).resolve().parent.parent / ".gemini_cache.json"
+CACHE_TTL = timedelta(hours=24)
 
 _client = None
 
@@ -28,11 +34,21 @@ def _get_client():
 
 
 def available() -> bool:
-    return bool(config.gemini_key())
+    return bool(config.gemini_key()) and not limits.paused("Gemini")
 
 
 def _call(prompt: str, schema: Any = None) -> Any | None:
-    """Ask Gemini for JSON. With a Pydantic `schema`, uses structured output."""
+    """Ask Gemini for JSON. With a Pydantic `schema`, uses structured output.
+
+    Answers are cached on disk for 24h (same model + prompt + schema), so reloads and repeats are free.
+    After a 429 Gemini is paused for a while and callers use their fallbacks; no retries.
+    """
+    k = filecache.key(config.GEMINI_MODEL, prompt, getattr(schema, "__name__", None))
+    cached = filecache.read(CACHE_PATH, k)
+    if cached is not None:
+        return cached
+    if limits.paused("Gemini"):
+        return None
     client = _get_client()
     if client is None:
         return None
@@ -46,12 +62,13 @@ def _call(prompt: str, schema: Any = None) -> Any | None:
             model=config.GEMINI_MODEL, contents=prompt, config=types.GenerateContentConfig(**cfg)
         )
         parsed = getattr(resp, "parsed", None)
-        if isinstance(parsed, BaseModel):
-            return parsed.model_dump()
-        return json.loads(resp.text)
+        out = parsed.model_dump() if isinstance(parsed, BaseModel) else json.loads(resp.text)
     except Exception as e:  # noqa: BLE001 - demo resilience: never crash the UI
-        log.warning("Gemini call failed, using mock: %s", e)
+        if not limits.note_failure("Gemini", e):
+            log.warning("Gemini call failed, using fallback: %s", type(e).__name__)
         return None
+    filecache.write(CACHE_PATH, k, out, CACHE_TTL)
+    return out
 
 
 def structured_call(prompt: str, schema: type[BaseModel]) -> dict | None:

@@ -42,3 +42,30 @@ def test_gemini_errors_return_none(monkeypatch):
 def test_no_key_returns_none(monkeypatch):
     monkeypatch.setattr(gemini, "_get_client", lambda: None)
     assert gemini.write_plan({}, {}, [], "2026-11-14") is None
+
+
+def test_answers_are_cached_so_repeats_cost_nothing(monkeypatch):
+    models = FakeModels(parsed=gemini.Extracted(field="cook"))
+    monkeypatch.setattr(gemini, "_get_client", lambda: SimpleNamespace(models=models))
+    calls = []
+    real = models.generate_content
+    models.generate_content = lambda **kw: calls.append(1) or real(**kw)
+    assert gemini.extract_facts("I'm a cook", "2026-11-14")["field"] == "cook"
+    assert gemini.extract_facts("I'm a cook", "2026-11-14")["field"] == "cook"
+    assert len(calls) == 1
+
+
+def test_rate_limit_pauses_gemini_without_retrying(monkeypatch):
+    import limits
+
+    class RateLimited(Exception):
+        code = 429
+
+    models = FakeModels(error=RateLimited("429 RESOURCE_EXHAUSTED"))
+    monkeypatch.setattr(gemini, "_get_client", lambda: SimpleNamespace(models=models))
+    monkeypatch.setattr(gemini.config, "gemini_key", lambda: "key")
+    assert gemini.extract_facts("a", "2026-11-14") is None
+    assert limits.paused("Gemini") and gemini.available() is False
+
+    models.error = AssertionError("called again while paused")
+    assert gemini.extract_facts("b", "2026-11-14") is None  # no call made

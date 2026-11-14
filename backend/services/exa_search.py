@@ -14,6 +14,7 @@ from pathlib import Path
 
 import activity
 import config
+import limits
 
 log = logging.getLogger(__name__)
 MAX_PARALLEL = 6
@@ -85,7 +86,7 @@ def _cache_write(key: str, value) -> None:
 def _get_client():
     global _client
     key = config.exa_key()
-    if not key:
+    if not key or limits.paused("Exa"):
         return None
     if _client is None:
         from exa_py import Exa
@@ -140,7 +141,8 @@ def search_official(queries: list[str], per_query: int = 3) -> list[dict] | None
             for s in _to_sources(res.results):
                 seen.setdefault(s["url"], s)
     except Exception as e:  # noqa: BLE001
-        log.warning("Exa official search failed, using mock: %s", e)
+        if not limits.note_failure("Exa", e):
+            log.warning("Exa official search failed, using fallback: %s", type(e).__name__)
         return None
     results = list(seen.values()) or None
     if results:
@@ -161,7 +163,8 @@ def _cached_search(kind: str, params: dict, run):
     try:
         results = run(exa)
     except Exception as e:  # noqa: BLE001
-        log.warning("Exa %s search failed, using mock: %s", kind, e)
+        if not limits.note_failure("Exa", e):
+            log.warning("Exa %s search failed, using fallback: %s", kind, type(e).__name__)
         return None
     if results:
         _cache_write(key, results)
@@ -312,7 +315,8 @@ def search_plan_sources(topics: list[tuple[str, str]], per_topic: int = 3) -> li
                     seen[r.url] = {"topic": topic, "title": r.title or r.url, "url": r.url, "highlight": highlight,
                                    "published": (getattr(r, "published_date", None) or "")[:10] or None}
     except Exception as e:  # noqa: BLE001
-        log.warning("Exa plan search failed, using mock: %s", e)
+        if not limits.note_failure("Exa", e):
+            log.warning("Exa plan search failed, using fallback: %s", type(e).__name__)
         return None
     results = list(seen.values()) or None
     if results:

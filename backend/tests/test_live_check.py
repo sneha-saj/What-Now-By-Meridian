@@ -41,3 +41,35 @@ def test_live_check_includes_rule_id_and_does_not_cache_errors(monkeypatch, tmp_
     monkeypatch.setattr(live_check, "_ask_gemini", lambda _rule, _page: (True, "3 months"))
     second = live_check.check_rule(DEADLINE_RULES[0])
     assert second["status"] == "verified" and second["rule_id"] == DEADLINE_RULES[0]["id"]
+
+
+def test_rules_sharing_a_page_fetch_it_once(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(live_check.config, "exa_key", lambda: "exa")
+    monkeypatch.setattr(live_check.config, "gemini_key", lambda: "gemini")
+    fetches = []
+
+    class FakeExa:
+        def __init__(self, api_key):
+            pass
+
+        def get_contents(self, urls, text):
+            fetches.append(urls)
+            return SimpleNamespace(results=[SimpleNamespace(text="Migri page text")])
+
+    import exa_py
+    monkeypatch.setattr(exa_py, "Exa", FakeExa)
+    monkeypatch.setattr(live_check, "_ask_gemini", lambda _rule, _page: (True, "3 months"))
+    statuses = [live_check.check_rule(r)["status"] for r in DEADLINE_RULES]
+    assert statuses == ["verified"] * len(DEADLINE_RULES)
+    assert len(fetches) == 1
+
+
+def test_failed_api_check_is_cached_briefly(monkeypatch):
+    monkeypatch.setattr(live_check.config, "exa_key", lambda: "exa")
+    monkeypatch.setattr(live_check.config, "gemini_key", lambda: "gemini")
+    calls = []
+    monkeypatch.setattr(live_check, "_fetch_page", lambda _url: calls.append(1) or (_ for _ in ()).throw(RuntimeError("down")))
+    assert live_check.check_rule(DEADLINE_RULES[0])["status"] == "error"
+    assert live_check.check_rule(DEADLINE_RULES[0])["status"] == "error"
+    assert len(calls) == 1  # not retried on every request

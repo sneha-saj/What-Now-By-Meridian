@@ -9,6 +9,10 @@ on:
         description: Replace warm site containers after a runtime secret change
         type: boolean
         default: false
+      recreate_api:
+        description: Replace warm API containers after a runtime secret change
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -53,7 +57,14 @@ jobs:
             modal deploy frontend/modal_app.py
           fi
       - name: Deploy separate API
-        run: modal deploy backend/modal_app.py
+        env:
+          RECREATE_API: ${{ inputs.recreate_api }}
+        run: |
+          if [ "$RECREATE_API" = "true" ]; then
+            modal deploy --strategy recreate backend/modal_app.py
+          else
+            modal deploy backend/modal_app.py
+          fi
       - name: Verify website and API
         run: |
           curl --fail --retry 3 --retry-delay 5 --max-time 60 https://what-now-by-meridian--site.us-east.modal.run/ --output /dev/null

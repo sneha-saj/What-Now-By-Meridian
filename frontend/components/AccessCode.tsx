@@ -54,7 +54,10 @@ export function AccessCode({ className, initiallyOpen = false, onCancel }: {
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-ink-soft">Live search and voice use limited API credits. Please keep your test brief so others can try it too.</p>
+          <div role="note" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-900">
+            <p className="font-bold">A note about live mode</p>
+            <p>Live search and voice use limited API credits. Please keep your test brief so others can try it too.</p>
+          </div>
           <form onSubmit={check} className="flex flex-wrap items-center gap-2">
             <label htmlFor={inputId} className="font-bold">Access code</label>
             <input id={inputId} value={text} autoFocus autoComplete="off" onChange={(e) => { setText(e.target.value); setState("idle"); }}

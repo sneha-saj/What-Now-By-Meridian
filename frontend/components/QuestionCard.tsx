@@ -5,17 +5,24 @@ import type { Question } from "@/lib/api";
 import { Button, cx } from "./primitives";
 import { RotatingPhrase } from "./RotatingPhrase";
 
-/** One question at a time: serif question, tap buttons (incl. "Not sure"), or answer in your own words. */
+/** One question at a time: serif question, tap buttons (incl. "Not sure"), or answer in your own words.
+ *  `previous` is the answer already given when the person went back to this question: it's shown as chosen and
+ *  can be changed. Back/Forward move through the questions answered so far. */
 export function QuestionCard({
-  question, busy, onAnswer, onText,
+  question, busy, onAnswer, onText, previous, onBack, onForward, position,
 }: {
   question: Question;
   busy?: boolean;
   onAnswer: (value: string) => void;
   onText: (text: string) => void;
+  previous?: string;
+  onBack?: () => void;
+  onForward?: () => void;
+  position?: string;
 }) {
-  const [date, setDate] = useState("");
-  const [text, setText] = useState("");
+  const isOption = previous !== undefined && question.options.some((o) => o.value === previous);
+  const [date, setDate] = useState(question.kind === "date" && previous && !isOption ? previous : "");
+  const [text, setText] = useState(previous !== undefined && !isOption && question.kind !== "date" ? previous : "");
   const [picked, setPicked] = useState<string | null>(null);
   const choose = (value: string) => {
     setPicked(value);
@@ -23,19 +30,32 @@ export function QuestionCard({
   };
   return (
     <section aria-labelledby="q-title" className="animate-fade-up rounded-3xl border border-rule bg-card p-6 shadow-[0_6px_24px_rgba(28,42,69,0.06)] sm:p-8">
-      <p className="text-sm text-ink-soft">One quick question</p>
+      <div className="flex items-center gap-3">
+        {(onBack || onForward) && (
+          <button type="button" onClick={onBack} disabled={!onBack || busy} aria-label="Previous question" title="Previous question"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule text-lg text-ink hover:border-ink disabled:invisible"><span aria-hidden>←</span></button>
+        )}
+        <p className="min-w-0 flex-1 text-sm text-ink-soft">{position ?? "One quick question"}{previous !== undefined && " · your answer is marked; change it or go forward"}</p>
+        {onForward && (
+          <button type="button" onClick={onForward} disabled={busy} aria-label="Next question" title="Next question"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule text-lg text-ink hover:border-ink disabled:invisible"><span aria-hidden>→</span></button>
+        )}
+      </div>
       <h2 id="q-title" className="mt-1 font-serif text-3xl font-semibold leading-snug sm:text-4xl">{question.question}</h2>
       <fieldset disabled={busy || picked !== null} className="mt-6 space-y-5">
         <legend className="sr-only">Choose an answer</legend>
         <div className="flex flex-wrap gap-3">
-          {question.options.map((o) => (
-            <Button key={o.value} variant="chip" aria-pressed={picked === o.value}
-              className={cx("text-lg", picked === o.value && "!border-ink !bg-ink !text-paper !opacity-100")}
-              onClick={() => choose(o.value)}>
-              {picked === o.value && <span aria-hidden>✓</span>}
-              {o.label}
-            </Button>
-          ))}
+          {question.options.map((o) => {
+            const chosen = picked === o.value || (picked === null && previous === o.value);
+            return (
+              <Button key={o.value} variant="chip" aria-pressed={chosen}
+                className={cx("text-lg", chosen && "!border-ink !bg-ink !text-paper !opacity-100")}
+                onClick={() => choose(o.value)}>
+                {chosen && <span aria-hidden>✓</span>}
+                {o.label}
+              </Button>
+            );
+          })}
         </div>
         {picked !== null && (
           <p role="status" className="animate-fade-up text-ink-soft">Got it. Updating your situation…</p>
@@ -77,7 +97,7 @@ export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete, phrases 
         onMouseEnter={() => setHoldHeadline(true)} onMouseLeave={() => setHoldHeadline(false)}
         onFocus={() => setHoldHeadline(true)} onBlur={() => setHoldHeadline(false)}>
         <span className="sr-only">Lost your job? Let&apos;s figure out what&apos;s next.</span>
-        <RotatingPhrase phrases={phrases} interval={2500} paused={holdHeadline} staticPhrase="Lost your job?"
+        <RotatingPhrase phrases={phrases} interval={2000} paused={holdHeadline} staticPhrase="Lost your job?"
           className="text-accent-ink" />
         <span aria-hidden="true" className="block">Let&apos;s figure out what&apos;s next.</span>
       </h1>

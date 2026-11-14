@@ -46,6 +46,7 @@ type Saved = {
   outOfScope?: { message: string; link?: string; links?: { title: string; url: string }[] };
   doneSteps: Record<string, boolean>;
   asks: AskEntry[];
+  qHistory?: { q: Question; value: string }[]; // questions answered in this session, for Back/Forward
   added: Partial<Record<StepAnchor, AddedItem[]>>;
   opp?: Partial<OpportunitiesResponse>;
   oppFor?: string; // the facts the opportunities were found for
@@ -87,6 +88,7 @@ export default function StartPage() {
   const [updatingFrom, setUpdatingFrom] = useState<number | null>(null);
   const [stepMsg, setStepMsg] = useState<{ n: number; text: string } | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [viewing, setViewing] = useState<number | null>(null); // index in qHistory when gone back; null = current question
   const [saved, setSaved] = useState<SavedRoadmap<Saved>[]>([]);
   useEffect(() => { setSaved(listSaved<Saved>()); }, []);
   const stripRef = useRef<HTMLDivElement>(null);
@@ -155,7 +157,7 @@ export default function StartPage() {
   }
 
   const [oppLoading, setOppLoading] = useState(false);
-  const factsKey = JSON.stringify(["perks-v3", s.facts.city, s.facts.field, s.facts.permit_type, s.facts.years_on_work_permit, s.facts.job_end_date]);
+  const factsKey = JSON.stringify(["perks-v4", s.facts.city, s.facts.field, s.facts.permit_type, s.facts.years_on_work_permit, s.facts.job_end_date]);
 
   // Opportunities load once per situation, when the tab is first opened (results are cached server-side too).
   useEffect(() => {
@@ -196,6 +198,7 @@ export default function StartPage() {
   }
 
   function clearAll() {
+    setViewing(null);
     setProposal(null);
     try { window.sessionStorage.removeItem(KEY); } catch {}
     window.history.replaceState(null, "", "/start");
@@ -352,9 +355,34 @@ export default function StartPage() {
           ) : s.question ? (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
               <div className="space-y-4">
-                <QuestionCard key={`${s.question.id}-${qVersion}`} question={s.question} busy={busy}
-                  onAnswer={(value) => send({ answers: { [s.question!.id]: value } as Partial<Facts> })}
-                  onText={(text) => send({ messages: [{ role: "user", text }] })} />
+                {(() => {
+                  const history = s.qHistory ?? [];
+                  const past = viewing !== null ? history[viewing] : undefined;
+                  // Answering (or re-answering) question q: remember it, drop anything answered after it, and send.
+                  const answer = (q: Question, value: string, keep: number, text = false) => {
+                    setViewing(null);
+                    update({ qHistory: [...history.slice(0, keep), { q, value }] });
+                    send(text ? { messages: [{ role: "user", text: value }] } : { answers: { [q.id]: value } as Partial<Facts> });
+                  };
+                  if (past && viewing !== null)
+                    return (
+                      <QuestionCard key={`past-${viewing}-${past.q.id}`} question={past.q} busy={busy} previous={past.value}
+                        position={`Question ${viewing + 1}`}
+                        onBack={viewing > 0 ? () => setViewing(viewing - 1) : undefined}
+                        onForward={() => setViewing(viewing + 1 < history.length ? viewing + 1 : null)}
+                        onAnswer={(value) => value === past.value
+                          ? setViewing(viewing + 1 < history.length ? viewing + 1 : null)  // same answer: just move on
+                          : answer(past.q, value, viewing)}
+                        onText={(t) => answer(past.q, t, viewing, true)} />
+                    );
+                  return (
+                    <QuestionCard key={`${s.question!.id}-${qVersion}`} question={s.question!} busy={busy}
+                      position={`Question ${history.length + 1}`}
+                      onBack={history.length ? () => setViewing(history.length - 1) : undefined}
+                      onAnswer={(value) => answer(s.question!, value, history.length)}
+                      onText={(t) => answer(s.question!, t, history.length, true)} />
+                  );
+                })()}
                 <ActivityLog lines={log} busy={busy} last={3} />
               </div>
               <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact} />

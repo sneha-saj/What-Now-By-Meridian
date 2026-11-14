@@ -73,3 +73,33 @@ def test_failed_api_check_is_cached_briefly(monkeypatch):
     assert live_check.check_rule(DEADLINE_RULES[0])["status"] == "error"
     assert live_check.check_rule(DEADLINE_RULES[0])["status"] == "error"
     assert len(calls) == 1  # not retried on every request
+
+
+def test_context_dev_reads_official_page_and_caches_it(monkeypatch, tmp_path):
+    import httpx
+    monkeypatch.setattr(live_check, "PAGE_CACHE_PATH", tmp_path / "pages.json")
+    monkeypatch.setattr(live_check.config, "context_key", lambda: "context-key")
+    monkeypatch.setattr(live_check.config, "exa_key", lambda: None)
+    requests = []
+
+    def fake_post(url, **kwargs):
+        requests.append((url, kwargs))
+        return httpx.Response(200, json={"markdown": {"success": True, "data": "Official Migri rule text"}},
+                              request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(live_check.httpx, "post", fake_post)
+    page_url = DEADLINE_RULES[0]["source_url"]
+    assert live_check._fetch_page(page_url) == "Official Migri rule text"
+    assert live_check._fetch_page(page_url) == "Official Migri rule text"
+    assert len(requests) == 1
+    assert requests[0][1]["json"]["url"] == page_url
+    assert "context-key" in requests[0][1]["headers"]["Authorization"]
+
+
+def test_context_dev_failure_uses_exa(monkeypatch, tmp_path):
+    monkeypatch.setattr(live_check, "PAGE_CACHE_PATH", tmp_path / "pages.json")
+    monkeypatch.setattr(live_check.config, "context_key", lambda: "context-key")
+    monkeypatch.setattr(live_check.config, "exa_key", lambda: "exa-key")
+    monkeypatch.setattr(live_check, "_fetch_context_page", lambda _url: (_ for _ in ()).throw(RuntimeError("failed")))
+    monkeypatch.setattr(live_check, "_fetch_exa_page", lambda _url, _key: "Exa page")
+    assert live_check._fetch_page(DEADLINE_RULES[0]["source_url"]) == "Exa page"

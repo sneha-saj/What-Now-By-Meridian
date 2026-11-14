@@ -26,6 +26,10 @@ def exa_key() -> str | None:
     return _key("EXA_API_KEY")
 
 
+def context_key() -> str | None:
+    return _key("CONTEXT_DEV_API_KEY")
+
+
 def gemini_key() -> str | None:
     return _key("GEMINI_API_KEY")
 

@@ -1,8 +1,9 @@
-"""Cached checks of official rule pages using Exa Contents and Gemini."""
+"""Cached checks of official rule pages using Context.dev or Exa and Gemini."""
 from __future__ import annotations
 
 import json
 import logging
+import httpx
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -52,12 +53,44 @@ def _failed_status(result) -> str | None:
 
 
 def _fetch_page(url: str) -> str:
-    """Text of the exact Migri URL via Exa contents (Exa copy under a week old). Cached 24h by URL: the rules share
-    one page, so this is one Exa call a day. Raises if Exa reports the URL failed."""
+    """Read one official URL, caching the shared rule page for 24 hours."""
     k = filecache.key("page", url)
     cached = filecache.read(PAGE_CACHE_PATH, k)
     if cached is not None:
         return cached
+    if config.context_key() and not limits.paused("Context.dev"):
+        try:
+            text = _fetch_context_page(url)
+            filecache.write(PAGE_CACHE_PATH, k, text, CACHE_TTL)
+            return text
+        except Exception as exc:
+            limits.note_failure("Context.dev", exc)
+            log.warning("Context.dev could not read %s: %s", url, type(exc).__name__)
+            if not config.exa_key() or limits.paused("Exa"):
+                raise
+    if not config.exa_key() or limits.paused("Exa"):
+        raise RuntimeError("No page retrieval provider is available")
+    return _fetch_exa_page(url, k)
+
+
+def _fetch_context_page(url: str) -> str:
+    """Use Context.dev's Scrape API for the exact official page, with no user facts."""
+    response = httpx.post(
+        "https://api.context.dev/v1/web/scrape",
+        headers={"Authorization": f"Bearer {config.context_key()}"},
+        json={"url": url, "formats": {"markdown": True},
+              "sharedParams": {"mainContentOnly": True}, "maxAgeMs": 0},
+        timeout=15,
+    )
+    response.raise_for_status()
+    markdown = response.json().get("markdown") or {}
+    if markdown.get("success") is not True or not isinstance(markdown.get("data"), str) or not markdown["data"].strip():
+        raise RuntimeError("Context.dev returned no Markdown for the official page")
+    return markdown["data"][:20000]
+
+
+def _fetch_exa_page(url: str, k: str) -> str:
+    """Use Exa Contents, then its search index if the official site blocks crawling."""
     from exa_py import Exa
     client = Exa(api_key=config.exa_key())
     # Migri's page is slow to crawl live, so accept Exa's copy if it's under a week old. If a fresh crawl still
@@ -138,23 +171,26 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
         except (KeyError, ValueError, TypeError):
             pass
     checked_at = now.isoformat()
-    if not config.exa_key() or not config.gemini_key():
+    if not (config.exa_key() or config.context_key()) or not config.gemini_key():
         # No call was made, so nothing to cache: adding keys works on the next request.
         return {"rule_id": rule["id"], "status": "error", "checked_at": checked_at,
                 "evidence_snippet": "Live-check API keys are not configured"}
-    if limits.paused("Exa") or limits.paused("Gemini"):
+    if (not (config.exa_key() and not limits.paused("Exa"))
+            and not (config.context_key() and not limits.paused("Context.dev"))) or limits.paused("Gemini"):
         return {"rule_id": rule["id"], "status": "error", "checked_at": checked_at,
                 "evidence_snippet": "Paused after a rate limit"}
-    service = "Exa"
+    service = "Context.dev" if config.context_key() else "Exa"
     try:
-        activity.emit({"type": "exa", "status": "searching", "purpose": "rule check", "query": rule["source_url"],
-                       "domains": ["migri.fi"]})
+        if service == "Exa":
+            activity.emit({"type": "exa", "status": "searching", "purpose": "rule check", "query": rule["source_url"],
+                           "domains": ["migri.fi"]})
         page = _fetch_page(rule["source_url"])
         sources_log.record([{"title": rule.get("description", "Migri"), "url": rule["source_url"]}], "rule check")
-        activity.emit({"type": "exa", "status": "found", "purpose": "rule check", "query": rule["source_url"],
-                       "results": [{"title": "Migri", "url": rule["source_url"]}], "count": 1})
+        if service == "Exa":
+            activity.emit({"type": "exa", "status": "found", "purpose": "rule check", "query": rule["source_url"],
+                           "results": [{"title": "Migri", "url": rule["source_url"]}], "count": 1})
         if not page:
-            raise RuntimeError("Exa returned no page text")
+            raise RuntimeError("The official page returned no text")
         log.info("Live check %s: fetched %d chars, starts %r", rule["id"], len(page), page[:300])
         service = "Gemini"
         verified, evidence = _ask_gemini(rule, page)

@@ -28,6 +28,8 @@ That one command installs everything on the first run (Python 3.11 venv + npm), 
 
 **No API keys? It still runs.** Every service falls back to mock data, and the UI shows a "Demo mode" note. Add `EXA_API_KEY` and `GEMINI_API_KEY` to `.env` for live mode.
 
+Optional: add `CONTEXT_DEV_API_KEY` to `.env` to fetch the exact Migri rule page through Context.dev's Scrape API. The rule check runs at most once per day per page, shares the page across rules, and uses Exa if Context.dev fails. The key stays on the backend; no personal answers are sent in the scrape request. Exa is still needed for steps, perks, and Ask.
+
 Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make test`, `make backend`, `make frontend`, `make clean`.
 
 ## Architecture
@@ -91,6 +93,7 @@ frontend/
 ## Tech challenges
 - [ ] **Gemini API (Google DeepMind)**: (in progress) understands the user's sentence, writes the plan with sources and sorts perks and support. Also confirms live that Migri's page still matches our stored rules.
 - [x] **OpenAI Codex**: used to build the Finland country config, rules engine + tests, live rule check and the "How we know this" page (see commits marked "codex:" or "[codex]" and the related pull requests).
+- [x] **Context.dev**: optional official Migri page retrieval for the cached live rule check; Exa remains the fallback.
 - [ ] **Oxylabs Web API**: not used. It was planned for company career pages, which went away with job search.
 - [ ] **ElevenLabs**: (planned) read the plan aloud / voice input for accessibility.
 - [ ] **Gemma (Google DeepMind)**: (idea) strip personal details before data leaves the device.

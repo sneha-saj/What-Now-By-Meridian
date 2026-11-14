@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AskSource, Deadline, PlanResponse, Source } from "@/lib/api";
+import type { AskSource, Deadline, Facts, PlanResponse, Source } from "@/lib/api";
+import { FIELDS, display } from "@/lib/facts";
 import { ago } from "@/lib/format";
 import { firstSentence } from "@/lib/roadmap";
 import { flattenSteps, type StepItem } from "@/lib/steps";
@@ -10,27 +11,39 @@ import { Button, GentleWarning, SourceChip, cx, formatDate, hostOf } from "./pri
 
 export type AddedItem = { question: string; answer: string; sources: AskSource[] };
 
-/** A source with the sentence Exa highlighted on the page, and how fresh the page is. */
-function SourceQuote({ s, live }: { s: Source; live: boolean }) {
+/** "Registration instructions … - Job Market Finland" -> "Registration instructions …", max ~45 characters. */
+function shortTitle(title: string) {
+  const first = title.split(/\s[-|–—]\s/)[0].trim() || title;
+  return first.length > 45 ? first.slice(0, 44).replace(/\s\S*$/, "") + "…" : first;
+}
+
+/** A small source chip: short title and site. Hover or keyboard focus shows the full title, the sentence Exa
+ *  highlighted on the page and how fresh it is. */
+function SourceLink({ s, live }: { s: Source; live: boolean }) {
   const quote = firstSentence(s.highlight);
   const fresh = ago(s.published);
   return (
-    <figure className="rounded-xl border border-rule bg-paper p-3">
-      {quote && <blockquote className="font-serif text-[1.05rem] leading-relaxed">“{quote}”</blockquote>}
-      <figcaption className={cx("flex flex-wrap items-center gap-x-2 gap-y-1 text-sm", quote && "mt-2")}>
-        {live && <GlobeIcon className="h-4 w-4 text-verified" />}
-        <a href={s.url} target="_blank" rel="noreferrer" className="font-bold underline decoration-rule underline-offset-4 hover:decoration-ink">
-          {s.title}<span className="sr-only"> (opens in a new tab)</span>
-        </a>
-        <span className="text-ink-soft">· {hostOf(s.url)}{fresh ? ` · updated ${fresh}` : ""}</span>
-      </figcaption>
-    </figure>
+    <span className="group relative inline-flex">
+      <a href={s.url} target="_blank" rel="noreferrer" title={s.title}
+        className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full border border-rule bg-paper px-3 py-1 text-sm hover:border-ink">
+        {live && <GlobeIcon className="h-3.5 w-3.5 shrink-0 text-verified" />}
+        <span className="truncate font-bold">{shortTitle(s.title)}</span>
+        <span className="shrink-0 text-ink-soft">· {hostOf(s.url)}</span>
+        <span className="sr-only"> (opens in a new tab){quote ? `. Quote: ${quote}` : ""}</span>
+      </a>
+      <span role="tooltip" aria-hidden
+        className="pointer-events-none invisible absolute bottom-full left-0 z-20 mb-2 w-[min(22rem,80vw)] rounded-xl border border-rule bg-card p-3 text-sm opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+        <span className="block font-bold">{s.title}</span>
+        {quote && <span className="mt-1 block font-serif">“{quote}”</span>}
+        <span className="mt-1 block text-ink-soft">{hostOf(s.url)}{fresh ? ` · updated ${fresh}` : ""}</span>
+      </span>
+    </span>
   );
 }
 
 function Quotes({ sources, live }: { sources: Source[]; live: boolean }) {
   if (!sources.length) return null;
-  return <div className="mt-3 space-y-2">{sources.map((s) => <SourceQuote key={s.url} s={s} live={live} />)}</div>;
+  return <div className="mt-3 flex flex-wrap gap-2">{sources.map((s) => <SourceLink key={s.url} s={s} live={live} />)}</div>;
 }
 
 function Added({ items }: { items?: AddedItem[] }) {
@@ -136,8 +149,92 @@ function AddInfo({ step, disabled, onSubmit }: { step: StepItem; disabled: boole
   );
 }
 
+export type Proposal = {
+  n: number; // the step the info was added to
+  note: string;
+  plan: PlanResponse;
+  facts: Facts;
+  factsUpdate: Partial<Facts>;
+  mock: boolean;
+  message?: string;
+};
+
+const same = (a?: StepItem, b?: StepItem) =>
+  !!a && !!b && a.title === b.title && (a.why ?? "") === (b.why ?? "") && a.points.join("|") === b.points.join("|");
+
+function StepSummary({ s, live }: { s: StepItem; live?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="font-serif text-lg font-semibold">{s.title}</p>
+      {s.why && <p className="mt-1">{s.why}</p>}
+      {s.points.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5">{s.points.map((p, j) => <li key={j}>{p}</li>)}</ul>}
+      {live !== undefined && <Quotes sources={s.sources} live={live} />}
+    </div>
+  );
+}
+
+/** Before anything changes: what's there now next to what it would become, from step n on. Accept or keep. */
+function Review({ p, current, currentDeadline, onAccept, onDiscard }: {
+  p: Proposal; current: StepItem[]; currentDeadline?: Deadline; onAccept: () => void; onDiscard: () => void;
+}) {
+  const next = flattenSteps(p.plan);
+  const rows: { n: number; now?: StepItem; after?: StepItem }[] = [];
+  for (let n = p.n; n <= Math.max(current.length, next.length); n++)
+    rows.push({ n, now: current.find((x) => x.n === n), after: next.find((x) => x.n === n) });
+  const changed = rows.filter((r) => !same(r.now, r.after));
+  const facts = Object.keys(p.factsUpdate)
+    .map((k) => FIELDS.find((f) => f.id === k))
+    .filter((f): f is (typeof FIELDS)[number] => !!f)
+    .map((f) => display(f, p.facts[f.id], p.facts) ?? f.label);
+  const oldDate = currentDeadline?.deadline_date, newDate = p.plan.deadline?.deadline_date;
+  const dateChanged = !!newDate && oldDate !== newDate;
+  const nothing = !changed.length && !facts.length && !dateChanged;
+
+  return (
+    <section aria-labelledby="review-title" className="animate-fade-up space-y-4 rounded-3xl border-2 border-accent/60 bg-card p-5 sm:p-7">
+      <div>
+        <h3 id="review-title" className="font-serif text-2xl font-semibold">Review the change from step {p.n}</h3>
+        <p className="mt-1 text-ink-soft">You added: “{p.note}”. Nothing changes until you choose.</p>
+      </div>
+      {p.message && <p className="rounded-lg bg-accent-soft px-3 py-2 text-accent-ink">{p.message}</p>}
+      {facts.length > 0 && (
+        <p><span className="font-bold">We&apos;ll also note: </span>{facts.join(" · ")}</p>
+      )}
+      {dateChanged && (
+        <p><span className="font-bold">The date you can stay until changes: </span>
+          {oldDate ? formatDate(oldDate) : "not known"} → <strong>{formatDate(newDate!)}</strong></p>
+      )}
+      {nothing && <p>Your steps stay the same with this information.</p>}
+      {changed.length > 0 && (
+        <ol className="space-y-3">
+          {changed.map((r) => (
+            <li key={r.n} className="rounded-2xl border border-rule bg-paper p-4">
+              <p className="text-sm font-bold text-accent-ink">Step {r.n}</p>
+              <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                <div className="min-w-0 text-ink-soft">
+                  <p className="mb-1 text-xs font-bold uppercase tracking-wide">Now</p>
+                  {r.now ? <div className="line-through decoration-ink-soft/50"><StepSummary s={r.now} /></div> : <p>No step here yet</p>}
+                </div>
+                <div className="min-w-0 rounded-xl border-l-4 border-accent pl-3">
+                  <p className="mb-1 text-xs font-bold uppercase tracking-wide text-accent-ink">After the change</p>
+                  {r.after ? <StepSummary s={r.after} live={!p.plan.mock} /> : <p className="text-ink-soft">This step is removed</p>}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="flex flex-wrap gap-3">
+        <Button onClick={onAccept}>{nothing ? "OK" : changed.length ? "Use the new steps" : "Save this"}</Button>
+        {!nothing && <Button variant="quiet" onClick={onDiscard}>Keep my current steps</Button>}
+      </div>
+    </section>
+  );
+}
+
 export function Steps({
   plan, deadline, live, done, added, updatingFrom, message, searchingText, onToggleDone, onAddInfo, onPickExactDate, focus,
+  proposal, onAccept, onDiscard,
 }: {
   plan?: PlanResponse;
   deadline?: Deadline;
@@ -151,6 +248,9 @@ export function Steps({
   onAddInfo: (n: number, note: string) => void;
   onPickExactDate: () => void;
   focus?: { id: "week1" | "deadline"; at: number } | null; // scroll to and briefly highlight
+  proposal?: Proposal | null; // a change waiting for the person to accept or keep
+  onAccept: () => void;
+  onDiscard: () => void;
 }) {
   const steps = flattenSteps(plan);
   const lastThisWeek = steps.filter((s) => s.kind === "action").at(-1)?.n;
@@ -172,7 +272,7 @@ export function Steps({
         </div>
       )}
       <ol aria-label="Your steps" className="space-y-4">
-        {steps.map((s) => {
+        {steps.filter((s) => !proposal || s.n < proposal.n).map((s) => {
           const updating = updatingFrom !== null && s.n >= updatingFrom;
           const isDone = !!done[s.key];
           return (
@@ -205,13 +305,14 @@ export function Steps({
                     <input type="checkbox" checked={isDone} onChange={() => onToggleDone(s.key)} className="h-5 w-5 accent-[var(--color-verified)]" />
                     Done
                   </label>
-                  <AddInfo step={s} disabled={updatingFrom !== null} onSubmit={(note) => onAddInfo(s.n, note)} />
+                  <AddInfo step={s} disabled={updatingFrom !== null || !!proposal} onSubmit={(note) => onAddInfo(s.n, note)} />
                 </div>
               </div>
             </li>
           );
         })}
       </ol>
+      {proposal && <Review p={proposal} current={steps} currentDeadline={deadline} onAccept={onAccept} onDiscard={onDiscard} />}
     </div>
   );
 }

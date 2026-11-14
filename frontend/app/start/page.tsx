@@ -15,7 +15,7 @@ import { FlowProgress } from "@/components/FlowProgress";
 import { HowWeKnow } from "@/components/HowWeKnow";
 import { Opportunities } from "@/components/Opportunities";
 import { QuestionCard, Welcome } from "@/components/QuestionCard";
-import { Legend, Steps, type AddedItem } from "@/components/Steps";
+import { Legend, Steps, type AddedItem, type Proposal } from "@/components/Steps";
 import { deleteSaved, listSaved, saveRoadmap, type SavedRoadmap } from "@/lib/saved";
 import { FIELDS, display } from "@/lib/facts";
 import { Button, GentleWarning, cx } from "@/components/primitives";
@@ -86,6 +86,7 @@ export default function StartPage() {
   const [focus, setFocus] = useState<{ id: StepAnchor; at: number } | null>(null);
   const [updatingFrom, setUpdatingFrom] = useState<number | null>(null);
   const [stepMsg, setStepMsg] = useState<{ n: number; text: string } | null>(null);
+  const [proposal, setProposal] = useState<Proposal | null>(null);
   const [saved, setSaved] = useState<SavedRoadmap<Saved>[]>([]);
   useEffect(() => { setSaved(listSaved<Saved>()); }, []);
   const stripRef = useRef<HTMLDivElement>(null);
@@ -185,8 +186,8 @@ export default function StartPage() {
         const line = toLogLine(e);
         if (line) setLog((cur) => [...cur, line].slice(-60));
       });
-      update({ plan: res.plan, deadline: res.plan.deadline, facts: res.facts });
-      setStepMsg({ n, text: res.message ?? "Updated with what you added." });
+      // Nothing changes yet: show the current and the new steps side by side, and let the person choose.
+      setProposal({ n, note, plan: res.plan, facts: res.facts, factsUpdate: res.facts_update ?? {}, mock: res.mock, message: res.message });
     } catch {
       setError("Couldn't update your steps right now. Please try again in a moment.");
     } finally {
@@ -195,6 +196,7 @@ export default function StartPage() {
   }
 
   function clearAll() {
+    setProposal(null);
     try { window.sessionStorage.removeItem(KEY); } catch {}
     window.history.replaceState(null, "", "/start");
     setS(empty());
@@ -367,7 +369,7 @@ export default function StartPage() {
           <div className="space-y-6">
             <div id={`panel-${tab}`}>
               {tab === "roadmap" && (
-                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_17rem] lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <div className="min-w-0 space-y-6">
                   <div>
                     <h2 className="font-serif text-3xl font-semibold sm:text-4xl">Your steps</h2>
@@ -392,12 +394,20 @@ export default function StartPage() {
                     onAddInfo={addInfo}
                     onPickExactDate={pickExactDate}
                     focus={focus}
+                    proposal={proposal}
+                    onAccept={() => {
+                      if (!proposal) return;
+                      update({ plan: proposal.plan, deadline: proposal.plan.deadline, facts: proposal.facts });
+                      setStepMsg({ n: proposal.n, text: "Updated with what you added." });
+                      setProposal(null);
+                    }}
+                    onDiscard={() => { if (proposal) setStepMsg({ n: proposal.n, text: "Kept your current steps." }); setProposal(null); }}
                   />
                   {opportunitiesHint}
                   <Legend />
                 </div>
                 {/* What we know so far: on the right of the steps (below them on small screens) */}
-                <div ref={sideRef} className="scroll-mt-24 lg:sticky lg:top-6">
+                <div ref={sideRef} className="scroll-mt-24 md:sticky md:top-6">
                   <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact} />
                 </div>
                 </div>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Question } from "@/lib/api";
 import { Button, cx } from "./primitives";
 import { RotatingPhrase } from "./RotatingPhrase";
+import { MicButton, VOICE_NOTE, useVoice } from "./Voice";
 
 /** One question at a time: serif question, tap buttons (incl. "Not sure"), or answer in your own words.
  *  `previous` is the answer already given when the person went back to this question: it's shown as chosen and
@@ -72,6 +73,7 @@ export function QuestionCard({
           <label htmlFor="q-text" className="sr-only">Or answer in your own words</label>
           <input id="q-text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Or answer in your own words"
             className="min-h-11 min-w-0 flex-1 rounded-xl border border-ink/25 bg-paper px-4" />
+          <MicButton onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
           <Button type="submit" variant="quiet" disabled={!text.trim()}>Send</Button>
         </form>
       </fieldset>
@@ -93,6 +95,7 @@ export function Welcome({ busy, onSubmit, onStart, saved = [], onOpen, onDelete,
 }) {
   const [text, setText] = useState("");
   const [holdHeadline, setHoldHeadline] = useState(false);
+  const voice = useVoice();
   return (
     <section aria-labelledby="welcome-title" className="animate-fade-up mx-auto max-w-3xl space-y-6 py-6 sm:py-12">
       <h1 id="welcome-title" className="font-serif text-4xl font-semibold leading-tight text-ink sm:text-6xl"
@@ -119,7 +122,11 @@ export function Welcome({ busy, onSubmit, onStart, saved = [], onOpen, onDelete,
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (text.trim()) onSubmit(text.trim()); } }}
           placeholder="For example: I worked as a cook in Helsinki for a year on a work permit. I was laid off last Friday."
           className="w-full rounded-xl border border-ink/25 bg-card p-4 outline-none placeholder:text-ink-soft/80 focus:border-ink" />
-        <Button type="submit" variant="chip" disabled={busy || !text.trim()}>Show my steps</Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" variant="chip" disabled={busy || !text.trim()}>Show my steps</Button>
+          <MicButton disabled={busy} onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
+        </div>
+        {voice && <p className="text-xs text-ink-soft">🎤 You can also say it out loud. {VOICE_NOTE}</p>}
       </form>
       {saved.length > 0 && (
         <section aria-labelledby="saved-title" className="space-y-3 border-t border-rule pt-6">

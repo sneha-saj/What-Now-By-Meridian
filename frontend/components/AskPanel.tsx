@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api, type AskResponse, type Facts, type RoadStep } from "@/lib/api";
 import { GlobeIcon } from "./icons";
+import { MicButton } from "./Voice";
 import { Button, GentleWarning, SourceChip } from "./primitives";
 
 export type AskEntry = { question: string; res: AskResponse; added?: boolean };
@@ -47,6 +48,7 @@ export function AskPanel({
         <input id="ask-input" value={q} onChange={(e) => setQ(e.target.value)} disabled={busy}
           placeholder="For example: Can I work part-time while I look? Or: I've actually been here 3 years."
           className="min-h-12 min-w-0 flex-1 rounded-xl border border-ink/25 bg-card px-4 text-lg" />
+        <MicButton disabled={busy} onText={(t) => setQ((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
         <Button type="submit" disabled={busy || !q.trim()}>{busy ? "Looking it up…" : "Ask"}</Button>
       </form>
       {busy && <p role="status" className="flex items-center gap-2 text-sm text-ink-soft"><GlobeIcon className="h-4 w-4 text-verified" /> Exa is looking this up…</p>}

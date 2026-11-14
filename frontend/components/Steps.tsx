@@ -8,6 +8,7 @@ import { firstSentence } from "@/lib/roadmap";
 import { flattenSteps, type StepItem } from "@/lib/steps";
 import { CheckIcon, GlobeIcon, PersonIcon, SearchIcon } from "./icons";
 import { Button, GentleWarning, SourceChip, cx, formatDate, hostOf } from "./primitives";
+import { ListenButton, MicButton } from "./Voice";
 
 export type AddedItem = { question: string; answer: string; sources: AskSource[] };
 
@@ -102,6 +103,7 @@ function StayHeader({ d, note, onPickExactDate }: { d: Deadline; note?: string |
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
+        {date && <ListenButton label="Listen" text={`You can stay in Finland to look for work until ${date}.${d.days_left !== null && d.days_left !== undefined && d.days_left >= 0 ? ` That's about ${Math.max(1, Math.round(d.days_left / 7))} weeks from now.` : ""}`} />}
         {d.check_status === "verified" && (
           <a href="/how-we-know" className="inline-flex min-h-9 flex-wrap items-center gap-1.5 rounded-full bg-verified-soft px-3 py-1 font-bold text-verified hover:underline">
             <CheckIcon /> Checked against migri.fi today{d.rule_in_force_since && <span className="font-normal">· rule since {formatDate(d.rule_in_force_since)}</span>}
@@ -156,6 +158,7 @@ function AddInfo({ step, disabled, onSubmit }: { step: StepItem; disabled: boole
         className="w-full rounded-xl border border-ink/25 bg-card p-3" />
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={disabled || !text.trim()}>Update this step and the next ones</Button>
+        <MicButton disabled={disabled} onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
         <Button type="button" variant="quiet" onClick={() => setOpen(false)}>Cancel</Button>
       </div>
     </form>
@@ -298,7 +301,10 @@ export function Steps({
                   {isDone ? <CheckIcon className="h-4 w-4" /> : s.n}
                 </span>
                 <div className={cx("min-w-0 flex-1", updating && "opacity-50")}>
-                  <p className="text-sm font-bold text-accent-ink">Step {s.n}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-accent-ink">Step {s.n}</p>
+                    <ListenButton label="Listen" text={[`Step ${s.n}. ${s.title}.`, s.why, ...s.points].filter(Boolean).join(" ")} />
+                  </div>
                   <h3 className={cx("font-serif text-xl font-semibold sm:text-2xl", isDone && "text-ink-soft line-through")}>{s.title}</h3>
                   {s.why && <p className="mt-1">{s.why}</p>}
                   {s.points.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5">{s.points.map((p, j) => <li key={j}>{p}</li>)}</ul>}

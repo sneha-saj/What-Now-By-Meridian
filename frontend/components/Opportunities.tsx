@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { OpportunitiesResponse } from "@/lib/api";
 import { isSample } from "@/lib/format";
 import { GlobeIcon } from "./icons";
 import { Button, SourceChip, cx } from "./primitives";
 import { ListenButton } from "./Voice";
+import { ExpandAll } from "./ExpandAll";
 
 const SHOW = 3;
 
@@ -87,45 +88,10 @@ export function Opportunities({
   const perks = data.perks_and_support;
   const discounts = useMore(perks?.discounts ?? []);
   const topics = perks?.topics ?? [];
+  const list = useRef<HTMLDivElement>(null);
 
-  /** Items for one topic. Nothing is shown unless a page confirms it. */
-  function items(id: string) {
-    const c = perks?.certificate;
-    if (id === "certificate")
-      return c ? (
-        <ul><Item name={c.name} listen={`${c.name}. ${c.how_to_get}`}
-          src={<><Src url={c.source_url} title="How to get it" date={c.source_date} /><ReadBy by={c.read_by} /></>}>
-          <p>{c.how_to_get}</p>
-        </Item></ul>
-      ) : null;
-    if (id === "discounts")
-      return discounts.shown.length ? (
-        <ul className="space-y-4">
-          {discounts.shown.map((d, i) => (
-            <Item key={i} name={d.name} listen={`${d.name}: ${d.discount}. Proof needed: ${d.proof_needed}.`}
-              src={<><Src url={d.source_url} title={d.city} date={d.source_date} /><ReadBy by={d.read_by} /></>}>
-              <p>{d.discount}</p>
-              <p className="text-sm text-ink-soft">Proof needed: {d.proof_needed}</p>
-            </Item>
-          ))}
-          <More {...discounts} />
-        </ul>
-      ) : null;
-    if (id === "incentives")
-      return perks?.incentives.length ? (
-        <ul className="space-y-4">
-          {perks.incentives.map((inc, i) => (
-            <Item key={i} name={inc.name} listen={`${inc.name}. ${inc.what_it_is} Conditions: ${inc.conditions_plain}. ${inc.caveat}`}
-              src={<><Src url={inc.source_url} title="Conditions" date={inc.source_date} /><ReadBy by={inc.read_by} /></>}>
-              <p>{inc.what_it_is}</p>
-              <p className="text-sm text-ink-soft">Conditions: {inc.conditions_plain}</p>
-              <p className={cx("text-sm font-bold", inc.may_apply ? "text-verified" : "text-warn")}>
-                {/^may apply/i.test(inc.caveat) ? "" : inc.may_apply ? "May apply to you. " : "Probably doesn't apply right now. "}{inc.caveat}
-              </p>
-            </Item>
-          ))}
-        </ul>
-      ) : null;
+  /** General items for a topic: support found live, or the saved guide when there's no live search. */
+  function supportList(id: string) {
     const list = (perks?.support ?? []).filter((x) => x.topic === id);
     return list.length ? (
       <ul className="space-y-4">
@@ -142,9 +108,50 @@ export function Opportunities({
     ) : null;
   }
 
+  /** Items for one topic. Nothing is shown unless a page confirms it (or it's the saved guide, labelled as such). */
+  function items(id: string) {
+    const c = perks?.certificate;
+    if (id === "certificate")
+      return c ? (
+        <ul><Item name="How to get it" listen={`${c.name}. ${c.how_to_get}`}
+          src={<><Src url={c.source_url} title="How to get it" date={c.source_date} /><ReadBy by={c.read_by} /></>}>
+          <p>{c.how_to_get}</p>
+        </Item></ul>
+      ) : supportList(id);
+    if (id === "discounts")
+      return discounts.shown.length ? (
+        <ul className="space-y-4">
+          {discounts.shown.map((d, i) => (
+            <Item key={i} name={d.name} listen={`${d.name}: ${d.discount}. Proof needed: ${d.proof_needed}.`}
+              src={<><Src url={d.source_url} title={d.city} date={d.source_date} /><ReadBy by={d.read_by} /></>}>
+              <p>{d.discount}</p>
+              <p className="text-sm text-ink-soft">Proof needed: {d.proof_needed}</p>
+            </Item>
+          ))}
+          <More {...discounts} />
+        </ul>
+      ) : supportList(id);
+    if (id === "incentives")
+      return perks?.incentives.length ? (
+        <ul className="space-y-4">
+          {perks.incentives.map((inc, i) => (
+            <Item key={i} name={inc.name} listen={`${inc.name}. ${inc.what_it_is} Conditions: ${inc.conditions_plain}. ${inc.caveat}`}
+              src={<><Src url={inc.source_url} title="Conditions" date={inc.source_date} /><ReadBy by={inc.read_by} /></>}>
+              <p>{inc.what_it_is}</p>
+              <p className="text-sm text-ink-soft">Conditions: {inc.conditions_plain}</p>
+              <p className={cx("text-sm font-bold", inc.may_apply ? "text-verified" : "text-warn")}>
+                {/^may apply/i.test(inc.caveat) ? "" : inc.may_apply ? "May apply to you. " : "Probably doesn't apply right now. "}{inc.caveat}
+              </p>
+            </Item>
+          ))}
+        </ul>
+      ) : supportList(id);
+    return supportList(id);
+  }
+
   /** The short line under a closed topic: the first thing in it. */
   function hint(id: string, label: string) {
-    if (id === "certificate") return perks?.certificate?.name ?? label;
+    if (id === "certificate") return label; // the topic title already says "Job search certificate"
     if (id === "discounts") return perks?.discounts[0] ? `${perks.discounts[0].name} · ${perks.discounts[0].discount}` : label;
     if (id === "incentives") return perks?.incentives[0]?.name ?? label;
     return (perks?.support ?? []).find((x) => x.topic === id)?.name ?? label;
@@ -155,11 +162,18 @@ export function Opportunities({
   return (
     <section aria-labelledby="opp-title" className="space-y-4">
       <div>
-        <h2 id="opp-title" className="font-serif text-3xl font-semibold sm:text-4xl">Perks and support</h2>
-        <p className="mt-2 text-ink-soft">Found live on official and city sites. Open a topic for details and sources.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="opp-title" className="font-serif text-3xl font-semibold sm:text-4xl">Perks and support</h2>
+          <ExpandAll target={list} />
+        </div>
+        <p className="mt-2 text-ink-soft">
+          {data.mock && !loading
+            ? "From our saved guide: general pointers, each linking to the official page. They weren't checked live, so open the page for the details that apply to you."
+            : "Found live on official and city sites. Open a topic for details and sources."}
+        </p>
       </div>
 
-      <div className="rounded-2xl border border-rule bg-card px-5 sm:px-7">
+      <div ref={list} className="rounded-2xl border border-rule bg-card px-5 sm:px-7">
         {shown.length === 0 ? (
           <Topic title="Perks and support" hint="Proof you're a jobseeker, discounts, and help for employers who hire you."
             open empty searching={loading}><span /></Topic>
@@ -174,9 +188,6 @@ export function Opportunities({
         })}
       </div>
 
-      {data.mock && !loading && (
-        <p className="text-sm text-ink-soft">Some of this couldn&apos;t be checked live right now, so this may be empty.</p>
-      )}
     </section>
   );
 }

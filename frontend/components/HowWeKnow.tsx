@@ -1,8 +1,9 @@
 "use client";
 // The "How we know this" content, shared by this page and the tab on /start.
 
-import { useEffect, useState, type SyntheticEvent } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { api, type RulesResponse } from "@/lib/api";
+import { ExpandAll } from "./ExpandAll";
 
 function groupBy<T>(items: T[], key: (t: T) => string): Record<string, T[]> {
   return items.reduce((acc, t) => ((acc[key(t)] ??= []).push(t), acc), {} as Record<string, T[]>);
@@ -17,6 +18,7 @@ export function HowWeKnow({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<RulesResponse | null>(null);
   const [error, setError] = useState(false);
   const [loadLive, setLoadLive] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (loadLive) api.rules().then(setData).catch(() => setError(true));
   }, [loadLive]);
@@ -24,10 +26,13 @@ export function HowWeKnow({ embedded = false }: { embedded?: boolean }) {
     if (event.currentTarget.open) setLoadLive(true);
   };
   return (
-    <div className={embedded ? "space-y-4" : "mx-auto max-w-3xl space-y-4 px-5 py-10 sm:px-8"}>
+    <div ref={root} className={embedded ? "space-y-4" : "mx-auto max-w-3xl space-y-4 px-5 py-10 sm:px-8"}>
       <header className="space-y-2">
-        {embedded ? <h2 className="font-serif text-3xl font-semibold">How we know this</h2>
-          : <h1 className="font-serif text-4xl font-semibold sm:text-5xl">How we know this</h1>}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {embedded ? <h2 className="font-serif text-3xl font-semibold">How we know this</h2>
+            : <h1 className="font-serif text-4xl font-semibold sm:text-5xl">How we know this</h1>}
+          <ExpandAll target={root} />
+        </div>
         <p className="text-ink-soft">We link to official sources and check key rules daily. Open a section if you want the details.</p>
       </header>
       <details className="group rounded-2xl bg-white shadow-sm ring-1 ring-calm-100" onToggle={load}>

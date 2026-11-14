@@ -288,12 +288,6 @@ export default function StartPage() {
       )}
     </div>
   );
-  const opportunitiesHint = s.built && s.tab === "roadmap" && (
-    <button onClick={() => goTab("opportunities")}
-      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4 text-left font-bold text-accent-ink hover:border-accent">
-      Next: perks and support for jobseekers <span aria-hidden>→</span>
-    </button>
-  );
   const live = !!s.plan && !s.plan.mock;
 
   return (
@@ -444,7 +438,6 @@ export default function StartPage() {
                     }}
                     onDiscard={() => { if (proposal) setStepMsg({ n: proposal.n, text: "Kept your current steps." }); setProposal(null); }}
                   />
-                  {opportunitiesHint}
                   <Legend />
                 </div>
                 {/* What we know so far: on the right of the steps (below them on small screens) */}

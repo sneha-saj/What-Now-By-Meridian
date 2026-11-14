@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      recreate_site:
+        description: Replace warm site containers after a runtime secret change
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -39,7 +44,14 @@ jobs:
           test -n "$GEMINI_API_KEY"
           test -n "$ACCESS_CODES" || { echo "Set the ACCESS_CODES secret first (judge-only live mode)"; exit 1; }
       - name: Deploy website and bundled API
-        run: modal deploy frontend/modal_app.py
+        env:
+          RECREATE_SITE: ${{ inputs.recreate_site }}
+        run: |
+          if [ "$RECREATE_SITE" = "true" ]; then
+            modal deploy --strategy recreate frontend/modal_app.py
+          else
+            modal deploy frontend/modal_app.py
+          fi
       - name: Deploy separate API
         run: modal deploy backend/modal_app.py
       - name: Verify website and API

@@ -271,6 +271,7 @@ class Certificate(Display):
     how_to_get: str
     source_url: str
     source_date: Optional[str] = None
+    read_by: Optional[Literal["context.dev"]] = None  # details read from the page itself by Context.dev
 
     def _defaults(self):
         return "Get your job search certificate", self.how_to_get, PrimaryAction(
@@ -284,6 +285,7 @@ class Discount(Display):
     city: str
     source_url: str
     source_date: Optional[str] = None
+    read_by: Optional[Literal["context.dev"]] = None  # details read from the page itself by Context.dev
 
     def _defaults(self):
         return self.name, self.discount, PrimaryAction(kind="open_link", label="See the discount", url=self.source_url)
@@ -297,6 +299,7 @@ class Incentive(Display):
     caveat: str
     source_url: str
     source_date: Optional[str] = None
+    read_by: Optional[Literal["context.dev"]] = None  # details read from the page itself by Context.dev
 
     def _defaults(self):
         return self.name, self.caveat or self.what_it_is, PrimaryAction(

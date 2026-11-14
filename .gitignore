@@ -13,6 +13,7 @@ __pycache__/
 .live_check_pages.json
 .gemini_cache.json
 .sources_used.json
+.context_dev_cache.json
 
 # node
 node_modules/

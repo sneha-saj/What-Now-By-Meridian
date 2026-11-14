@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import httpx
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -14,6 +13,7 @@ import config
 import sources_log
 import filecache
 import limits
+from integrations import context_dev
 from countries.finland import DEADLINE_RULES
 
 log = logging.getLogger(__name__)
@@ -58,35 +58,35 @@ def _fetch_page(url: str) -> str:
     cached = filecache.read(PAGE_CACHE_PATH, k)
     if cached is not None:
         return cached
-    if config.context_key() and not limits.paused("Context.dev"):
+    if context_dev.available():
         try:
             text = _fetch_context_page(url)
             filecache.write(PAGE_CACHE_PATH, k, text, CACHE_TTL)
+            filecache.write(PAGE_CACHE_PATH, k + ":by", "context.dev", CACHE_TTL)
             return text
-        except Exception as exc:
-            limits.note_failure("Context.dev", exc)
-            log.warning("Context.dev could not read %s: %s", url, type(exc).__name__)
+        except Exception as exc:  # the wrapper already logged it and paused Context.dev on a 429/402
+            log.warning("Context.dev could not read %s, trying Exa: %s", url, exc)
             if not config.exa_key() or limits.paused("Exa"):
                 raise
     if not config.exa_key() or limits.paused("Exa"):
         raise RuntimeError("No page retrieval provider is available")
-    return _fetch_exa_page(url, k)
+    text = _fetch_exa_page(url, k)
+    filecache.write(PAGE_CACHE_PATH, k + ":by", "exa", CACHE_TTL)
+    return text
+
+
+def page_read_by(url: str) -> str | None:
+    """Which service read today's copy of this page ("context.dev" or "exa"), so the app can say so."""
+    return filecache.read(PAGE_CACHE_PATH, filecache.key("page", url) + ":by")
 
 
 def _fetch_context_page(url: str) -> str:
-    """Use Context.dev's Scrape API for the exact official page, with no user facts."""
-    response = httpx.post(
-        "https://api.context.dev/v1/web/scrape",
-        headers={"Authorization": f"Bearer {config.context_key()}"},
-        json={"url": url, "formats": {"markdown": True},
-              "sharedParams": {"mainContentOnly": True}, "maxAgeMs": 0},
-        timeout=15,
-    )
-    response.raise_for_status()
-    markdown = response.json().get("markdown") or {}
-    if markdown.get("success") is not True or not isinstance(markdown.get("data"), str) or not markdown["data"].strip():
+    """Migri's exact page through Context.dev (shared wrapper), fresh: `maxAgeMs` 0, because the app says "checked
+    against migri.fi today". This runs at most once a day per page, since _fetch_page caches the text for 24h."""
+    text = context_dev.read_markdown(url, purpose="Migri's rule page", max_age_ms=0, cache=False)
+    if not text:
         raise RuntimeError("Context.dev returned no Markdown for the official page")
-    return markdown["data"][:20000]
+    return text[:20000]
 
 
 def _fetch_exa_page(url: str, k: str) -> str:
@@ -194,7 +194,8 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
         log.info("Live check %s: fetched %d chars, starts %r", rule["id"], len(page), page[:300])
         service = "Gemini"
         verified, evidence = _ask_gemini(rule, page)
-        entry = {"rule_id": rule["id"], "status": "verified" if verified else "mismatch", "checked_at": checked_at, "evidence_snippet": evidence}
+        entry = {"rule_id": rule["id"], "status": "verified" if verified else "mismatch", "checked_at": checked_at,
+                 "evidence_snippet": evidence, "read_by": page_read_by(rule["source_url"])}
     except Exception as exc:  # graceful degradation for unavailable upstreams
         limits.note_failure(service, exc)
         log.warning("Live check failed for %s: %s: %s", rule["id"], type(exc).__name__, str(exc)[:200])

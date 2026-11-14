@@ -75,25 +75,30 @@ def test_failed_api_check_is_cached_briefly(monkeypatch):
     assert len(calls) == 1  # not retried on every request
 
 
-def test_context_dev_reads_official_page_and_caches_it(monkeypatch, tmp_path):
+def test_context_dev_reads_official_page_fresh_and_caches_it(monkeypatch, tmp_path):
     import httpx
+    from integrations import context_dev
     monkeypatch.setattr(live_check, "PAGE_CACHE_PATH", tmp_path / "pages.json")
-    monkeypatch.setattr(live_check.config, "context_key", lambda: "context-key")
+    monkeypatch.setattr(context_dev.config, "context_key", lambda: "context-key")
     monkeypatch.setattr(live_check.config, "exa_key", lambda: None)
     requests = []
 
     def fake_post(url, **kwargs):
         requests.append((url, kwargs))
-        return httpx.Response(200, json={"markdown": {"success": True, "data": "Official Migri rule text"}},
+        return httpx.Response(200, json={"markdown": {"requested": True, "success": True, "data": "Official Migri rule text"}},
                               request=httpx.Request("POST", url))
 
-    monkeypatch.setattr(live_check.httpx, "post", fake_post)
+    monkeypatch.setattr(context_dev.httpx, "post", fake_post)
     page_url = DEADLINE_RULES[0]["source_url"]
     assert live_check._fetch_page(page_url) == "Official Migri rule text"
     assert live_check._fetch_page(page_url) == "Official Migri rule text"
     assert len(requests) == 1
     assert requests[0][1]["json"]["url"] == page_url
     assert "context-key" in requests[0][1]["headers"]["Authorization"]
+    body = requests[0][1]["json"]
+    assert body["maxAgeMs"] == 0  # "checked against migri.fi today" means a fresh copy, once a day
+    assert body["formats"] == {"markdown": True} and body["sharedParams"] == {"mainContentOnly": True}
+    assert body["timeoutOpts"] == {"milliseconds": 30_000, "behavior": "return-partial"}
 
 
 def test_context_dev_failure_uses_exa(monkeypatch, tmp_path):
@@ -103,3 +108,18 @@ def test_context_dev_failure_uses_exa(monkeypatch, tmp_path):
     monkeypatch.setattr(live_check, "_fetch_context_page", lambda _url: (_ for _ in ()).throw(RuntimeError("failed")))
     monkeypatch.setattr(live_check, "_fetch_exa_page", lambda _url, _key: "Exa page")
     assert live_check._fetch_page(DEADLINE_RULES[0]["source_url"]) == "Exa page"
+
+
+def test_check_says_which_service_read_the_page(monkeypatch, tmp_path):
+    import httpx
+    from integrations import context_dev
+    monkeypatch.setattr(live_check, "CACHE_PATH", tmp_path / "live.json")
+    monkeypatch.setattr(live_check, "PAGE_CACHE_PATH", tmp_path / "pages.json")
+    monkeypatch.setattr(context_dev.config, "context_key", lambda: "context-key")
+    monkeypatch.setattr(live_check.config, "gemini_key", lambda: "gemini")
+    monkeypatch.setattr(live_check.config, "exa_key", lambda: None)
+    monkeypatch.setattr(context_dev.httpx, "post", lambda url, **kw: httpx.Response(
+        200, json={"markdown": {"requested": True, "success": True, "data": "3 months"}}, request=httpx.Request("POST", url)))
+    monkeypatch.setattr(live_check, "_ask_gemini", lambda rule, page: (True, "3 months"))
+    result = live_check.check_rule(DEADLINE_RULES[0], force=True)
+    assert result["status"] == "verified" and result["read_by"] == "context.dev"

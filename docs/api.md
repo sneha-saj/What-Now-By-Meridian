@@ -19,6 +19,7 @@ Every response has `mock: true` when a fallback was used (no API key, or a call 
 | `GET /rules` | The deadline rules, their latest live check against Migri, and trusted domains |
 | `POST /referrals` | Companies hiring, people to contact, communities, and draft messages |
 | `POST /chat` | Guided chat: the same steps, one message at a time, with a live "Your situation" card |
+| `POST /chat/stream` | Same as `/chat`, streamed with live progress, Exa activity and partial results |
 | `GET /health` | Which integrations have keys configured |
 
 ---
@@ -176,8 +177,9 @@ Response:
 ## POST /plan
 
 1. The rules engine (`rules.calculate_deadline`, plain code) computes the deadline from the facts.
-2. The live check confirms the rule against the official Migri page. If it isn't `verified`,
-   `deadline_date` is left out and the response carries a calm `warning` with `warning_link`.
+2. The live check confirms the rule against the official Migri page, judging meaning rather than exact wording.
+   The date is always shown. If the page seems to say something different (`mismatch`), a calm `warning`
+   is added; if the check couldn't run (`error`), a neutral "Couldn't check right now" note is added.
 3. Exa searches only the trusted domains (preferring pages updated after June 2025) for: registering
    as a jobseeker, unemployment benefits, alternative permits for this person, and labour-shortage sectors.
 4. Gemini writes the plan from those pages only. Every action must cite at least one real source;
@@ -189,10 +191,11 @@ Response:
 
 | Field | Notes |
 | --- | --- |
-| `deadline` | `status` (`ok` / `not_applicable` / `needs_info` / `unclear`), `explanation`, `months`, `deadline_date`, `days_left`, `possible_dates` (when the permit or years are unclear), `source`, `verified`, `live_checks`, `warning`, `warning_link` |
+| `deadline` | `status` (`ok` / `not_applicable` / `needs_info` / `unclear`), `explanation`, `months`, `deadline_date` (always set when the rule applies and the job end date is known), `days_left`, `possible_dates` (when the permit or years are unclear), `rule_in_force_since`, `source`, `verified`, `check_status` (`verified` / `mismatch` / `error` / `none`), `live_checks`, `warning`, `warning_link` |
 | `this_week` | Exactly 3 actions: `title`, `why` (one calm sentence), `how` (short steps), `sources` (`title`, `url`, `highlight`) |
 | `timeline` | Steps back from the deadline: Week 1, 2, 4, 8, Final weeks. Each has `steps` and `sources` |
-| `plan_b` | Alternatives: `option`, `why`, `latest_start_date`, `sources` |
+| `plan_b` | Permits that fit this person, chosen by plain code (new employer; job-seeker permit if they studied in Finland; family-based if they have family here; entrepreneur): `id`, `option`, `who_it_fits`, `why`, `latest_start_date` (the deadline), `sources`. Options without a source are dropped |
+| `plan_b_note` | Plain-language note when no option fits or none is needed |
 | `disclaimer` | Not legal advice |
 
 ### Example
@@ -242,7 +245,8 @@ Response:
       }
     ],
     "warning": null,
-    "warning_link": null
+    "warning_link": null,
+    "check_status": "verified"
   },
   "this_week": [
     {
@@ -377,18 +381,29 @@ Response:
   ],
   "plan_b": [
     {
-      "option": "Another residence permit",
-      "why": "Another permit type may fit your situation; check with Migri or your union.",
-      "latest_start_date": null,
+      "id": "new_employer",
+      "option": "A new work-based residence permit",
+      "who_it_fits": "Anyone who gets a job offer from a new employer before the deadline.",
+      "why": "If a new employer hires you, you can apply for a new work-based permit. Check the conditions on Migri's site.",
+      "latest_start_date": "2027-02-01",
       "sources": [
         {
-          "title": "Migri – Changes to work-based residence permits",
-          "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+          "title": "Migri – Finnish Immigration Service",
+          "url": "https://migri.fi/en/home",
           "highlight": null
-        },
+        }
+      ]
+    },
+    {
+      "id": "entrepreneur",
+      "option": "Residence permit for an entrepreneur",
+      "who_it_fits": "People who want to start or run their own business in Finland.",
+      "why": "If you want to start your own business, for example in food, Migri has a separate permit. Check the conditions first.",
+      "latest_start_date": "2027-02-01",
+      "sources": [
         {
-          "title": "InfoFinland – Unemployment",
-          "url": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+          "title": "Migri – Finnish Immigration Service",
+          "url": "https://migri.fi/en/home",
           "highlight": null
         }
       ]
@@ -526,12 +541,12 @@ Response:
 4. **Drafts**: Gemini writes one short, polite message per contact (max 80 words) mentioning one real
    detail from the sources. Drafts only: nothing is ever sent.
 
-At most 6 Exa searches per request, cached for 24 hours, to control credits. Without Exa, only real
+At most 7 Exa searches per request (run in parallel), cached for 24 hours, to control credits. Without Exa, only real
 help services are listed (no invented companies or people).
 
 **Input**: `{"facts": {...}}`. Uses `city`, `field` and the other facts.
 
-**Output**: `companies` (`name`, `why_relevant`, `url`, `source`), `contacts` (`name`, `role`,
+**Output**: `companies` (`name`, `why_relevant` (one sentence, max 20 words), `url`, `hiring_now`, `hiring_evidence` (a job post or careers page, when found), `source`; companies with hiring evidence come first), `contacts` (`name`, `role`,
 `company`, `why_this_person`, `profile_url`), `communities` (`name`, `type`, `date_if_event`, `url`),
 `drafts` (`to`, `profile_url`, `message`).
 
@@ -564,9 +579,10 @@ Response:
       "url": "https://example.com/bistro",
       "source": {
         "title": "Example Bistro Oy (sample)",
-        "url": "https://example.com/bistro",
-        "highlight": "Sample data: we are hiring line cooks in Helsinki."
-      }
+        "url": "https://example.com/bistro"
+      },
+      "hiring_now": true,
+      "hiring_evidence": "https://example.com/bistro/careers"
     },
     {
       "name": "Example Hotels Finland (sample)",
@@ -574,9 +590,10 @@ Response:
       "url": "https://example.com/hotels",
       "source": {
         "title": "Example Hotels Finland (sample)",
-        "url": "https://example.com/hotels",
-        "highlight": "Sample data: open roles in hotel restaurants."
-      }
+        "url": "https://example.com/hotels"
+      },
+      "hiring_now": false,
+      "hiring_evidence": null
     }
   ],
   "contacts": [
@@ -711,6 +728,7 @@ Response:
       "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US"
     },
     "verified": true,
+    "check_status": "verified",
     "live_checks": [
       {
         "rule_id": "work-based-three-months",
@@ -724,3 +742,20 @@ Response:
   "mock": true
 }
 ```
+
+---
+
+## POST /chat/stream
+
+Same input and final result as `/chat`, sent as server-sent events so the roadmap can fill in live.
+Each event is a line `data: {json}`:
+
+| Event | Meaning |
+| --- | --- |
+| `{"type": "progress", "stage": ...}` | `reading_situation`, `checking_rules`, `finding_steps`, `finding_people` |
+| `{"type": "exa", "status": "searching", "purpose", "query", "domains", "category"}` | Exa started a search (e.g. purpose `unemployment benefits` on `kela.fi`) |
+| `{"type": "exa", "status": "found", "purpose", "query", "results": [{title, url, published}], "count"}` | What that search found |
+| `{"type": "exa", "status": "cached", "purpose", "count"}` | Reused a search from the last 24 hours |
+| `{"type": "partial", "key": "deadline" / "plan" / "referrals", "data": ...}` | A piece of the result is ready |
+| `{"type": "result", "data": <ChatResponse>}` | The final `/chat` response |
+| `{"type": "error"}` | Something failed; the browser falls back to `/chat` |

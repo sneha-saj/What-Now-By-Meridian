@@ -309,7 +309,8 @@ def search_plan_sources(topics: list[tuple[str, str]], per_topic: int = 3) -> li
             for r in res.results:
                 highlight = " ... ".join(getattr(r, "highlights", None) or [])[:1200]
                 if r.url not in seen and highlight:
-                    seen[r.url] = {"topic": topic, "title": r.title or r.url, "url": r.url, "highlight": highlight}
+                    seen[r.url] = {"topic": topic, "title": r.title or r.url, "url": r.url, "highlight": highlight,
+                                   "published": (getattr(r, "published_date", None) or "")[:10] or None}
     except Exception as e:  # noqa: BLE001
         log.warning("Exa plan search failed, using mock: %s", e)
         return None

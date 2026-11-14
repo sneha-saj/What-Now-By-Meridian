@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+import activity
 import config
 from countries.finland import DEADLINE_RULES
 
@@ -85,7 +86,11 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
     try:
         if not config.exa_key() or not config.gemini_key():
             raise RuntimeError("Live-check API keys are not configured")
+        activity.emit({"type": "exa", "status": "searching", "purpose": "rule check", "query": rule["source_url"],
+                       "domains": ["migri.fi"]})
         page = _fetch_page(rule["source_url"])
+        activity.emit({"type": "exa", "status": "found", "purpose": "rule check", "query": rule["source_url"],
+                       "results": [{"title": "Migri", "url": rule["source_url"]}], "count": 1})
         if not page:
             raise RuntimeError("Exa returned no page text")
         log.info("Live check %s: fetched %d chars, starts %r", rule["id"], len(page), page[:300])

@@ -13,11 +13,10 @@ export default function HowWeKnow() {
   const [error, setError] = useState(false);
   useEffect(() => { api.rules().then(setData).catch(() => setError(true)); }, []);
   return (
-    <main className="mx-auto max-w-4xl space-y-8 px-4 py-12">
+    <main id="main" className="mx-auto max-w-5xl space-y-8 px-5 py-12 sm:px-8">
       <header className="space-y-2">
-        <a href="/" className="text-sm text-calm-500 underline">← What Now?</a>
-        <h1 className="text-3xl font-semibold">How we know this</h1>
-        <p className="text-calm-700">We store each rule with its official source and check the official page again each time. If something looks different, we warn you instead of guessing.</p>
+                <h1 className="font-serif text-4xl font-semibold sm:text-5xl">How we know this</h1>
+        <p className="text-calm-700">We store each rule with its official source. Once a day, Exa reads the official Migri page and Gemini checks that it still says the same thing. If something looks different, we warn you instead of guessing.</p>
       </header>
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Finland deadline rules</h2>
@@ -32,7 +31,7 @@ export default function HowWeKnow() {
               <td className="p-3 text-calm-700">{rule.description}<p className="mt-1 text-xs text-calm-500">Applies to: {rule.applies_to.join(", ")}</p></td>
               <td className="p-3"><a className="text-calm-700 underline" href={rule.source_url} target="_blank" rel="noreferrer">Migri</a></td>
               <td className="p-3">{rule.in_force_since}</td>
-              <td className="p-3"><span className={rule.live_check.status === "verified" ? "text-emerald-800" : "text-amber-900"}>{rule.live_check.status}</span><p className="mt-1 text-xs text-calm-500">{checkedTime(rule.live_check.checked_at)}</p>{rule.live_check.evidence_snippet && <p className="mt-1 max-w-xs text-xs text-calm-700">{rule.live_check.evidence_snippet}</p>}</td>
+              <td className="p-3"><span className={rule.live_check.status === "verified" ? "font-bold text-verified" : rule.live_check.status === "mismatch" ? "font-bold text-warn" : "text-ink-soft"}>{rule.live_check.status === "verified" ? "✓ Matches Migri today" : rule.live_check.status === "mismatch" ? "May have changed" : "Couldn't check right now"}</span><p className="mt-1 text-xs text-calm-500">{checkedTime(rule.live_check.checked_at)}</p>{rule.live_check.evidence_snippet && <p className="mt-1 max-w-xs text-xs text-calm-700">{rule.live_check.evidence_snippet}</p>}</td>
             </tr>)}</tbody>
           </table>
           {!data && !error && <p className="p-4 text-sm text-calm-500">Loading latest checks…</p>}

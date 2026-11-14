@@ -2,6 +2,7 @@
 
 from datetime import date
 
+import contextvars
 import json
 import logging
 import queue
@@ -13,6 +14,7 @@ from fastapi import Body, FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+import activity
 import config
 from models import (STEPS, Action, ChatRequest, ChatResponse, Community, Company, Contact, Deadline, Draft, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
                     PlanResponse, PossibleDate, ReferralRequest, ReferralResponse, Source,
@@ -122,6 +124,7 @@ def build_deadline(f: Facts, today: date) -> Deadline:
         status=status, explanation=r["explanation"], applies=r["applies"], months=r["months"],
         deadline_date=r["deadline_date"], possible_dates=possible, missing=missing, rule_id=r["rule_id"],
         source=Source(title=SOURCE_TITLE, url=r["source_url"]), verified=check_status == "verified",
+        rule_in_force_since=next((x["in_force_since"] for x in DEADLINE_RULES if x["id"] in rule_ids), None),
         check_status=check_status, live_checks=checks,
     )
     if d.deadline_date:
@@ -135,7 +138,8 @@ def build_deadline(f: Facts, today: date) -> Deadline:
 
 
 def _cite(ids: list[str], by_id: dict) -> list[Source]:
-    return [Source(title=by_id[i]["title"], url=by_id[i]["url"], highlight=by_id[i]["highlight"])
+    return [Source(title=by_id[i]["title"], url=by_id[i]["url"], highlight=by_id[i]["highlight"],
+                   published=by_id[i].get("published"))
             for i in ids if i in by_id]
 
 
@@ -332,8 +336,9 @@ def chat_stream(req: ChatRequest):
     events: queue.Queue = queue.Queue()
 
     def work():
+        activity.set_emitter(events.put)
         try:
-            resp = run_chat(req, emit=lambda stage: events.put({"type": "progress", "stage": stage}))
+            resp = run_chat(req)
             events.put({"type": "result", "data": resp.model_dump(mode="json", exclude_none=True)})
         except Exception as e:  # noqa: BLE001
             logging.getLogger(__name__).exception("chat stream failed: %s", e)
@@ -350,12 +355,20 @@ def chat_stream(req: ChatRequest):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-def run_chat(req: ChatRequest, emit=lambda stage: None) -> ChatResponse:
+def _progress(stage: str) -> None:
+    activity.emit({"type": "progress", "stage": stage})
+
+
+def _partial(key: str, value) -> None:
+    activity.emit({"type": "partial", "key": key, "data": value.model_dump(mode="json", exclude_none=True)})
+
+
+def run_chat(req: ChatRequest) -> ChatResponse:
     today = date.today()
     latest = req.messages[-1] if req.messages else None
     extracted, mock = {}, config.USE_MOCK
     if latest and latest.role == "user" and latest.text.strip():
-        emit("reading_situation")
+        _progress("reading_situation")
         if config.USE_MOCK:
             extracted = mocks.example_facts()
         else:
@@ -377,18 +390,30 @@ def run_chat(req: ChatRequest, emit=lambda stage: None) -> ChatResponse:
 
     current = STEPS.index(req.step) if req.step in STEPS else 0
     step = STEPS[max(1, min(current + (req.action == "next"), len(STEPS) - 1))]
-    emit("checking_rules")
+    _progress("checking_rules")
     deadline = build_deadline(facts, today) if not config.USE_MOCK else PlanResponse(**mocks.example("plan")).deadline
+    _partial("deadline", deadline)
     resp = ChatResponse(reply=STEP_REPLY[step], step=step, facts=facts, confirmed_fields=confirmed,
                         deadline=deadline, mock=mock)
+
+    def plan_then_report():
+        out = build_full_plan(facts, deadline)
+        _partial("plan", out)
+        return out
+
+    def referrals_then_report():
+        out = build_referrals(facts)
+        _partial("referrals", out)
+        return out
+
     with ThreadPoolExecutor(max_workers=2) as pool:
         plan_job = refs_job = None
         if step in ("this_week", "find_your_way_in"):
-            emit("finding_steps")
-            plan_job = pool.submit(build_full_plan, facts, deadline)
+            _progress("finding_steps")
+            plan_job = pool.submit(contextvars.copy_context().run, plan_then_report)
         if step == "find_your_way_in":
-            emit("finding_people")
-            refs_job = pool.submit(build_referrals, facts)
+            _progress("finding_people")
+            refs_job = pool.submit(contextvars.copy_context().run, referrals_then_report)
         if plan_job:
             resp.plan = plan_job.result()
             resp.mock = resp.mock or resp.plan.mock

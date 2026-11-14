@@ -50,8 +50,8 @@ function ContactCard({
 
 /** Step 4. Max 5 of each, "Show more" for the rest. Drafts are editable and never sent. */
 export function FindYourWayIn({
-  r, drafts, onDraft,
-}: { r: ReferralResponse; drafts: Record<string, string>; onDraft: (url: string, text: string) => void }) {
+  r, drafts, onDraft, bare = false,
+}: { r: ReferralResponse; drafts: Record<string, string>; onDraft: (url: string, text: string) => void; bare?: boolean }) {
   const companies = useShowMore(r.companies);
   const contacts = useShowMore(r.contacts);
   const communities = useShowMore(r.communities);
@@ -59,7 +59,7 @@ export function FindYourWayIn({
 
   return (
     <section aria-labelledby="way-title" className="space-y-8">
-      <div>
+      <div className={bare ? "sr-only" : undefined}>
         <h2 id="way-title" className="font-serif text-4xl font-semibold">Find your way in</h2>
         <p className="mt-2 text-lg text-ink-soft">Most jobs in Finland are found through people. Here are some places to start.</p>
       </div>

@@ -61,6 +61,7 @@ class Source(BaseModel):
     title: str
     url: str
     highlight: Optional[str] = None
+    published: Optional[str] = None  # page date reported by Exa, when known
 
 
 class PossibleDate(BaseModel):
@@ -79,6 +80,7 @@ class Deadline(BaseModel):
     possible_dates: list[PossibleDate] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
     rule_id: Optional[str] = None
+    rule_in_force_since: Optional[str] = None
     source: Source
     verified: bool = False
     check_status: Literal["verified", "mismatch", "error", "none"] = "none"

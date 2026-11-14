@@ -10,9 +10,15 @@ const atkinson = Atkinson_Hyperlegible({
   display: "swap",
 });
 
+const TITLE = "What Now? – Laid off on a work permit? Your deadline & next steps (Finland)";
+const DESCRIPTION =
+  "Find out how long you can stay, what to do this week, and who can refer you to a new job. Sourced from Migri and Kela.";
+
 export const metadata: Metadata = {
-  title: "What Now? by Meridian",
-  description: "Lost your job in Finland? Calm, sourced next steps: your permit deadline, this week's actions and people who can help.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: { title: TITLE, description: DESCRIPTION, type: "website", siteName: "What Now?" },
+  twitter: { card: "summary", title: TITLE, description: DESCRIPTION },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -26,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <nav aria-label="Main" className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
             <a href="/" className="font-serif text-xl font-semibold tracking-tight">
               What Now?
-              <span className="ml-2 font-sans text-sm font-normal text-ink-soft">by Meridian</span>
+              <span className="ml-2 hidden font-sans text-sm font-normal text-ink-soft sm:inline">Your next steps after a layoff.</span>
             </a>
             <div className="flex items-center gap-1 text-[0.95rem]">
               <a href="/start" className="rounded-lg px-3 py-2 hover:bg-paper-deep">Get started</a>

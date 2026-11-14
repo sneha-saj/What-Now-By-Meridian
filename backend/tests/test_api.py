@@ -395,4 +395,7 @@ def test_chat_stream_sends_progress_then_result(verified, live_services):
         events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
     stages = [e["stage"] for e in events if e["type"] == "progress"]
     assert stages == ["checking_rules", "finding_steps"]
+    partials = [e["key"] for e in events if e["type"] == "partial"]
+    assert partials == ["deadline", "plan"]  # roadmap nodes can fill in before the final result
     assert events[-1]["type"] == "result" and events[-1]["data"]["step"] == "this_week"
+    assert events[-1]["data"]["deadline"]["rule_in_force_since"] == "2025-06-11"

@@ -1,129 +1,76 @@
-"use client";
+import { CheckIcon, GlobeIcon, PersonIcon } from "@/components/icons";
 
-import { useState } from "react";
-import { api, type Facts, type PlanResponse, type Question, type ReferralResponse } from "@/lib/api";
-import { DeadlineCard, PlanBCard, QuestionChips, ReferralsCard, ThisWeekCard, TimelineCard } from "@/components/ui";
+const STEPS = [
+  {
+    title: "Your deadline",
+    text: "How long you can stay to find a new job: 3 or 6 months, worked out from your permit and checked against Migri's page the same day.",
+  },
+  {
+    title: "This week",
+    text: "The three most useful things to do now, like registering as a jobseeker and checking Kela support, each with its official source.",
+  },
+  {
+    title: "Week by week, and a Plan B",
+    text: "A roadmap from today to your deadline, plus other permits that could fit you and the latest date to start them.",
+  },
+  {
+    title: "Find your way in",
+    text: "Companies hiring now, people who could refer you, and communities and events. With a short draft message you send yourself.",
+  },
+];
 
 export default function Home() {
-  const [text, setText] = useState("");
-  const [facts, setFacts] = useState<Facts | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [plan, setPlan] = useState<PlanResponse | null>(null);
-  const [refs, setRefs] = useState<ReferralResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [outOfScope, setOutOfScope] = useState<{ message: string; link: string } | null>(null);
-
-  async function run<T>(fn: () => Promise<T>) {
-    setLoading(true);
-    setError(null);
-    try {
-      return await fn();
-    } catch (e) {
-      setError("Something went wrong on our side. Your information is safe — please try again.");
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function buildPlan(f: Facts) {
-    await run(async () => {
-      const [p, r] = await Promise.all([api.plan(f), api.referrals(f)]);
-      setPlan(p);
-      setRefs(r);
-    });
-  }
-
-  async function submit() {
-    if (!text.trim()) return;
-    setPlan(null);
-    setRefs(null);
-    setOutOfScope(null);
-    const res = await run(() => api.intake(text));
-    if (!res) return;
-    if (res.out_of_scope || !res.facts) {
-      setFacts(null);
-      setQuestions([]);
-      setOutOfScope({ message: res.message ?? "", link: res.link ?? "" });
-      return;
-    }
-    setFacts(res.facts);
-    setQuestions(res.missing_questions);
-    if (res.missing_questions.length === 0) await buildPlan(res.facts);
-  }
-
-  async function answer(q: Question, value: string) {
-    const next = { ...facts, [q.id]: value } as Facts;
-    const remaining = questions.filter((x) => x.id !== q.id);
-    setFacts(next);
-    setQuestions(remaining);
-    if (remaining.length === 0) await buildPlan(next);
-  }
-
-  const isMock = plan?.mock || refs?.mock;
-
   return (
-    <main className="mx-auto max-w-2xl space-y-6 px-4 py-12">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-semibold">What now?</h1>
-        <p className="text-calm-700">
-          Lost your job in Finland? Take a breath. Tell us in one sentence — we'll work out what matters this
-          week.
-        </p>
-      </header>
-
-      <div className="space-y-3">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), submit())}
-          rows={3}
-          placeholder="e.g. I was laid off yesterday as a software developer in Espoo, I'm on a work permit from India."
-          className="w-full rounded-2xl border border-calm-100 bg-white p-4 text-base shadow-sm outline-none focus:ring-2 focus:ring-calm-500"
-        />
-        <button
-          onClick={submit}
-          disabled={loading || !text.trim()}
-          className="rounded-full bg-calm-700 px-6 py-2.5 font-medium text-white disabled:opacity-40"
-        >
-          {loading ? "Thinking…" : "Show me what to do"}
-        </button>
-      </div>
-
-      {error && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{error}</p>}
-
-      {questions.length > 0 && (
-        <section className="space-y-5 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-calm-100">
-          <p className="text-sm text-calm-500">
-            {questions.length === 1 ? "One quick question" : `${questions.length} quick questions`} — just tap.
+    <main id="main" className="mx-auto max-w-7xl px-5 pb-20 sm:px-8">
+      <section className="grid gap-10 py-12 sm:py-20 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-end">
+        <div className="space-y-6">
+          <h1 className="animate-fade-up font-serif text-5xl font-semibold leading-[1.05] sm:text-7xl">
+            Laid off? Let&apos;s figure out what&apos;s next.
+          </h1>
+          <p className="max-w-2xl text-xl sm:text-2xl">
+            Find out how long you can stay, what to do this week, and who can refer you to a new job.
           </p>
-          {questions.slice(0, 1).map((q) => (
-            <QuestionChips key={q.id} q={q} onAnswer={(v) => answer(q, v)} />
-          ))}
-        </section>
-      )}
-
-      {plan && <DeadlineCard d={plan.deadline} />}
-      {outOfScope && (
-        <p className="rounded-xl bg-calm-50 p-4 text-sm text-calm-700">
-          {outOfScope.message}{" "}
-          {outOfScope.link && (
-            <a className="underline" href={outOfScope.link} target="_blank" rel="noreferrer">
-              Read more
+          <div className="flex flex-wrap items-center gap-4 pt-2">
+            <a href="/start" className="inline-flex min-h-12 items-center rounded-xl bg-ink px-6 py-3 text-lg font-bold text-paper hover:bg-ink/90">
+              Let&apos;s start
             </a>
-          )}
-        </p>
-      )}
-      {plan && <ThisWeekCard actions={plan.this_week} />}
-      {plan && plan.timeline.length > 0 && <TimelineCard weeks={plan.timeline} />}
-      {plan && plan.plan_b.length > 0 && <PlanBCard options={plan.plan_b} />}
-      {refs && <ReferralsCard r={refs} />}
+            <span className="text-ink-soft">Takes about 2 minutes. No account.</span>
+          </div>
+          <p className="text-sm text-ink-soft">Currently for people in Finland. More countries coming.</p>
+        </div>
 
-      {plan && <p className="text-center text-xs text-calm-500">{plan.disclaimer}</p>}
-      {isMock && (
-        <p className="text-center text-xs text-calm-500">Demo mode: some results are sample data (no API keys set).</p>
-      )}
+        <aside aria-label="How it works" className="rounded-3xl border border-rule bg-card p-6 shadow-[0_6px_24px_rgba(28,42,69,0.06)] sm:p-8">
+          <p className="font-serif text-2xl font-semibold">How it works</p>
+          <ol className="mt-4 space-y-4">
+            <li className="flex gap-3"><PersonIcon className="mt-1 h-5 w-5 text-accent-ink" /><span><strong>You tell us</strong> what happened in a sentence. We ask only what&apos;s missing.</span></li>
+            <li className="flex gap-3"><GlobeIcon className="mt-1 h-5 w-5 text-verified" /><span><strong>Exa searches live</strong> on Migri, Kela, InfoFinland and Työmarkkinatori, and the web for jobs and people.</span></li>
+            <li className="flex gap-3"><CheckIcon className="mt-1 h-5 w-5 text-verified" /><span><strong>Your roadmap builds itself</strong>, step by step, every fact with its source.</span></li>
+          </ol>
+        </aside>
+      </section>
+
+      <section aria-labelledby="what-title" className="border-t border-rule py-12">
+        <h2 id="what-title" className="font-serif text-3xl font-semibold sm:text-4xl">What you get</h2>
+        <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {STEPS.map((s, i) => (
+            <li key={s.title} className="rounded-2xl border border-rule bg-card p-6">
+              <span className="font-serif text-lg text-accent-ink">{i + 1}</span>
+              <p className="mt-1 font-serif text-xl font-semibold">{s.title}</p>
+              <p className="mt-2 text-ink-soft">{s.text}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="trust-title" className="grid gap-8 border-t border-rule py-12 lg:grid-cols-3">
+        <h2 id="trust-title" className="font-serif text-3xl font-semibold">Why you can trust it</h2>
+        <ul className="space-y-3 text-lg lg:col-span-2">
+          <li>Sourced from Migri, Kela, InfoFinland and Työmarkkinatori. Every step links to the page it came from.</li>
+          <li>The deadline is worked out by plain code from Migri&apos;s rules, not guessed by AI. <a href="/how-we-know" className="underline">How we know this</a>.</li>
+          <li>Nothing is stored on a server and nothing is sent for you. Draft messages are yours to edit and send.</li>
+          <li className="text-ink-soft">Guidance, not legal advice. For permit decisions, contact Migri or your union.</li>
+        </ul>
+      </section>
     </main>
   );
 }

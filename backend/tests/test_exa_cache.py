@@ -62,7 +62,7 @@ def test_plan_search_uses_trusted_domains_and_highlights(monkeypatch, tmp_path):
         assert "June 2025" in kw["objective"]
     # Pages without a highlight are dropped; duplicates across topics are kept once.
     assert results == [{"topic": "register_jobseeker", "title": "Kela", "url": "https://www.kela.fi/a",
-                        "highlight": "Labour market subsidy"}]
+                        "highlight": "Labour market subsidy", "published": None}]
 
 
 def test_plan_search_returns_none_when_exa_fails(monkeypatch, tmp_path):
@@ -129,3 +129,23 @@ def test_companies_with_hiring_evidence_rank_first(monkeypatch, tmp_path):
     assert out[0]["hiring_evidence"] == "https://posts.fi/jobs/cook-123"
     assert out[1]["hiring_evidence"] == "https://careers-oy.fi/careers"
     assert out[2]["hiring_evidence"] is None
+
+
+def test_searches_report_live_activity(monkeypatch, tmp_path):
+    import activity
+    monkeypatch.setattr(exa_search, "CACHE_PATH", tmp_path / "exa-cache.json")
+    monkeypatch.setattr(exa_search, "_get_client", lambda: RecordingExa())
+    events = []
+    activity.set_emitter(events.append)
+    try:
+        exa_search.search_plan_sources(exa_search.plan_topics(None, []))
+        exa_search.search_plan_sources(exa_search.plan_topics(None, []))  # second time: from cache
+    finally:
+        activity.set_emitter(None)
+    searching = [e for e in events if e["status"] == "searching"]
+    found = [e for e in events if e["status"] == "found"]
+    assert len(searching) == len(found) == 3
+    assert {e["purpose"] for e in searching} == {"registering as a jobseeker", "unemployment benefits", "labour-shortage sectors"}
+    assert searching[0]["domains"] == ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"]
+    assert found[0]["results"][0]["url"] == "https://www.kela.fi/a"
+    assert events[-1]["status"] == "cached"

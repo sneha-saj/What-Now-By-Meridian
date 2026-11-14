@@ -10,7 +10,7 @@ export type Facts = {
   family_in_finland?: boolean | null;
 };
 
-export type Source = { title: string; url: string; highlight?: string | null };
+export type Source = { title: string; url: string; highlight?: string | null; published?: string | null };
 export type Option = { value: string; label: string };
 export type Question = { id: keyof Facts; question: string; kind: "choice" | "date"; options: Option[] };
 
@@ -34,6 +34,7 @@ export type Deadline = {
   possible_dates: PossibleDate[];
   missing: string[];
   rule_id?: string | null;
+  rule_in_force_since?: string | null;
   source: Source;
   verified: boolean;
   check_status: "verified" | "mismatch" | "error" | "none";
@@ -115,9 +116,25 @@ export type ChatResponse = {
 };
 
 export type ProgressStage = "reading_situation" | "checking_rules" | "finding_steps" | "finding_people";
+export type ExaEvent = {
+  type: "exa";
+  status: "searching" | "found" | "cached";
+  purpose: string;
+  query?: string;
+  domains?: string[];
+  category?: string | null;
+  results?: { title: string; url: string; published?: string | null }[];
+  count?: number;
+};
+export type StreamEvent =
+  | { type: "progress"; stage: ProgressStage }
+  | ExaEvent
+  | { type: "partial"; key: "deadline"; data: Deadline }
+  | { type: "partial"; key: "plan"; data: PlanResponse }
+  | { type: "partial"; key: "referrals"; data: ReferralResponse };
 
-/** POST /chat/stream: calls onProgress for each stage, resolves with the result. Falls back to /chat. */
-export async function chatStream(req: ChatRequest, onProgress: (stage: ProgressStage) => void): Promise<ChatResponse> {
+/** POST /chat/stream: calls onEvent for each live event, resolves with the result. Falls back to /chat. */
+export async function chatStream(req: ChatRequest, onEvent: (e: StreamEvent) => void): Promise<ChatResponse> {
   try {
     const res = await fetch("/api/chat/stream", {
       method: "POST",
@@ -137,9 +154,9 @@ export async function chatStream(req: ChatRequest, onProgress: (stage: ProgressS
       for (const part of parts) {
         if (!part.startsWith("data: ")) continue;
         const event = JSON.parse(part.slice(6));
-        if (event.type === "progress") onProgress(event.stage);
-        else if (event.type === "result") return event.data as ChatResponse;
-        else if (event.type === "error") throw new Error("chat failed");
+        if (event.type === "result") return event.data as ChatResponse;
+        if (event.type === "error") throw new Error("chat failed");
+        onEvent(event as StreamEvent);
       }
     }
     throw new Error("stream ended without a result");

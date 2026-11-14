@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-calm-50: #f4f7f6;
+  --color-calm-100: #e6efec;
+  --color-calm-500: #4f7c70;
+  --color-calm-700: #2f5148;
+  --color-calm-900: #1c2f2a;
+}
+
+body {
+  background: var(--color-calm-50);
+  color: var(--color-calm-900);
+}

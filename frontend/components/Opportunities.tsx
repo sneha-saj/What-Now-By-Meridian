@@ -5,6 +5,7 @@ import type { OpportunitiesResponse } from "@/lib/api";
 import { isSample } from "@/lib/format";
 import { GlobeIcon } from "./icons";
 import { Button, Card, SourceChip, cx } from "./primitives";
+import { ListenButton } from "./Voice";
 
 const SHOW = 3;
 
@@ -69,7 +70,10 @@ export function Opportunities({
     if (id === "certificate")
       return perks?.certificate ? (
         <div className="rounded-2xl border border-verified/30 bg-verified-soft/50 p-4">
-          <p className="font-bold">Start here: {perks.certificate.name}</p>
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-bold">Start here: {perks.certificate.name}</p>
+            <ListenButton iconOnly what="the job search certificate" text={`${perks.certificate.name}. ${perks.certificate.how_to_get}`} />
+          </div>
           <p className="mt-1">{perks.certificate.how_to_get}</p>
           <div className="mt-2 flex flex-wrap gap-2"><Src url={perks.certificate.source_url} title="How to get it" date={perks.certificate.source_date} /><ReadBy by={perks.certificate.read_by} /></div>
         </div>
@@ -79,7 +83,10 @@ export function Opportunities({
         <ul className="space-y-3">
           {discounts.shown.map((d, i) => (
             <li key={i}>
-              <p><strong>{d.name}</strong> · {d.discount}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p><strong>{d.name}</strong> · {d.discount}</p>
+                <ListenButton iconOnly what={d.name} text={`${d.name}: ${d.discount}. Proof needed: ${d.proof_needed}.`} />
+              </div>
               <p className="text-sm text-ink-soft">Proof needed: {d.proof_needed}</p>
               <div className="mt-1 flex flex-wrap gap-2"><Src url={d.source_url} title={d.city} date={d.source_date} /><ReadBy by={d.read_by} /></div>
             </li>
@@ -92,7 +99,10 @@ export function Opportunities({
         <div className="space-y-3">
           {perks.incentives.map((inc, i) => (
             <div key={i} className="rounded-2xl border border-rule bg-paper p-4">
-              <p className="font-bold">{inc.name}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-bold">{inc.name}</p>
+                <ListenButton iconOnly what={inc.name} text={`${inc.name}. ${inc.what_it_is} Conditions: ${inc.conditions_plain}. ${inc.caveat}`} />
+              </div>
               <p className="mt-1">{inc.what_it_is}</p>
               <p className="mt-1"><span className="text-ink-soft">Conditions: </span>{inc.conditions_plain}</p>
               <p className={cx("mt-2 rounded-lg px-3 py-2", inc.may_apply ? "bg-verified-soft text-verified" : "bg-warn-soft text-warn")}>
@@ -109,7 +119,10 @@ export function Opportunities({
       <ul className="space-y-3">
         {list.map((x, i) => (
           <li key={i} className="rounded-2xl border border-rule bg-paper p-4">
-            <p className="font-bold">{x.name}</p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="font-bold">{x.name}</p>
+              <ListenButton iconOnly what={x.name} text={[x.name + ".", x.what_it_is, x.who_can_get_it && `Who can get it: ${x.who_can_get_it}.`, x.how_to_get && `How: ${x.how_to_get}`].filter(Boolean).join(" ")} />
+            </div>
             <p className="mt-1">{x.what_it_is}</p>
             {x.who_can_get_it && <p className="mt-1"><span className="text-ink-soft">Who can get it: </span>{x.who_can_get_it}</p>}
             {x.how_to_get && <p className="mt-1"><span className="text-ink-soft">How: </span>{x.how_to_get}</p>}

@@ -152,13 +152,15 @@ function AddInfo({ step, disabled, onSubmit }: { step: StepItem; disabled: boole
   return (
     <form className="mt-2 basis-full space-y-2" onSubmit={(e) => { e.preventDefault(); if (text.trim()) { onSubmit(text.trim()); setOpen(false); setText(""); } }}>
       <label htmlFor={id} className="block font-bold">What should we know about step {step.n}?</label>
+<div className="relative">
       <textarea id={id} rows={2} value={text} autoFocus maxLength={500} onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
         placeholder="For example: I already registered last week. Or: I'm in an unemployment fund through my union."
-        className="w-full rounded-xl border border-ink/25 bg-card p-3" />
+        className="w-full rounded-xl border border-ink/25 bg-card p-3 pr-14" />
+        <MicButton inside disabled={disabled} onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={disabled || !text.trim()}>Update this step and the next ones</Button>
-        <MicButton disabled={disabled} onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
         <Button type="button" variant="quiet" onClick={() => setOpen(false)}>Cancel</Button>
       </div>
     </form>

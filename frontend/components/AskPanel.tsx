@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api, type AskResponse, type Facts, type RoadStep } from "@/lib/api";
 import { GlobeIcon } from "./icons";
-import { MicButton } from "./Voice";
+import { ListenButton, MicButton } from "./Voice";
 import { Button, GentleWarning, SourceChip } from "./primitives";
 
 export type AskEntry = { question: string; res: AskResponse; added?: boolean };
@@ -45,10 +45,12 @@ export function AskPanel({
       </div>
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex flex-wrap gap-3">
         <label htmlFor="ask-input" className="sr-only">Your question</label>
-        <input id="ask-input" value={q} onChange={(e) => setQ(e.target.value)} disabled={busy}
-          placeholder="For example: Can I work part-time while I look? Or: I've actually been here 3 years."
-          className="min-h-12 min-w-0 flex-1 rounded-xl border border-ink/25 bg-card px-4 text-lg" />
-        <MicButton disabled={busy} onText={(t) => setQ((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
+        <div className="relative min-w-0 flex-1">
+          <input id="ask-input" value={q} onChange={(e) => setQ(e.target.value)} disabled={busy}
+            placeholder="For example: Can I work part-time while I look? Or: I've actually been here 3 years."
+            className="min-h-12 w-full rounded-xl border border-ink/25 bg-card py-2 pl-4 pr-12 text-lg" />
+          <MicButton inside className="!top-1.5" disabled={busy} onText={(t) => setQ((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
+        </div>
         <Button type="submit" disabled={busy || !q.trim()}>{busy ? "Looking it up…" : "Ask"}</Button>
       </form>
       {busy && <p role="status" className="flex items-center gap-2 text-sm text-ink-soft"><GlobeIcon className="h-4 w-4 text-verified" /> Exa is looking this up…</p>}
@@ -58,7 +60,10 @@ export function AskPanel({
           const i = entries.length - 1 - k;
           return (
             <li key={i} className="animate-fade-up rounded-2xl border border-rule bg-paper p-4">
-              <p className="text-sm text-ink-soft">{e.question}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm text-ink-soft">{e.question}</p>
+                <ListenButton iconOnly what="this answer" text={e.res.answer} />
+              </div>
               <p className="mt-2 text-lg">{e.res.answer}</p>
               {e.res.facts_update && Object.keys(e.res.facts_update).length > 0 && (
                 <p className="mt-2 rounded-lg bg-accent-soft px-3 py-2 text-accent-ink">

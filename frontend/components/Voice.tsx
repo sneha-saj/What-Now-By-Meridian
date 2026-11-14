@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MicIcon, SpeakerIcon, StopIcon } from "./icons";
 import { cx } from "./primitives";
 
 /** Whether the backend has voice (ElevenLabs) set up. Asked once per page load; buttons stay hidden until it says yes. */
@@ -17,8 +18,11 @@ export function useVoice(): boolean {
 export const VOICE_NOTE = "Your recording is sent to ElevenLabs to turn it into text. We don't keep it.";
 const MAX_SECONDS = 60;
 
-/** 🎤 Voice typing: tap to record, tap again to stop; the text is passed to `onText`. */
-export function MicButton({ onText, disabled, className }: { onText: (text: string) => void; disabled?: boolean; className?: string }) {
+/** Voice typing: tap the mic to record, tap again to stop; the text is passed to `onText`.
+ *  `inside` = a small icon placed inside a text box on the right (the box needs `relative` and right padding). */
+export function MicButton({ onText, disabled, className, inside = false }: {
+  onText: (text: string) => void; disabled?: boolean; className?: string; inside?: boolean;
+}) {
   const on = useVoice();
   const [state, setState] = useState<"idle" | "recording" | "working" | "error">("idle");
   const rec = useRef<MediaRecorder | null>(null);
@@ -58,25 +62,40 @@ export function MicButton({ onText, disabled, className }: { onText: (text: stri
   }
 
   const label = state === "recording" ? "Stop recording" : state === "working" ? "Turning your voice into text" : "Speak instead of typing";
+  const status = state === "recording" ? "Listening… tap stop when you're done" : state === "working" ? "Writing it down…"
+    : state === "error" ? "Couldn't use the microphone. Please type instead." : "";
+  const button = (
+    <button type="button" disabled={disabled || state === "working"} aria-label={label} title={`${label}. ${VOICE_NOTE}`}
+      onClick={() => (state === "recording" ? rec.current?.stop() : start())}
+      className={cx("inline-flex shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50",
+        inside ? "h-9 w-9 border shadow-sm" : "h-11 w-11 border",
+        state === "recording" ? "border-accent bg-accent text-paper motion-safe:animate-pulse"
+          : state === "error" ? "border-warn text-warn" : "border-ink/25 bg-card text-ink-soft hover:border-ink hover:text-ink")}>
+      {state === "recording" ? <StopIcon /> : state === "working" ? <span aria-hidden className="motion-safe:animate-pulse">…</span> : <MicIcon className={inside ? "h-4 w-4" : "h-5 w-5"} />}
+    </button>
+  );
+  if (inside)
+    return (
+      <span className={cx("absolute right-2 top-2 inline-flex items-center gap-2", className)}>
+        {status && <span aria-hidden className="hidden rounded-full bg-card px-2 py-0.5 text-xs text-ink-soft shadow-sm sm:inline">{status}</span>}
+        {button}
+        <span aria-live="polite" className="sr-only">{status}</span>
+      </span>
+    );
   return (
     <span className={cx("inline-flex items-center gap-2", className)}>
-      <button type="button" disabled={disabled || state === "working"} aria-label={label} title={`${label}. ${VOICE_NOTE}`}
-        onClick={() => (state === "recording" ? rec.current?.stop() : start())}
-        className={cx("inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-lg transition-colors disabled:opacity-50",
-          state === "recording" ? "border-accent bg-accent text-paper motion-safe:animate-pulse" : "border-ink/25 bg-card hover:border-ink")}>
-        <span aria-hidden>{state === "working" ? "…" : state === "recording" ? "■" : "🎤"}</span>
-      </button>
-      <span aria-live="polite" className="text-sm text-ink-soft">
-        {state === "recording" ? "Listening… tap ■ when you're done" : state === "working" ? "Writing it down…" : state === "error" ? "Couldn't use the microphone. Please type instead." : ""}
-      </span>
+      {button}
+      <span aria-live="polite" className="text-sm text-ink-soft">{status}</span>
     </span>
   );
 }
 
 let playing: HTMLAudioElement | null = null;
 
-/** 🔊 Listen: reads `text` aloud (ElevenLabs). Only one plays at a time. */
-export function ListenButton({ text, label = "Listen", className }: { text: string; label?: string; className?: string }) {
+/** Listen: reads `text` aloud (ElevenLabs). Only one plays at a time. `iconOnly` = a small round speaker button. */
+export function ListenButton({ text, label = "Listen", className, iconOnly = false, what }: {
+  text: string; label?: string; className?: string; iconOnly?: boolean; what?: string;
+}) {
   const on = useVoice();
   const [state, setState] = useState<"idle" | "loading" | "playing" | "error">("idle");
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -100,11 +119,21 @@ export function ListenButton({ text, label = "Listen", className }: { text: stri
     }
   }
 
+  const icon = state === "playing" ? <StopIcon /> : <SpeakerIcon />;
+  const words = state === "loading" ? "Loading…" : state === "playing" ? "Stop" : state === "error" ? "Couldn't play" : label;
+  if (iconOnly)
+    return (
+      <button type="button" onClick={play} disabled={state === "loading"} aria-pressed={state === "playing"}
+        aria-label={state === "playing" ? "Stop reading aloud" : `Read aloud${what ? `: ${what}` : ""}`} title={state === "error" ? "Couldn't play" : "Read aloud"}
+        className={cx("inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink/20 bg-card text-ink-soft hover:border-ink hover:text-ink disabled:opacity-60",
+          state === "playing" && "border-accent text-accent-ink", state === "loading" && "motion-safe:animate-pulse", className)}>
+        {icon}
+      </button>
+    );
   return (
     <button type="button" onClick={play} disabled={state === "loading"} aria-pressed={state === "playing"}
       className={cx("inline-flex min-h-9 items-center gap-1.5 rounded-full border border-ink/20 bg-card px-3 py-1 text-sm font-bold text-ink hover:border-ink disabled:opacity-60", className)}>
-      <span aria-hidden>{state === "playing" ? "■" : "🔊"}</span>
-      {state === "loading" ? "Loading…" : state === "playing" ? "Stop" : state === "error" ? "Couldn't play" : label}
+      {icon}{words}
     </button>
   );
 }

@@ -4,7 +4,8 @@ import { useState } from "react";
 import type { Question } from "@/lib/api";
 import { Button, cx } from "./primitives";
 import { RotatingPhrase } from "./RotatingPhrase";
-import { MicButton, VOICE_NOTE, useVoice } from "./Voice";
+import { ListenButton, MicButton, VOICE_NOTE, useVoice } from "./Voice";
+import { MicIcon } from "./icons";
 
 /** One question at a time: serif question, tap buttons (incl. "Not sure"), or answer in your own words.
  *  `previous` is the answer already given when the person went back to this question: it's shown as chosen and
@@ -42,7 +43,11 @@ export function QuestionCard({
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule text-lg text-ink hover:border-ink disabled:invisible"><span aria-hidden>→</span></button>
         )}
       </div>
-      <h2 id="q-title" className="mt-1 font-serif text-3xl font-semibold leading-snug sm:text-4xl">{question.question}</h2>
+      <div className="mt-1 flex items-start justify-between gap-3">
+        <h2 id="q-title" className="font-serif text-3xl font-semibold leading-snug sm:text-4xl">{question.question}</h2>
+        <ListenButton iconOnly what="this question" className="mt-1.5"
+          text={`${question.question} ${question.options.length ? `You can answer: ${question.options.map((o) => o.label).join(", ")}.` : ""}`} />
+      </div>
       <fieldset disabled={busy || picked !== null} className="mt-6 space-y-5">
         <legend className="sr-only">Choose an answer</legend>
         <div className="flex flex-wrap gap-3">
@@ -71,9 +76,11 @@ export function QuestionCard({
         )}
         <form className="flex flex-wrap items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim()) { setPicked(text.trim()); onText(text.trim()); setText(""); } }}>
           <label htmlFor="q-text" className="sr-only">Or answer in your own words</label>
-          <input id="q-text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Or answer in your own words"
-            className="min-h-11 min-w-0 flex-1 rounded-xl border border-ink/25 bg-paper px-4" />
-          <MicButton onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
+          <div className="relative min-w-0 flex-1">
+            <input id="q-text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Or answer in your own words"
+              className="min-h-11 w-full rounded-xl border border-ink/25 bg-paper py-2 pl-4 pr-12" />
+            <MicButton inside className="!top-1" onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
+          </div>
           <Button type="submit" variant="quiet" disabled={!text.trim()}>Send</Button>
         </form>
       </fieldset>
@@ -118,15 +125,15 @@ export function Welcome({ busy, onSubmit, onStart, saved = [], onOpen, onDelete,
         className="space-y-3 rounded-2xl border border-rule bg-card/60 p-5">
         <label htmlFor="welcome-text" className="block font-bold">Or tell me in your own words</label>
         <p className="text-sm text-ink-soft">Write what happened in a sentence or two and I&apos;ll skip the questions you&apos;ve already answered.</p>
+<div className="relative">
         <textarea id="welcome-text" rows={3} value={text} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (text.trim()) onSubmit(text.trim()); } }}
           placeholder="For example: I worked as a cook in Helsinki for a year on a work permit. I was laid off last Friday."
-          className="w-full rounded-xl border border-ink/25 bg-card p-4 outline-none placeholder:text-ink-soft/80 focus:border-ink" />
-        <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" variant="chip" disabled={busy || !text.trim()}>Show my steps</Button>
-          <MicButton disabled={busy} onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
+          className="w-full rounded-xl border border-ink/25 bg-card p-4 pr-14 outline-none placeholder:text-ink-soft/80 focus:border-ink" />
+          <MicButton inside disabled={busy} onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
         </div>
-        {voice && <p className="text-xs text-ink-soft">🎤 You can also say it out loud. {VOICE_NOTE}</p>}
+        <Button type="submit" variant="chip" disabled={busy || !text.trim()}>Show my steps</Button>
+        {voice && <p className="flex items-center gap-1.5 text-xs text-ink-soft"><MicIcon className="h-3.5 w-3.5" /> You can also tap the mic and say it out loud. {VOICE_NOTE}</p>}
       </form>
       {saved.length > 0 && (
         <section aria-labelledby="saved-title" className="space-y-3 border-t border-rule pt-6">

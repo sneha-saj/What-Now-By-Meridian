@@ -40,6 +40,12 @@ To deploy on Modal, install its CLI in `backend/.venv` (`backend/.venv/bin/pip i
 
 Pushes to `main` automatically deploy both Modal apps through [the GitHub Actions workflow](.github/workflows/deploy-modal.yml). Configure repository Actions secrets named `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `EXA_API_KEY`, `GEMINI_API_KEY`, and optionally `CONTEXT_DEV_API_KEY`. The workflow checks the public site and API after deployment. Manual `modal deploy` remains available for urgent fixes.
 
+**Live mode only for judges (optional).** Set `ACCESS_CODES=code1,code2` (in `.env` locally, and as a Modal secret
+when hosted). Then anyone with the link gets a free **demo mode**: no paid API calls. The date still comes from the
+rules engine, the steps from our checked saved guide, and the app says clearly that it's a demo. Someone with a code
+(typed under "Judge? Enter access code" on the first page, or via a link like `/start?code=code1`) gets the full live
+version. The code stays in that browser and is checked on the server. Leave it empty and everyone gets live mode.
+
 Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make test`, `make backend`, `make frontend`, `make clean`.
 
 ## Architecture

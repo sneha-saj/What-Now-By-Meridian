@@ -162,21 +162,60 @@ def write_plan(facts: dict, deadline: dict, sources: list[dict], today: str) -> 
 
 # ---------- /referrals ----------
 
-DRAFT_PROMPT = """Draft a short, warm, specific message (max 80 words) from a job seeker in Finland to each contact below.
-The sender: {facts}. They recently lost their job and are looking for a new role in Finland.
-Be honest, not desperate. Mention why this contact is relevant. No placeholders except [Your name].
+class _CompanyNote(BaseModel):
+    id: str
+    why_relevant: str
 
-Contacts:
+
+class _CommunityNote(BaseModel):
+    id: str
+    type: str
+    date_if_event: Optional[str] = None
+
+
+class _Draft(BaseModel):
+    id: str
+    why_this_person: str
+    message: str
+
+
+class ReferralNotes(BaseModel):
+    companies: list[_CompanyNote]
+    communities: list[_CommunityNote]
+    drafts: list[_Draft]
+
+
+REFERRALS_PROMPT = """You help a job seeker in Finland reach out to companies and people. Use ONLY the details below.
+Today is {today}.
+
+1. companies: for each company id, why_relevant: one sentence on why it fits this person, based on its highlight.
+2. communities: for each community id, type: "professional_group" | "event" | "union", and date_if_event
+   (YYYY-MM-DD) only if the highlight states a date within the next 30 days, else null.
+3. drafts: for each contact id, why_this_person (one sentence) and message: a short, polite, personal message
+   (max 80 words) from the job seeker. Mention exactly one real detail from that contact's or company's
+   highlight. No exaggeration, no attachments, end with "[Your name]". These are drafts; nothing is sent.
+
+Job seeker: {facts}
+
+COMPANIES:
+{companies}
+
+CONTACTS:
 {contacts}
 
-Return JSON: {{"messages": [str, ...]}} in the same order as the contacts."""
+COMMUNITIES:
+{communities}"""
 
 
-def draft_messages(facts: dict, contacts: list[dict]) -> list[str] | None:
-    lines = "\n".join(
-        f"{i + 1}. {c['name']} – {c['role']} at {c['organization']} ({c['why']})"
-        for i, c in enumerate(contacts)
+def write_referral_notes(facts: dict, companies: list[dict], contacts: list[dict], communities: list[dict],
+                         today: str) -> dict | None:
+    def lines(items, fields):
+        return "\n".join(f"[{x['id']}] " + " | ".join(str(x.get(f) or "") for f in fields) for x in items) or "(none)"
+
+    prompt = REFERRALS_PROMPT.format(
+        today=today, facts=facts,
+        companies=lines(companies, ("name", "url", "highlight")),
+        contacts=lines(contacts, ("name", "role", "company", "highlight")),
+        communities=lines(communities, ("name", "url", "highlight")),
     )
-    out = _json_call(DRAFT_PROMPT.format(facts=facts, contacts=lines))
-    msgs = out.get("messages") if isinstance(out, dict) else None
-    return msgs if isinstance(msgs, list) and len(msgs) == len(contacts) else None
+    return structured_call(prompt, ReferralNotes)

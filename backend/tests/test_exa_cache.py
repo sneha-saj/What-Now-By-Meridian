@@ -75,3 +75,37 @@ def test_plan_search_returns_none_when_exa_fails(monkeypatch, tmp_path):
 
     monkeypatch.setattr(exa_search, "_get_client", lambda: Broken())
     assert exa_search.search_plan_sources([("t", "q")]) is None
+
+
+class PeopleExa:
+    def __init__(self):
+        self.calls = []
+
+    def search(self, query, **kwargs):
+        self.calls.append((query, kwargs))
+        if kwargs.get("category") == "people":
+            return SimpleNamespace(results=[SimpleNamespace(title="Aino Virtanen - Head Chef - Rafla Oy | LinkedIn",
+                                                            url="https://linkedin.com/in/aino", highlights=["12 cooks"])])
+        return SimpleNamespace(results=[SimpleNamespace(title=f"Co {i}", url=f"https://c{i}.fi", highlights=["h"])
+                                        for i in range(10)])
+
+
+def test_referral_searches_limit_results_and_use_categories(monkeypatch, tmp_path):
+    monkeypatch.setattr(exa_search, "CACHE_PATH", tmp_path / "exa-cache.json")
+    client = PeopleExa()
+    monkeypatch.setattr(exa_search, "_get_client", lambda: client)
+
+    companies = exa_search.search_companies("cook", "Helsinki")
+    assert len(companies) == 8
+    assert client.calls[0][1]["category"] == "company" and client.calls[0][1]["num_results"] == 8
+
+    people = exa_search.search_people(companies, "cook", "Helsinki")
+    people_calls = [c for c in client.calls if c[1].get("category") == "people"]
+    assert len(people_calls) == 3  # top 3 companies only
+    assert all(c[1]["num_results"] == 2 for c in people_calls)
+    assert people[0] == {"name": "Aino Virtanen", "role": "Head Chef", "company": "Co 0",
+                         "profile_url": "https://linkedin.com/in/aino", "highlight": "12 cooks"}
+
+    communities = exa_search.search_communities("cook", "Helsinki", "2026-11-14")
+    assert {g["kind"] for g in communities} == {"professional_group", "union"}
+    assert len(client.calls) == 1 + 3 + 2  # max 6 searches per /referrals request

@@ -118,7 +118,7 @@ export default function Home() {
       {plan && <ThisWeekCard actions={plan.this_week} />}
       {plan && plan.timeline.length > 0 && <TimelineCard weeks={plan.timeline} />}
       {plan && plan.plan_b.length > 0 && <PlanBCard options={plan.plan_b} />}
-      {refs && refs.referrals.length > 0 && <ReferralsCard referrals={refs.referrals} />}
+      {refs && <ReferralsCard r={refs} />}
 
       {plan && <p className="text-center text-xs text-calm-500">{plan.disclaimer}</p>}
       {isMock && (

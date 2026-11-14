@@ -55,15 +55,17 @@ export type PlanResponse = {
   mock: boolean;
 };
 
-export type Referral = {
-  name: string;
-  role: string;
-  organization: string;
-  why: string;
-  message: string;
-  source: Source;
+export type Company = { name: string; why_relevant: string; url: string; source: Source };
+export type Contact = { name: string; role: string; company: string; why_this_person: string; profile_url: string };
+export type Community = { name: string; type: "professional_group" | "event" | "union"; date_if_event?: string | null; url: string };
+export type Draft = { to: string; profile_url: string; message: string };
+export type ReferralResponse = {
+  companies: Company[];
+  contacts: Contact[];
+  communities: Community[];
+  drafts: Draft[];
+  mock: boolean;
 };
-export type ReferralResponse = { referrals: Referral[]; mock: boolean };
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {

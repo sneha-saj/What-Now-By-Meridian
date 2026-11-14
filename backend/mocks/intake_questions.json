@@ -1,0 +1,68 @@
+{
+  "request": {
+    "text": "I'm from India and lost my restaurant job in Helsinki.",
+    "answers": {}
+  },
+  "response": {
+    "facts": {
+      "citizenship_group": "other",
+      "citizenship_country": "India",
+      "city": "Helsinki",
+      "field": "restaurant worker"
+    },
+    "missing_questions": [
+      {
+        "id": "permit_type",
+        "question": "What kind of residence permit do you have?",
+        "kind": "choice",
+        "options": [
+          {
+            "value": "work_based",
+            "label": "Work-based"
+          },
+          {
+            "value": "specialist_blue_card",
+            "label": "Specialist / EU Blue Card"
+          },
+          {
+            "value": "student",
+            "label": "Student"
+          },
+          {
+            "value": "family_based",
+            "label": "Family-based"
+          },
+          {
+            "value": "permanent",
+            "label": "Permanent"
+          },
+          {
+            "value": "not_sure",
+            "label": "Not sure"
+          }
+        ]
+      },
+      {
+        "id": "job_end_date",
+        "question": "When was (or is) your last day of work?",
+        "kind": "date",
+        "options": [
+          {
+            "value": "2026-11-14",
+            "label": "Today"
+          },
+          {
+            "value": "2026-11-07",
+            "label": "About a week ago"
+          },
+          {
+            "value": "2026-10-15",
+            "label": "About a month ago"
+          }
+        ]
+      }
+    ],
+    "out_of_scope": false,
+    "mock": true
+  }
+}

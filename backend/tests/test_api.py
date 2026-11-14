@@ -180,10 +180,66 @@ def test_rules_endpoint_includes_country_config(monkeypatch):
     assert "migri.fi" in body["trusted_domains"]
 
 
-def test_referrals_have_drafted_messages_and_sources():
-    body = client.post("/referrals", json={"facts": {"field": "data analyst", "city": "Espoo"}}).json()
-    assert body["referrals"]
-    assert all(r["message"] and r["source"]["url"] for r in body["referrals"])
+COMPANIES = [{"name": f"Restaurant {i} Oy", "url": f"https://r{i}.fi", "highlight": f"Hiring cooks {i}"} for i in range(1, 5)]
+PEOPLE = [{"name": "Aino Virtanen", "role": "Head Chef", "company": "Restaurant 1 Oy",
+           "profile_url": "https://linkedin.com/in/aino", "highlight": "Leads a team of 12 cooks"}]
+GROUPS = [{"name": "Helsinki Chefs Meetup", "url": "https://meetup.com/x", "kind": "professional_group", "highlight": "Next meetup 2026-11-20"},
+          {"name": "PAM union", "url": "https://pam.fi", "kind": "union", "highlight": "Career coaching for members"}]
+
+
+@pytest.fixture
+def referral_exa(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(main.exa_search, "search_companies", lambda field, city: calls.setdefault("companies", (field, city)) and [dict(c) for c in COMPANIES])
+    monkeypatch.setattr(main.exa_search, "search_people", lambda companies, field, city: [dict(p) for p in PEOPLE])
+    monkeypatch.setattr(main.exa_search, "search_communities", lambda field, city, today: [dict(g) for g in GROUPS])
+    return calls
+
+
+def test_referrals_with_exa_and_gemini(monkeypatch, referral_exa):
+    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: {
+        "companies": [{"id": "C1", "why_relevant": "Hires cooks in Helsinki."}],
+        "communities": [{"id": "G1", "type": "event", "date_if_event": "2026-11-20"},
+                        {"id": "G2", "type": "union", "date_if_event": "2026-11-21"}],
+        "drafts": [{"id": "P1", "why_this_person": "Leads the kitchen.",
+                    "message": "Hi Aino, I read that you lead a team of 12 cooks. Could we talk? [Your name]"}]})
+    body = client.post("/referrals", json={"facts": {"field": "restaurant worker", "city": "Helsinki"}}).json()
+    assert referral_exa["companies"] == ("restaurant worker", "Helsinki")
+    assert body["mock"] is False
+    assert body["companies"][0]["why_relevant"] == "Hires cooks in Helsinki."
+    assert body["companies"][1]["why_relevant"].startswith("From their page:")  # no Gemini note -> real highlight
+    assert body["contacts"][0] == {"name": "Aino Virtanen", "role": "Head Chef", "company": "Restaurant 1 Oy",
+                                   "why_this_person": "Leads the kitchen.", "profile_url": "https://linkedin.com/in/aino"}
+    assert "12 cooks" in body["drafts"][0]["message"]
+    assert body["communities"][0] == {"name": "Helsinki Chefs Meetup", "type": "event", "date_if_event": "2026-11-20",
+                                      "url": "https://meetup.com/x"}
+    assert body["communities"][1]["date_if_event"] is None  # dates only for events
+
+
+def test_referral_drafts_over_80_words_fall_back_to_template(monkeypatch, referral_exa):
+    long = " ".join(["word"] * 81)
+    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: {
+        "companies": [], "communities": [], "drafts": [{"id": "P1", "why_this_person": "x", "message": long}]})
+    msg = client.post("/referrals", json={"facts": {"field": "cook"}}).json()["drafts"][0]["message"]
+    assert len(msg.split()) <= 80 and "Restaurant 1 Oy" in msg
+
+
+def test_referrals_without_gemini_still_return_exa_results(monkeypatch, referral_exa):
+    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: None)
+    body = client.post("/referrals", json={"facts": {"field": "cook"}}).json()
+    assert body["mock"] is True
+    assert len(body["companies"]) == 4 and len(body["drafts"]) == 1
+    assert [g["type"] for g in body["communities"]] == ["professional_group", "union"]
+
+
+def test_referrals_without_exa_list_only_real_help_services(monkeypatch):
+    monkeypatch.setattr(main.exa_search, "search_companies", lambda *a: None)
+    monkeypatch.setattr(main.exa_search, "search_communities", lambda *a: None)
+    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: pytest.fail("Gemini called without data"))
+    body = client.post("/referrals", json={"facts": {}}).json()
+    assert body["mock"] is True
+    assert body["companies"] == [] and body["contacts"] == [] and body["drafts"] == []
+    assert body["communities"]
 
 
 def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
@@ -193,18 +249,46 @@ def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
     def unexpected(*_args, **_kwargs):
         raise AssertionError("External service called while USE_MOCK is enabled")
 
-    for name in ("extract_facts", "write_plan", "draft_messages"):
+    for name in ("extract_facts", "write_plan", "write_referral_notes"):
         monkeypatch.setattr(main.gemini, name, unexpected)
-    for name in ("search_plan_sources", "search_referrals"):
+    for name in ("search_plan_sources", "search_companies", "search_people", "search_communities"):
         monkeypatch.setattr(main.exa_search, name, unexpected)
 
     intake_body = client.post("/intake", json={"text": "ignored in saved example mode"}).json()
     assert intake_body["mock"] is True
-    assert intake_body["facts"]["field"] == "software developer"
+    assert intake_body["facts"]["field"] == "restaurant worker"
 
     plan_body = client.post("/plan", json={"facts": intake_body["facts"]}).json()
     assert plan_body["mock"] is True
+    assert plan_body["deadline"]["deadline_date"] == "2027-02-01"
     assert len(plan_body["this_week"]) == 3
     referrals_body = client.post("/referrals", json={"facts": intake_body["facts"]}).json()
-    assert referrals_body["mock"] is True
-    assert len(referrals_body["referrals"]) == 2
+    assert referrals_body["mock"] is True and referrals_body["drafts"]
+    assert client.get("/rules").json()["trusted_domains"]
+
+
+@pytest.mark.parametrize("name,model", [
+    ("intake", "IntakeResponse"), ("intake_questions", "IntakeResponse"), ("intake_out_of_scope", "IntakeResponse"),
+    ("plan", "PlanResponse"), ("referrals", "ReferralResponse")])
+def test_saved_examples_match_response_models(name, model):
+    import models
+    from services import mocks
+    getattr(models, model).model_validate(mocks.example(name), strict=False)
+
+
+def test_saved_plan_example_matches_the_rules_engine(monkeypatch):
+    """The documented example must agree with what the rules engine computes for the persona."""
+    from services import mocks
+    monkeypatch.setattr(main, "get_live_check", lambda rule_id: {"rule_id": rule_id, **VERIFIED})
+    monkeypatch.setattr(main.gemini, "available", lambda: False)
+    saved = mocks.example("plan")["deadline"]
+    live = client.post("/plan", json={"facts": mocks.example_facts()}).json()["deadline"]
+    for key in ("status", "months", "deadline_date", "rule_id"):
+        assert live[key] == saved[key]
+
+
+def test_openapi_docs_page_works():
+    spec = client.get("/openapi.json").json()
+    assert {"/intake", "/plan", "/rules", "/referrals"} <= spec["paths"].keys()
+    assert "intake" in spec["paths"]["/intake"]["post"]["requestBody"]["content"]["application/json"]["examples"]
+    assert client.get("/docs").status_code == 200

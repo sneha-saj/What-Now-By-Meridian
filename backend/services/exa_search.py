@@ -119,13 +119,9 @@ def search_official(queries: list[str], per_query: int = 3) -> list[dict] | None
     return results
 
 
-def search_referrals(occupation: str, city: str, n: int = 3) -> list[dict] | None:
-    """Find companies hiring + people to contact.
-
-    TODO: for richer, verified lists, move this to Exa's Agent API (/agent) —
-    the build-with-exa skill says list-building belongs there, not Websets.
-    """
-    key = _cache_key("referrals", {"occupation": occupation, "city": city, "n": n})
+def _cached_search(kind: str, params: dict, run):
+    """Shared cache + error handling for the referral searches. `run(exa)` returns a list."""
+    key = _cache_key(kind, params)
     cached = _cache_read(key)
     if cached is not None:
         return cached
@@ -133,43 +129,81 @@ def search_referrals(occupation: str, city: str, n: int = 3) -> list[dict] | Non
     if exa is None:
         return None
     try:
-        companies = exa.search(
-            f"companies in {city}, Finland hiring {occupation} English-speaking",
-            category="company", num_results=n, contents={"highlights": True},
-            objective=(f"Find companies in {city}, Finland that currently hire {occupation}s and work in English, "
-                       "so a job seeker can contact them. Prefer company pages and careers pages."),
-        ).results
-        people = exa.search(
-            f"{occupation} recruiter or hiring manager in {city}, Finland",
-            category="people", num_results=n, contents={"highlights": True},
-            objective=(f"Find recruiters or hiring managers who hire {occupation}s in {city}, Finland, "
-                       "so a job seeker can reach out to them directly."),
-        ).results
+        results = run(exa)
     except Exception as e:  # noqa: BLE001
-        log.warning("Exa referral search failed, using mock: %s", e)
+        log.warning("Exa %s search failed, using mock: %s", kind, e)
         return None
-
-    contacts = []
-    for p in people:
-        contacts.append({
-            "name": p.title or "Contact",
-            "role": "Recruiter / hiring manager",
-            "organization": (getattr(p, "author", None) or "See profile"),
-            "why": f"Works in {occupation} hiring around {city}.",
-            "source": {"title": p.title or p.url, "url": p.url},
-        })
-    for c in companies:
-        contacts.append({
-            "name": "Hiring team",
-            "role": "Recruitment",
-            "organization": c.title or c.url,
-            "why": f"Company in {city} that hires {occupation}s.",
-            "source": {"title": c.title or c.url, "url": c.url},
-        })
-    results = contacts[: n * 2] or None
     if results:
         _cache_write(key, results)
-    return results
+    return results or None
+
+
+def _hl(r) -> str:
+    return " ... ".join(getattr(r, "highlights", None) or [])[:600]
+
+
+def search_companies(field: str, city: str, n: int = 8) -> list[dict] | None:
+    """Companies hiring now in the user's field (or labour-shortage sectors) in or near their city."""
+    def run(exa):
+        res = exa.search(
+            f"companies in or near {city}, Finland currently hiring {field} or in labour-shortage sectors",
+            category="company", num_results=n, contents={"highlights": True},
+            objective=(f"Companies in or near {city}, Finland that are hiring now for {field} roles, or work in "
+                       "sectors with a labour shortage, and that hire international workers. Prefer company "
+                       "and careers pages. Pull what the company does and any open roles."),
+        )
+        return [{"name": r.title or r.url, "url": r.url, "highlight": _hl(r)} for r in res.results][:n]
+    return _cached_search("companies", {"field": field, "city": city, "n": n}, run)
+
+
+def _split_profile_title(title: str) -> tuple[str, str]:
+    """'Jane Doe - Head Chef - Restaurant Oy | LinkedIn' -> ('Jane Doe', 'Head Chef')."""
+    parts = [p.strip() for p in title.split("|")[0].split(" - ") if p.strip()]
+    return (parts[0] if parts else title), (parts[1] if len(parts) > 1 else "")
+
+
+def search_people(companies: list[dict], field: str, city: str, top: int = 3, per_company: int = 2) -> list[dict] | None:
+    """Public professional profiles of likely contacts at the top companies."""
+    names = [c["name"] for c in companies[:top]]
+
+    def run(exa):
+        people = []
+        for company in names:
+            res = exa.search(
+                f"{field} hiring manager, team lead or recruiter at {company} in {city}, Finland",
+                category="people", num_results=per_company, contents={"highlights": True},
+                objective=(f"Public professional profiles of people at {company} who hire for {field} roles "
+                           "or have a similar background, so a job seeker can reach out politely."),
+            )
+            for r in res.results:
+                name, role = _split_profile_title(r.title or "")
+                if name:
+                    people.append({"name": name, "role": role, "company": company, "profile_url": r.url,
+                                   "highlight": _hl(r)})
+        return people
+    return _cached_search("people", {"companies": names, "field": field, "city": city,
+                                     "per_company": per_company}, run)
+
+
+def search_communities(field: str, city: str, today: str, n: int = 3) -> list[dict] | None:
+    """International professional groups, upcoming meetups/events and union career services."""
+    queries = [
+        ("professional_group", f"international professionals {field} network, meetups or events in {city} Finland "
+                               f"in the next 30 days from {today}"),
+        ("union", f"trade union career services for {field} workers in Finland, in English"),
+    ]
+
+    def run(exa):
+        out = []
+        for kind, q in queries:
+            res = exa.search(
+                q, num_results=n, contents={"highlights": True},
+                objective=("Help an international job seeker in Finland find professional groups, upcoming events "
+                           "(next 30 days) and union career services. Pull event dates when stated."),
+            )
+            out += [{"name": r.title or r.url, "url": r.url, "kind": kind, "highlight": _hl(r)} for r in res.results]
+        return out
+    return _cached_search("communities", {"field": field, "city": city, "today": today, "n": n}, run)
 
 
 PLAN_OBJECTIVE = (

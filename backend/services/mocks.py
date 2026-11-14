@@ -9,23 +9,25 @@ from copy import deepcopy
 from datetime import date, timedelta
 from pathlib import Path
 
-_EXAMPLES = json.loads(Path(__file__).with_name("mock_responses.json").read_text())
+EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "mocks"
+
+
+def example(name: str) -> dict:
+    """Saved example response (persona: restaurant worker from India, 1 year on a work permit, Helsinki).
+
+    Used when USE_MOCK=true and documented in docs/api.md.
+    """
+    return deepcopy(json.loads((EXAMPLES_DIR / f"{name}.json").read_text(encoding="utf-8"))["response"])
 
 
 def example_facts() -> dict:
-    return deepcopy(_EXAMPLES["intake_facts"])
+    return example("intake")["facts"]
 
 
-def example_sources() -> list[dict]:
-    return deepcopy(_EXAMPLES["official_sources"])
-
-
-def example_steps() -> list[dict]:
-    return deepcopy(_EXAMPLES["steps"])
-
-
-def example_referrals() -> tuple[list[dict], list[str]]:
-    return deepcopy(_EXAMPLES["referrals"]), list(_EXAMPLES["messages"])
+def example_referrals() -> dict:
+    out = example("referrals")
+    out.pop("mock", None)
+    return out
 
 SOURCES = {
     "migri": {"title": "Migri – Finnish Immigration Service", "url": "https://migri.fi/en/home"},
@@ -119,28 +121,15 @@ def plan(deadline_date: str | None) -> dict:
     }
 
 
-def referrals(occupation: str, city: str) -> list[dict]:
-    return [
-        {"name": "International House advisors", "role": "Guidance for internationals",
-         "organization": f"International House {city}" if city == "Helsinki" else "International House Helsinki",
-         "why": "Free in-person advice on permits, Kela and job search in English.",
-         "source": {"title": "International House Helsinki", "url": "https://www.ihhelsinki.fi/"}},
-        {"name": "Talent Boost team", "role": "International talent services",
-         "organization": "Work in Finland",
-         "why": f"Connects international {occupation}s with Finnish employers.",
-         "source": {"title": "Work in Finland", "url": "https://www.workinfinland.com/"}},
-        {"name": "Example Recruiter (mock)", "role": f"Recruiter, {occupation}",
-         "organization": f"Example Oy, {city}",
-         "why": "Placeholder until Exa people search is wired up.",
-         "source": {"title": "Job Market Finland", "url": "https://tyomarkkinatori.fi/en"}},
-    ]
-
-
-def message(contact: dict, occupation: str) -> str:
-    return (
-        f"Hi {contact['name']},\n\n"
-        f"I'm a {occupation} based in Finland and I'm currently looking for my next role. "
-        f"I saw that {contact['organization']} {contact['why'][0].lower() + contact['why'][1:]} "
-        "Would you have 15 minutes for a short chat, or could you point me to the right person?\n\n"
-        "Thank you,\n[Your name]"
-    )
+def referrals(city: str) -> dict:
+    """No Exa: point to real, official help services only. No invented companies or people."""
+    ih = "International House Helsinki"
+    return {
+        "companies": [],
+        "contacts": [],
+        "communities": [
+            {"name": ih, "type": "professional_group", "url": "https://www.ihhelsinki.fi/"},
+            {"name": "Work in Finland", "type": "professional_group", "url": "https://www.workinfinland.com/"},
+        ],
+        "drafts": [],
+    }

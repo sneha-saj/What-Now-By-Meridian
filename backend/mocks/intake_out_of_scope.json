@@ -1,0 +1,13 @@
+{
+  "request": {
+    "text": "I lost my job in Sweden last week.",
+    "answers": {}
+  },
+  "response": {
+    "missing_questions": [],
+    "out_of_scope": true,
+    "message": "What Now? only covers jobs in Finland. If your job was in another country, check that country's official services. InfoFinland explains unemployment in Finland.",
+    "link": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+    "mock": true
+  }
+}

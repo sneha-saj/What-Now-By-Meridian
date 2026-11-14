@@ -2,12 +2,14 @@
 
 from datetime import date
 
-from fastapi import FastAPI
+import json
+
+from fastapi import Body, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
-from models import (Action, Deadline, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
-                    PlanResponse, PossibleDate, Referral, ReferralRequest, ReferralResponse, Source,
+from models import (Action, Community, Company, Contact, Deadline, Draft, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
+                    PlanResponse, PossibleDate, ReferralRequest, ReferralResponse, Source,
                     TimelineStep)
 from questions import canonical_permit, needed_fields, questions_for
 from rules import calculate_deadline
@@ -15,7 +17,7 @@ from countries.finland import DEADLINE_RULES, SOURCE_TITLE, SOURCE_URL, TRUSTED_
 from live_check import check_all_rules, get_live_check
 from services import exa_search, gemini, mocks
 
-app = FastAPI(title="What Now? by Meridian")
+app = FastAPI(title="What Now? by Meridian", description="Calm next steps for people who lost their job in Finland. See docs/api.md.")
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -26,9 +28,21 @@ def health():
             "oxylabs": config.ENABLE_OXYLABS, "elevenlabs": config.ENABLE_ELEVENLABS}
 
 
-@app.get("/rules")
+@app.get("/rules", summary="Deadline rules, their latest live check and trusted domains")
 def rules():
+    """The Finland deadline rules from the country config, each with its latest live check against the
+    official page (cached 24h), plus the domains we trust for sources."""
+    if config.USE_MOCK:
+        return mocks.example("rules")
     return {"rules": check_all_rules(), "trusted_domains": TRUSTED_DOMAINS}
+
+
+def _examples(*names: str) -> dict:
+    """Request examples for /docs, from the saved persona examples in backend/mocks/."""
+    out = {}
+    for n in names:
+        out[n] = {"summary": n.replace("_", " "), "value": json.loads((mocks.EXAMPLES_DIR / f"{n}.json").read_text())["request"]}
+    return out
 
 
 OUT_OF_SCOPE_LINK = "https://www.infofinland.fi/en/work-and-enterprise/unemployment"
@@ -37,8 +51,12 @@ DISCLAIMER = ("This is general guidance based on official Finnish sources, not l
 WARNING = "This rule may have changed. Please check Migri."
 
 
-@app.post("/intake", response_model=IntakeResponse, response_model_exclude_none=True)
-def intake(req: IntakeRequest):
+@app.post("/intake", response_model=IntakeResponse, response_model_exclude_none=True,
+          summary="Turn the user's sentence into facts and ask what's missing")
+def intake(req: IntakeRequest = Body(openapi_examples=_examples("intake", "intake_questions", "intake_out_of_scope"))):
+    """Gemini extracts facts from free text, merged with `answers` to earlier questions (answers win).
+    Returns up to 3 tap-to-answer questions for what the deadline still needs, or `out_of_scope`
+    if the job was outside Finland."""
     today = date.today()
     if config.USE_MOCK:
         raw, mock = mocks.example_facts(), True
@@ -137,37 +155,76 @@ def build_plan(f: Facts, d: Deadline, today: date) -> dict | None:
             "plan_b": [p for p in plan_b if p.sources]}
 
 
-@app.post("/plan", response_model=PlanResponse)
-def plan(req: PlanRequest):
+@app.post("/plan", response_model=PlanResponse, summary="Deadline, this week's 3 actions, timeline and plan B")
+def plan(req: PlanRequest = Body(openapi_examples=_examples("plan"))):
+    """The rules engine computes the deadline (hidden if today's live check can't verify the rule).
+    Exa finds official pages on the trusted domains; Gemini writes the plan from them only, citing sources."""
+    if config.USE_MOCK:
+        return PlanResponse(**mocks.example("plan"))
     today = date.today()
     f = req.facts
     d = build_deadline(f, today)
-    built = None if config.USE_MOCK else build_plan(f, d, today)
+    built = build_plan(f, d, today)
     mock = built is None
     if built is None:
         built = mocks.plan(d.deadline_date.isoformat() if d.deadline_date else None)
     return PlanResponse(deadline=d, disclaimer=DISCLAIMER, mock=mock, **built)
 
 
-@app.post("/referrals", response_model=ReferralResponse)
-def referrals(req: ReferralRequest):
-    occupation = req.facts.field or "professional"
-    city = req.facts.city or "Helsinki"
+MAX_DRAFT_WORDS = 80
+
+
+def _template_draft(c: dict, field: str) -> str:
+    return (f"Hi {c['name']}, I'm a {field} in Finland looking for my next role. I came across your work at "
+            f"{c['company']} and would really value a short chat or a pointer to the right person. "
+            "Thank you for your time! [Your name]")
+
+
+@app.post("/referrals", response_model=ReferralResponse, summary="Companies, people, communities and draft messages")
+def referrals(req: ReferralRequest = Body(openapi_examples=_examples("referrals"))):
+    """Exa finds companies hiring, public professional profiles at the top companies and communities.
+    Gemini drafts one short message per contact. Drafts only: nothing is ever sent."""
+    f = req.facts
+    field = f.field or "professional"
+    city = f.city or "Helsinki"
+    today = date.today().isoformat()
 
     if config.USE_MOCK:
-        contacts, messages = mocks.example_referrals()
-        mock = True
-    else:
-        contacts = exa_search.search_referrals(occupation, city)
-        mock = contacts is None
-    if contacts is None:
-        contacts = mocks.referrals(occupation, city)
-        messages = None
-    if not config.USE_MOCK:
-        messages = gemini.draft_messages(req.facts.model_dump(mode="json"), contacts)
-    if messages is None:
-        messages = [mocks.message(c, occupation) for c in contacts]
+        return ReferralResponse(**mocks.example_referrals(), mock=True)
 
-    return ReferralResponse(
-        referrals=[Referral(message=m, **c) for c, m in zip(contacts, messages)], mock=mock
-    )
+    companies = exa_search.search_companies(field, city) or []
+    contacts = exa_search.search_people(companies, field, city) if companies else []
+    contacts = contacts or []
+    communities = exa_search.search_communities(field, city, today) or []
+    if not (companies or communities):
+        return ReferralResponse(**mocks.referrals(city), mock=True)
+
+    companies = [{**c, "id": f"C{i + 1}"} for i, c in enumerate(companies)]
+    contacts = [{**c, "id": f"P{i + 1}"} for i, c in enumerate(contacts)]
+    communities = [{**c, "id": f"G{i + 1}"} for i, c in enumerate(communities)]
+    notes = gemini.write_referral_notes(f.model_dump(mode="json"), companies, contacts, communities, today) or {}
+    why = {n["id"]: n["why_relevant"] for n in notes.get("companies", [])}
+    kinds = {n["id"]: n for n in notes.get("communities", [])}
+    drafts = {n["id"]: n for n in notes.get("drafts", [])}
+
+    out_companies = [Company(name=c["name"], url=c["url"], source=Source(title=c["name"], url=c["url"], highlight=c["highlight"]),
+                             why_relevant=why.get(c["id"]) or f"From their page: {c['highlight'][:160]}")
+                     for c in companies]
+    out_contacts, out_drafts = [], []
+    for c in contacts:
+        d = drafts.get(c["id"], {})
+        message = d.get("message", "")
+        if not message or len(message.split()) > MAX_DRAFT_WORDS:
+            message = _template_draft(c, field)
+        out_contacts.append(Contact(name=c["name"], role=c["role"] or "Professional", company=c["company"],
+                                    profile_url=c["profile_url"],
+                                    why_this_person=d.get("why_this_person") or f"Works at {c['company']}."))
+        out_drafts.append(Draft(to=c["name"], profile_url=c["profile_url"], message=message))
+    out_communities = []
+    for g in communities:
+        n = kinds.get(g["id"], {})
+        kind = n.get("type") if n.get("type") in ("professional_group", "event", "union") else g["kind"]
+        out_communities.append(Community(name=g["name"], url=g["url"], type=kind,
+                                         date_if_event=n.get("date_if_event") if kind == "event" else None))
+    return ReferralResponse(companies=out_companies, contacts=out_contacts, communities=out_communities,
+                            drafts=out_drafts, mock=not notes)

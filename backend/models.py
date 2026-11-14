@@ -119,15 +119,37 @@ class ReferralRequest(BaseModel):
     facts: Facts
 
 
-class Referral(BaseModel):
+class Company(BaseModel):
     name: str
-    role: str
-    organization: str
-    why: str
-    message: str
+    why_relevant: str
+    url: str
     source: Source
 
 
+class Contact(BaseModel):
+    name: str
+    role: str
+    company: str
+    why_this_person: str
+    profile_url: str
+
+
+class Community(BaseModel):
+    name: str
+    type: Literal["professional_group", "event", "union"]
+    date_if_event: Optional[str] = None
+    url: str
+
+
+class Draft(BaseModel):
+    to: str
+    profile_url: str
+    message: str
+
+
 class ReferralResponse(BaseModel):
-    referrals: list[Referral]
+    companies: list[Company]
+    contacts: list[Contact]
+    communities: list[Community]
+    drafts: list[Draft]
     mock: bool

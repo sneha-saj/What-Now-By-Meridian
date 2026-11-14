@@ -1,12 +1,6 @@
-import { CheckIcon, GlobeIcon, PersonIcon } from "@/components/icons";
+import { CheckIcon, GlobeIcon, PencilIcon, PersonIcon, SearchIcon } from "@/components/icons";
 
 const SOURCES = ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"];
-
-const GET = [
-  { n: "1", title: "How long you can stay", text: "3 or 6 months, checked against Migri today." },
-  { n: "2", title: "Your next steps, in order", text: "Each one linked to its official source." },
-  { n: "3", title: "Perks and support", text: "Job search certificate, city discounts and hiring incentives." },
-];
 
 /** A small, labelled example of the first steps, joined by the signature amber "meridian" line. */
 function StepsPreview() {
@@ -65,27 +59,18 @@ export default function Home() {
         <StepsPreview />
       </section>
 
-      {/* What you get: three short tiles */}
-      <section aria-label="What you get" className="border-y border-rule bg-paper-deep/60">
-        <ul className="mx-auto grid max-w-6xl gap-px px-5 sm:grid-cols-3 sm:px-8">
-          {GET.map((g) => (
-            <li key={g.n} className="py-8 sm:px-6 sm:first:pl-0">
-              <span className="font-serif text-3xl text-accent-ink">{g.n}</span>
-              <p className="mt-1 font-serif text-2xl font-semibold">{g.title}</p>
-              <p className="mt-1 text-ink-soft">{g.text}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       {/* How it works: one line */}
       <section aria-label="How it works" className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
-        <ol className="flex flex-col gap-4 text-lg sm:flex-row sm:items-center sm:gap-3">
+        <ol className="flex flex-col gap-4 text-lg lg:flex-row lg:items-center lg:gap-3">
           <li className="flex items-center gap-2"><PersonIcon className="h-5 w-5 text-accent-ink" /> You tell us what happened</li>
-          <li aria-hidden className="hidden h-px flex-1 bg-accent sm:block" />
-          <li className="flex items-center gap-2"><GlobeIcon className="h-5 w-5 text-verified" /> Exa searches official sites live</li>
-          <li aria-hidden className="hidden h-px flex-1 bg-accent sm:block" />
-          <li className="flex items-center gap-2"><CheckIcon className="h-5 w-5 text-verified" /> Your next steps, every fact sourced</li>
+          <li aria-hidden className="hidden h-px flex-1 bg-accent lg:block" />
+          <li className="flex items-center gap-2"><GlobeIcon className="h-5 w-5 text-verified" /> Exa finds the official pages</li>
+          <li aria-hidden className="hidden h-px flex-1 bg-accent lg:block" />
+          <li className="flex items-center gap-2"><SearchIcon className="h-5 w-5 text-verified" /> Context.dev reads them in full</li>
+          <li aria-hidden className="hidden h-px flex-1 bg-accent lg:block" />
+          <li className="flex items-center gap-2"><PencilIcon className="h-5 w-5 text-accent-ink" /> Gemini writes your steps</li>
+          <li aria-hidden className="hidden h-px flex-1 bg-accent lg:block" />
+          <li className="flex items-center gap-2"><CheckIcon className="h-5 w-5 text-verified" /> Every fact sourced</li>
         </ol>
 
         <div className="mt-12 flex flex-col gap-3 border-t border-rule pt-6 text-sm text-ink-soft sm:flex-row sm:items-center sm:justify-between">

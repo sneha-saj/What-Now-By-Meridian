@@ -28,7 +28,9 @@ Every response has `mock: true` when a fallback was used (no API key, or a call 
 | `POST /opportunities` (+ `/stream`) | Perks and support: job search certificate, city discounts, employer incentives, all from live Exa sources |
 | `POST /steps/update` (+ `/stream`) | Add info to one step; that step and the ones after it are rewritten live |
 | `POST /ask` | Ask a question; Exa's Answer endpoint replies with sources |
-| `GET /health` | Which integrations have keys configured |
+| `POST /voice/transcribe` | Voice typing: raw recording in (e.g. `audio/webm`, max 5 MB), `{"text"}` out (ElevenLabs) |
+| `POST /voice/speak` | Listen: `{"text"}` in (max 1500 chars), MP3 out, cached 7 days (ElevenLabs) |
+| `GET /health` | Which integrations are set up (`voice` tells the app whether to show the mic and Listen buttons) |
 
 ---
 

@@ -89,7 +89,7 @@ backend/
   questions.py         missing facts → tap-to-answer questions
   services/            gemini.py, exa_search.py, mocks.py
   opportunities.py     Perks and support
-  integrations/        elevenlabs.py (stub, not wired in)
+  integrations/        context_dev.py, elevenlabs.py (voice typing and Listen)
   tests/               test_rules.py, test_api.py
 frontend/
   app/page.tsx         single page
@@ -101,11 +101,11 @@ frontend/
 - [x] **Exa – The Internet Butler / Your Personal Assistant**: Exa finds and reads the facts: official sites (migri.fi, kela.fi, infofinland.fi, tyomarkkinatori.fi), full page contents with highlights, perks and support on city sites, answers to questions, and live checks of the rule sources.
 
 ## Tech challenges
-- [ ] **Gemini API (Google DeepMind)**: (in progress) understands the user's sentence, writes the plan with sources and sorts perks and support. Also confirms live that Migri's page still matches our stored rules.
+- [x] **Gemini API (Google DeepMind)**: reads your first message and picks the questions that matter for you; writes your steps only from the sources Exa found (every step must cite one); rewrites steps when you add info; checks daily that Migri's page still matches our stored rules; sorts perks and judges whether employer incentives "may apply". The date itself always comes from plain code, not AI.
 - [x] **OpenAI Codex**: used to build the Finland country config, rules engine + tests, live rule check and the "How we know this" page (see commits marked "codex:" or "[codex]" and the related pull requests).
 - [x] **Context.dev**: reads whole official pages for exact details: Migri's rule page for the live rule check, and the perk pages (certificate, discounts, incentives) with a JSON Schema. Shown in the app as "Read from the page by Context.dev"; Exa remains the fallback.
 - [ ] **Oxylabs Web API**: not used. It was planned for company career pages, which went away with job search.
-- [ ] **ElevenLabs**: (planned) read the plan aloud / voice input for accessibility.
+- [x] **ElevenLabs**: 🎤 voice typing in every free-text box (speech to text, `scribe_v3`) and 🔊 "Listen" on the date and each step (text to speech, `eleven_flash_v2_5`, cached). For people who are stressed, reading in a second language, or find listening easier. Needs `ELEVENLABS_API_KEY`; without it the buttons are hidden. Recordings go to ElevenLabs and are not stored by us; the app says so next to the mic.
 - [ ] **Gemma (Google DeepMind)**: (idea) strip personal details before data leaves the device.
 - [x] **Modal**: hosts the public Next.js site and its FastAPI backend, with a separate API deployment available.
 - [ ] **MongoDB Atlas (MLH)**: (idea) save the user's plan and progress.

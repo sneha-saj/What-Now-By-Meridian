@@ -225,3 +225,85 @@ class AskResponse(BaseModel):
     off_topic: bool = False
     official_only: bool = False
     mock: bool = False
+
+
+# ---------- /opportunities ----------
+
+class HiddenJob(BaseModel):
+    company: str
+    signal: str
+    signal_date: str
+    source_url: str
+    why_it_fits: str
+    action: Literal["reach_out"] = "reach_out"
+
+
+class OppContact(BaseModel):
+    name: str
+    role: str
+    company: str
+    why_this_person: str
+    profile_url: str
+    draft: str
+
+
+class SupportItem(BaseModel):
+    name: str
+    what_it_is: str
+    why_it_may_apply: str
+    eligibility_note: str = "May apply, check the conditions."
+    source_url: str
+    source_date: Optional[str] = None
+
+
+class EventItem(BaseModel):
+    name: str
+    date: str
+    place: Optional[str] = None
+    url: str
+    why_relevant: str
+
+
+class Certificate(BaseModel):
+    name: str
+    how_to_get: str
+    source_url: str
+    source_date: Optional[str] = None
+
+
+class Discount(BaseModel):
+    name: str
+    discount: str
+    proof_needed: str
+    city: str
+    source_url: str
+    source_date: Optional[str] = None
+
+
+class Incentive(BaseModel):
+    name: str
+    what_it_is: str
+    conditions_plain: str
+    may_apply: bool
+    caveat: str
+    source_url: str
+    source_date: Optional[str] = None
+
+
+class PerksAndSupport(BaseModel):
+    certificate: Optional[Certificate] = None
+    discounts: list[Discount] = Field(default_factory=list)
+    incentives: list[Incentive] = Field(default_factory=list)
+
+
+class OpportunitiesRequest(BaseModel):
+    facts: Facts
+
+
+class OpportunitiesResponse(BaseModel):
+    hidden_jobs: list[HiddenJob] = Field(default_factory=list)
+    people: list[OppContact] = Field(default_factory=list)
+    support: list[SupportItem] = Field(default_factory=list)
+    events: list[EventItem] = Field(default_factory=list)
+    perks_and_support: PerksAndSupport = Field(default_factory=PerksAndSupport)
+    mock: bool = False

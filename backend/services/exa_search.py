@@ -383,3 +383,49 @@ def ask(question: str, official_only: bool, context: str = "") -> dict | None:
                    "results": out["citations"], "count": len(out["citations"])})
     _cache_write(key, out)
     return out
+
+
+# ---------- /opportunities ----------
+
+def _rows(res, purpose: str) -> list[dict]:
+    return [{"title": r.title or r.url, "url": r.url, "published": _date(r), "highlight": _hl(r), "purpose": purpose}
+            for r in res.results]
+
+
+def search_opportunities(field: str, city: str, today: str, city_domains: list[str], support_types: list[dict],
+                         perk_queries: dict) -> dict | None:
+    """All Opportunities searches for one city + field, in parallel, cached 24h. About 9 Exa searches:
+    hiring signals (last 60 days), events (next 30 days), 4 support types and 3 perks. People come after,
+    from the top companies. Returns raw rows per section, or None if Exa is unavailable."""
+    since = (datetime.fromisoformat(today) - timedelta(days=60)).date().isoformat()
+    month = datetime.fromisoformat(today).strftime("%B %Y")
+    official = list(config.OFFICIAL_DOMAINS) + city_domains
+
+    calls = [
+        ("hidden_jobs", "hiring signals", dict(
+            query=f"{field} company in {city} Finland opening new location, expanding, hiring, funding",
+            num_results=8, start_published_date=since, contents={"highlights": True},
+            objective=(f"Recent news (last 60 days) about companies in or near {city}, Finland that hire {field}s: "
+                       "new openings, expansions, new locations or funding. Pull the company name and what changed."))),
+        ("events", "events", dict(
+            query=f"recruitment fair, {field} industry meetup or international community event in {city} {month}",
+            num_results=6, contents={"highlights": True},
+            objective=(f"Events in {city}, Finland in the next 30 days from {today}: recruitment fairs, {field} "
+                       "meetups, events for internationals. Pull the event date and place."))),
+        *[(f"support:{t['id']}", "support", dict(
+            query=f"{t['query']} {city}", num_results=3, include_domains=official, contents={"highlights": True},
+            objective=f"Official page about {t['name'].lower()} in {city} or Finland, with who can apply."))
+          for t in support_types],
+        *[(f"perks:{k}", "perks", dict(
+            query=f"{q} {city}", num_results=4, include_domains=official, contents={"highlights": True},
+            objective=f"Official page in {city} or Finland: {q}. Pull the exact discount, conditions and proof needed."))
+          for k, q in perk_queries.items()],
+    ]
+
+    def run(exa):
+        def one(c):
+            section, purpose, kw = c
+            kw = dict(kw)
+            return section, _rows(_search(exa, kw.pop("query"), purpose, **kw), purpose)
+        return dict(_parallel(one, calls))
+    return _cached_search("opportunities", {"field": field, "city": city, "today": today, "v": 1}, run)

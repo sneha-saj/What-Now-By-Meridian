@@ -1,0 +1,73 @@
+{
+  "request": {
+    "facts": {
+      "citizenship_group": "other",
+      "permit_type": "work_based",
+      "years_on_work_permit": 1,
+      "job_end_date": "2026-11-01",
+      "city": "Helsinki",
+      "field": "restaurant worker"
+    }
+  },
+  "response": {
+    "hidden_jobs": [
+      {
+        "company": "Example Bistro Group (sample)",
+        "signal": "Sample: opening a new restaurant in Kallio in December.",
+        "signal_date": "2026-10-28",
+        "source_url": "https://example.com/news/new-restaurant",
+        "why_it_fits": "New restaurants need kitchen and floor staff.",
+        "action": "reach_out"
+      }
+    ],
+    "people": [
+      {
+        "name": "Sample Contact",
+        "role": "Head Chef",
+        "company": "Example Bistro Group (sample)",
+        "why_this_person": "Leads the kitchen team for the new opening.",
+        "profile_url": "https://example.com/profile/sample",
+        "draft": "Hi, I read that Example Bistro is opening a new restaurant in Kallio. I've worked in a Helsinki kitchen for a year and would love to help with the opening. Could we have a short chat? [Your name]"
+      }
+    ],
+    "support": [
+      {
+        "name": "Finnish language course (sample)",
+        "what_it_is": "Sample: a free Finnish course for jobseekers.",
+        "why_it_may_apply": "It may apply because you're an unemployed jobseeker in Helsinki.",
+        "eligibility_note": "May apply, check the conditions.",
+        "source_url": "https://example.com/finnish-course",
+        "source_date": null
+      }
+    ],
+    "events": [
+      {
+        "name": "Sample recruitment fair",
+        "date": "2026-11-26",
+        "place": "Helsinki",
+        "url": "https://example.com/fair",
+        "why_relevant": "Restaurants recruit at this fair."
+      }
+    ],
+    "perks_and_support": {
+      "certificate": {
+        "name": "Job search certificate (proof you're a jobseeker)",
+        "how_to_get": "Sample: download it from your Job Market Finland account.",
+        "source_url": "https://example.com/certificate",
+        "source_date": null
+      },
+      "discounts": [
+        {
+          "name": "Swimming halls (sample)",
+          "discount": "Sample: reduced price",
+          "proof_needed": "Job search certificate",
+          "city": "Helsinki",
+          "source_url": "https://example.com/swimming",
+          "source_date": null
+        }
+      ],
+      "incentives": []
+    },
+    "mock": true
+  }
+}

@@ -17,10 +17,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import activity
 import config
 import sources_log
-from models import (STEPS, Action, AskRequest, AskResponse, AskSource, ChatRequest, ChatResponse, Community, Company, Contact, Deadline, Draft, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
+from models import (STEPS, OpportunitiesRequest, OpportunitiesResponse, Action, AskRequest, AskResponse, AskSource, ChatRequest, ChatResponse, Community, Company, Contact, Deadline, Draft, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
                     PlanResponse, PossibleDate, ReferralRequest, ReferralResponse, Source,
                     TimelineStep)
 import ask as ask_rules
+import opportunities as opps
 import plan_b
 from questions import APPROX, canonical_permit, needed_fields, next_field, question, questions_for
 from rules import calculate_deadline
@@ -506,3 +507,49 @@ def ask_question(req: AskRequest):
                   "Please check with Migri or your union.")
     return AskResponse(answer=answer, sources=sources, suggested_roadmap_step=step if sources else None,
                        official_only=official)
+
+
+# ---------- /opportunities ----------
+
+def _deadline_months(f: Facts) -> int | None:
+    permit = canonical_permit(f)
+    if permit is None:
+        return None
+    try:
+        return calculate_deadline(permit, f.years(), f.job_end_date).get("months")
+    except ValueError:
+        return None
+
+
+@app.post("/opportunities", response_model=OpportunitiesResponse,
+          summary="Hidden jobs, people, support, events and perks, found live")
+def opportunities(req: OpportunitiesRequest):
+    """Separate from the roadmap. Every item comes from an Exa source. About 11 Exa searches and 2 Gemini calls
+    per city + field, cached 24h. `/opportunities/stream` streams each section as it's ready."""
+    if config.USE_MOCK:
+        return OpportunitiesResponse(**mocks.example("opportunities"))
+    return opps.build(req.facts, _deadline_months(req.facts))
+
+
+@app.post("/opportunities/stream", summary="Same as /opportunities, streamed with live activity and partial sections")
+def opportunities_stream(req: OpportunitiesRequest):
+    events: queue.Queue = queue.Queue()
+
+    def work():
+        activity.set_emitter(events.put)
+        try:
+            resp = opportunities(req)
+            events.put({"type": "result", "data": resp.model_dump(mode="json")})
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).exception("opportunities stream failed: %s", e)
+            events.put({"type": "error"})
+        events.put(None)
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def gen():
+        while (event := events.get()) is not None:
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

@@ -292,7 +292,8 @@ def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
 
 @pytest.mark.parametrize("name,model", [
     ("intake", "IntakeResponse"), ("intake_questions", "IntakeResponse"), ("intake_out_of_scope", "IntakeResponse"),
-    ("plan", "PlanResponse"), ("referrals", "ReferralResponse"), ("chat", "ChatResponse")])
+    ("plan", "PlanResponse"), ("referrals", "ReferralResponse"), ("chat", "ChatResponse"),
+    ("opportunities", "OpportunitiesResponse")])
 def test_saved_examples_match_response_models(name, model):
     import models
     from services import mocks

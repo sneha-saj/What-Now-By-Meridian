@@ -124,3 +124,35 @@ QUESTION_BANK = {
         ],
     },
 }
+
+
+# ---------- Opportunities ----------
+# Official city sites searched alongside the trusted domains for local support, perks and incentives.
+CITY_DOMAINS = {
+    "helsinki": ["hel.fi", "myhelsinki.fi"],
+    "espoo": ["espoo.fi"],
+    "vantaa": ["vantaa.fi"],
+    "tampere": ["tampere.fi"],
+    "turku": ["turku.fi"],
+    "oulu": ["ouka.fi"],
+}
+
+# Support types we look for. Each is one Exa search on trusted + city domains. Gemini then keeps only items
+# whose eligibility text plausibly matches the user; we never claim eligibility.
+SUPPORT_TYPES = [
+    {"id": "labour_market_training", "name": "Labour market training",
+     "query": "labour market training for unemployed jobseekers free courses"},
+    {"id": "language_courses", "name": "Finnish or Swedish language courses",
+     "query": "free Finnish language courses for unemployed immigrants"},
+    {"id": "mentoring", "name": "Mentoring for internationals",
+     "query": "mentoring programme for international jobseekers"},
+    {"id": "startup_grant", "name": "Start-up grant",
+     "query": "start-up grant for unemployed person starting a business"},
+]
+
+# Perks: always try the job search certificate first, then discounts and employer hiring incentives.
+PERK_QUERIES = {
+    "certificate": "how to get a job search certificate proof of unemployed jobseeker status for discounts",
+    "discounts": "discounts for unemployed jobseekers swimming sports museums culture adult education courses",
+    "incentives": "employer hiring subsidy for hiring an unemployed jobseeker city employment benefit",
+}

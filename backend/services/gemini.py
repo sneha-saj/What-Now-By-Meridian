@@ -258,3 +258,122 @@ def write_referral_notes(facts: dict, companies: list[dict], contacts: list[dict
         communities=lines(communities, ("name", "url", "highlight")),
     )
     return structured_call(prompt, ReferralNotes, "writing why each company fits and drafting your messages")
+
+
+# ---------- /opportunities ----------
+
+class _OppJob(BaseModel):
+    row_id: str
+    company: str
+    signal: str
+    why_it_fits: str
+
+
+class _OppSupport(BaseModel):
+    row_id: str
+    name: str
+    what_it_is: str
+    why_it_may_apply: str
+    plausible: bool
+
+
+class _OppEvent(BaseModel):
+    row_id: str
+    name: str
+    date: Optional[str] = None
+    place: Optional[str] = None
+    why_relevant: str
+
+
+class _OppCertificate(BaseModel):
+    row_id: str
+    how_to_get: str
+
+
+class _OppDiscount(BaseModel):
+    row_id: str
+    name: str
+    discount: str
+    proof_needed: str
+
+
+class _OppIncentive(BaseModel):
+    row_id: str
+    name: str
+    what_it_is: str
+    conditions_plain: str
+    may_apply: bool
+    caveat: str
+
+
+class OpportunityNotes(BaseModel):
+    hidden_jobs: list[_OppJob]
+    support: list[_OppSupport]
+    events: list[_OppEvent]
+    certificate: Optional[_OppCertificate] = None
+    discounts: list[_OppDiscount]
+    incentives: list[_OppIncentive]
+
+
+OPPORTUNITIES_PROMPT = """You help a person in Finland who lost their job find opportunities. Use ONLY the rows below.
+Cite each item by its row id. Leave a row out if it doesn't clearly fit. Never invent names, dates or discounts.
+Today is {today}. Plain language, one sentence per field, no markdown.
+
+hidden_jobs: rows marked [hiring] that describe a real hiring signal (new opening, expansion, new location,
+  funding) at a company that could hire this person. company, signal (what changed), why_it_fits.
+support: rows marked [support]. plausible=true only if the eligibility text plausibly matches the person.
+  why_it_may_apply must say "may apply" and never claim they are eligible.
+events: rows marked [event] that are an event within 30 days of today. date as YYYY-MM-DD only if the row
+  states it, place if stated, why_relevant.
+certificate: the [perks] row that explains how to get a job search certificate / proof of jobseeker status,
+  with how_to_get in plain steps. null if no row explains it.
+discounts: [perks] rows that state a concrete discount for unemployed jobseekers (sports, swimming, museums,
+  culture, courses): name, discount (exactly as stated), proof_needed.
+incentives: [perks] rows about employer hiring incentives: name, what_it_is, conditions_plain, may_apply (true only
+  if the person plausibly meets the conditions), caveat (if a condition like "unemployed for 3 months" conflicts
+  with their permit deadline of {deadline_months} months, say so plainly).
+
+Person: {facts}
+
+ROWS:
+{rows}"""
+
+
+def write_opportunities(facts: dict, deadline_months, rows: list[dict], today: str) -> dict | None:
+    tag = {"hiring signals": "hiring", "support": "support", "events": "event", "perks": "perks"}
+    lines = "\n".join(f"[{r['id']}] [{tag.get(r['purpose'], r['purpose'])}] {r['title']} ({r['url']}"
+                      f"{', ' + r['published'] if r.get('published') else ''})\n{(r.get('highlight') or '')[:500]}"
+                      for r in rows)
+    return structured_call(
+        OPPORTUNITIES_PROMPT.format(today=today, facts=facts, rows=lines or "(none)",
+                                    deadline_months=deadline_months or "unknown"),
+        OpportunityNotes, f"sorting {len(rows)} live finds into opportunities")
+
+
+class _ContactDraft(BaseModel):
+    id: str
+    why_this_person: str
+    message: str
+
+
+class ContactDrafts(BaseModel):
+    drafts: list[_ContactDraft]
+
+
+DRAFTS_PROMPT = """Draft one short, polite, personal message (max 80 words) from a job seeker to each contact below.
+Mention one real detail from the contact's company signal. No exaggeration. End with "[Your name]".
+{incentive}These are drafts; nothing is sent. Also give why_this_person in one sentence.
+
+Job seeker: {facts}
+
+CONTACTS:
+{contacts}"""
+
+
+def write_contact_drafts(facts: dict, contacts: list[dict], incentive: str | None) -> dict | None:
+    hint = (f"If it fits naturally, mention briefly that the employer may be able to use this hiring incentive: "
+            f"{incentive}. Don't promise it applies.\n") if incentive else ""
+    lines = "\n".join(f"[{c['id']}] {c['name']}, {c['role']} at {c['company']}. Company signal: {c.get('signal', '')}"
+                      for c in contacts)
+    return structured_call(DRAFTS_PROMPT.format(incentive=hint, facts=facts, contacts=lines), ContactDrafts,
+                           "drafting your messages")

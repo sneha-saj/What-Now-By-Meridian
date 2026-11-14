@@ -36,7 +36,7 @@ It's called with plain HTTP from `backend/integrations/context_dev.py`: cached 2
 
 For Modal deployment, `.env` has placeholders for `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. Modal uses this token pair to authenticate its CLI; these values are not needed to run the app locally, and Modal does not automatically read this project's `.env`. You can also configure the CLI with `modal setup`.
 
-To deploy the FastAPI backend to Modal, install its CLI in `backend/.venv` (`backend/.venv/bin/pip install modal`), sign in with `backend/.venv/bin/modal setup` or provide both Modal token variables, then run `backend/.venv/bin/modal deploy backend/modal_app.py`. The deployment sends only the Exa, Gemini, and Context.dev keys from `.env` as a Modal Secret. The deployed API is at `https://lovelyshradan--what-now-by-meridian-api-web.us-east.modal.run`. Set the frontend host's `API_URL` to this URL and rebuild the frontend. Modal does not host the Next.js frontend in this setup.
+To deploy on Modal, install its CLI in `backend/.venv` (`backend/.venv/bin/pip install modal`) and sign in with `backend/.venv/bin/modal setup` or provide both Modal token variables. Deploy the public site with `backend/.venv/bin/modal deploy frontend/modal_app.py`. The site bundles Next.js and FastAPI in one Modal container, so its `/api` requests stay local. The deploy script sends only the Exa, Gemini, and Context.dev keys from `.env` as a Modal Secret. The public site is at [what-now-by-meridian-site](https://lovelyshradan--what-now-by-meridian-site-web.us-east.modal.run). The API can also be deployed separately with `backend/.venv/bin/modal deploy backend/modal_app.py`.
 
 Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make test`, `make backend`, `make frontend`, `make clean`.
 
@@ -105,7 +105,7 @@ frontend/
 - [ ] **Oxylabs Web API**: not used. It was planned for company career pages, which went away with job search.
 - [ ] **ElevenLabs**: (planned) read the plan aloud / voice input for accessibility.
 - [ ] **Gemma (Google DeepMind)**: (idea) strip personal details before data leaves the device.
-- [x] **Modal**: hosts the FastAPI backend as a public ASGI web function.
+- [x] **Modal**: hosts the public Next.js site and its FastAPI backend, with a separate API deployment available.
 - [ ] **MongoDB Atlas (MLH)**: (idea) save the user's plan and progress.
 
 Only ticked items are used in the current version. We tick items when they're actually integrated.

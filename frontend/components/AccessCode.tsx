@@ -5,8 +5,10 @@ import { getCode, loadHealth, setCode, useHealth } from "@/lib/access";
 import { CheckIcon } from "./icons";
 import { Button, cx } from "./primitives";
 
-/** "Judge? Enter access code": only shown when the server uses access codes. With a valid code the app runs live
- *  (Exa, Gemini, Context.dev, ElevenLabs); without one it's the free demo. */
+// Public by design. The hosted ACCESS_CODES allowlist must include this code too.
+export const PUBLIC_TRIAL_CODE = "meridian-live-trial-r8n4";
+
+/** Demo is the default. Visitors can enter a private code or deliberately reveal the public trial code. */
 export function AccessCode({ className, initiallyOpen = false, onCancel }: {
   className?: string; initiallyOpen?: boolean; onCancel?: () => void;
 }) {
@@ -15,6 +17,8 @@ export function AccessCode({ className, initiallyOpen = false, onCancel }: {
   const [open, setOpen] = useState(initiallyOpen);
   const [text, setText] = useState("");
   const [state, setState] = useState<"idle" | "checking" | "wrong">("idle");
+  const [revealTrial, setRevealTrial] = useState(false);
+  const [copied, setCopied] = useState(false);
   if (!health?.access_codes) return null;
 
   if (health.live)
@@ -44,19 +48,34 @@ export function AccessCode({ className, initiallyOpen = false, onCancel }: {
   return (
     <div className={cx("text-sm", className)}>
       {!open ? (
-        <p className="text-ink-soft">
-          Demo mode: live search and voice are off.{" "}
-          <button className="min-h-9 font-bold text-ink underline" onClick={() => setOpen(true)}>Judge? Enter access code</button>
-        </p>
+        <div className="space-y-2">
+          <p className="text-ink-soft">You&apos;re in demo mode. Live search and voice are off.</p>
+          <button type="button" className="min-h-9 font-bold text-ink underline" onClick={() => setOpen(true)}>Try the live version</button>
+        </div>
       ) : (
-        <form onSubmit={check} className="flex flex-wrap items-center gap-2">
-          <label htmlFor={inputId} className="font-bold">Access code</label>
-          <input id={inputId} value={text} autoFocus autoComplete="off" onChange={(e) => { setText(e.target.value); setState("idle"); }}
-            className="min-h-11 w-48 rounded-xl border border-ink/25 bg-card px-3" />
-          <Button type="submit" variant="chip" disabled={!text.trim() || state === "checking"}>{state === "checking" ? "Checking…" : "Use code"}</Button>
-          <Button type="button" variant="quiet" onClick={() => { setOpen(false); onCancel?.(); }}>Cancel</Button>
-          {state === "wrong" && <span role="alert" className="basis-full text-warn">That code didn&apos;t work. Check it and try again.</span>}
-        </form>
+        <div className="space-y-3">
+          <p className="text-ink-soft">Live search and voice use limited API credits. Please keep your test brief so others can try it too.</p>
+          <form onSubmit={check} className="flex flex-wrap items-center gap-2">
+            <label htmlFor={inputId} className="font-bold">Access code</label>
+            <input id={inputId} value={text} autoFocus autoComplete="off" onChange={(e) => { setText(e.target.value); setState("idle"); }}
+              className="min-h-11 w-48 rounded-xl border border-ink/25 bg-card px-3" />
+            <Button type="submit" variant="chip" disabled={!text.trim() || state === "checking"}>{state === "checking" ? "Checking…" : "Use code"}</Button>
+            <Button type="button" variant="quiet" onClick={() => { setOpen(false); onCancel?.(); }}>Stay in demo</Button>
+            {state === "wrong" && <span role="alert" className="basis-full text-warn">That code didn&apos;t work. Check it and try again.</span>}
+          </form>
+          {!revealTrial ? (
+            <button type="button" className="min-h-9 font-bold text-ink underline" onClick={() => setRevealTrial(true)}>No code? Reveal a trial code</button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-rule bg-paper p-3">
+              <span className="text-ink-soft">Trial code:</span>
+              <code className="select-all font-bold">{PUBLIC_TRIAL_CODE}</code>
+              <Button type="button" variant="chip" onClick={async () => {
+                try { await navigator.clipboard.writeText(PUBLIC_TRIAL_CODE); setCopied(true); }
+                catch { setCopied(false); }
+              }}>{copied ? "Copied" : "Copy code"}</Button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -33,7 +33,7 @@ function VoiceGate({ health, onClose }: { health: Health | null; onClose: () => 
         </div>
         {!health ? <p className="text-ink-soft">Checking voice availability…</p>
           : health.access_codes && !health.live ? <>
-            <p className="text-ink-soft">If you&apos;re a judge, enter your access code to use the microphone.</p>
+            <p className="text-ink-soft">You can enter an access code or reveal a trial code to use the microphone.</p>
             <AccessCode initiallyOpen onCancel={onClose} />
           </> : <p className="text-ink-soft">Voice isn&apos;t available right now. You can type your answer instead.</p>}
       </section>
@@ -91,7 +91,7 @@ export function MicButton({ onText, disabled, className, inside = false }: {
     : state === "error" ? "Couldn't use the microphone. Please type instead." : "";
   const button = (
     <button type="button" disabled={disabled || state === "working"}
-      aria-label={on ? label : health?.access_codes ? "Speak instead of typing; judge access required" : "Speak instead of typing; voice unavailable"}
+      aria-label={on ? label : health?.access_codes ? "Speak instead of typing; access code required" : "Speak instead of typing; voice unavailable"}
       title={on ? `${label}. ${VOICE_NOTE}` : "Speak instead of typing"}
       onClick={() => !on ? setGateOpen(true) : state === "recording" ? rec.current?.stop() : start()}
       className={cx("inline-flex shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50",

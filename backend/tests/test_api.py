@@ -535,6 +535,21 @@ def test_off_topic_first_message_gets_a_polite_no_not_a_roadmap(monkeypatch, use
     assert "relationship" not in body["reply"] and "deadline" not in body and body["facts"] == {}
 
 
+@pytest.mark.parametrize("extracted", [{}, {"lost_job": None}, {"city": "Helsinki"}])
+def test_off_topic_first_message_is_polite_live_even_if_gemini_is_unsure(monkeypatch, extracted):
+    monkeypatch.setattr(main.config, "USE_MOCK", False)
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: extracted)
+    body = client.post("/chat", json={"messages": _msg("I need food")}).json()
+    assert body["out_of_scope"] is True and "job loss in Finland" in body["reply"] and body["facts"] == {}
+
+
+def test_off_topic_words_but_gemini_reads_a_job_loss_carries_on(monkeypatch):
+    monkeypatch.setattr(main.config, "USE_MOCK", False)
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"lost_job": True})
+    body = client.post("/chat", json={"messages": _msg("I got sacked and I need food")}).json()
+    assert body.get("out_of_scope") is not True and body["question"]["id"] == "citizenship_group"
+
+
 @pytest.mark.parametrize("text", ["My company closed down", "Probation ended last week", "I was made redundant"])
 def test_job_loss_wording_is_not_mistaken_for_off_topic(monkeypatch, text):
     monkeypatch.setattr(main.config, "USE_MOCK", True)

@@ -462,7 +462,8 @@ def _run_chat(req: ChatRequest) -> ChatResponse:
                                 links=[Source(title="Moving and working in Finland (InfoFinland)", url=OUT_OF_SCOPE_LINK)],
                                 mock=mock)
 
-        if off_topic and extracted.get("lost_job") is False:
+        # No job words and Gemini didn't say it's about losing a job: same polite reply as demo mode.
+        if off_topic and extracted.get("lost_job") is not True:
             return _off_topic_start(mock)
 
     facts, confirmed = _merge_chat_facts(req, extracted)

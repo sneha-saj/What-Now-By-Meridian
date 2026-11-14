@@ -200,71 +200,6 @@ def test_rules_endpoint_includes_country_config(monkeypatch):
     assert "migri.fi" in body["trusted_domains"]
 
 
-COMPANIES = [{"name": f"Restaurant {i} Oy", "url": f"https://r{i}.fi", "highlight": f"Hiring cooks {i}",
-              "hiring_evidence": "https://r1.fi/careers" if i == 1 else None} for i in range(1, 5)]
-PEOPLE = [{"name": "Aino Virtanen", "role": "Head Chef", "company": "Restaurant 1 Oy",
-           "profile_url": "https://linkedin.com/in/aino", "highlight": "Leads a team of 12 cooks"}]
-GROUPS = [{"name": "Helsinki Chefs Meetup", "url": "https://meetup.com/x", "kind": "professional_group", "highlight": "Next meetup 2026-11-20"},
-          {"name": "PAM union", "url": "https://pam.fi", "kind": "union", "highlight": "Career coaching for members"}]
-
-
-@pytest.fixture
-def referral_exa(monkeypatch):
-    calls = {}
-    monkeypatch.setattr(main.exa_search, "search_companies", lambda field, city: calls.setdefault("companies", (field, city)) and [dict(c) for c in COMPANIES])
-    monkeypatch.setattr(main.exa_search, "search_people", lambda companies, field, city: [dict(p) for p in PEOPLE])
-    monkeypatch.setattr(main.exa_search, "search_communities", lambda field, city, today: [dict(g) for g in GROUPS])
-    return calls
-
-
-def test_referrals_with_exa_and_gemini(monkeypatch, referral_exa):
-    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: {
-        "companies": [{"id": "C1", "why_relevant": "Hires cooks in Helsinki."}],
-        "communities": [{"id": "G1", "type": "event", "date_if_event": "2026-11-20"},
-                        {"id": "G2", "type": "union", "date_if_event": "2026-11-21"}],
-        "drafts": [{"id": "P1", "why_this_person": "Leads the kitchen.",
-                    "message": "Hi Aino, I read that you lead a team of 12 cooks. Could we talk? [Your name]"}]})
-    body = client.post("/referrals", json={"facts": {"field": "restaurant worker", "city": "Helsinki"}}).json()
-    assert referral_exa["companies"] == ("restaurant worker", "Helsinki")
-    assert body["mock"] is False
-    assert body["companies"][0]["why_relevant"] == "Hires cooks in Helsinki."
-    assert body["companies"][0]["hiring_now"] is True and body["companies"][0]["hiring_evidence"] == "https://r1.fi/careers"
-    assert body["companies"][1]["hiring_now"] is False
-    assert body["companies"][1]["why_relevant"] == "Came up in a search for restaurant worker employers near Helsinki."  # never raw page text
-    assert body["contacts"][0] == {"name": "Aino Virtanen", "role": "Head Chef", "company": "Restaurant 1 Oy",
-                                   "why_this_person": "Leads the kitchen.", "profile_url": "https://linkedin.com/in/aino"}
-    assert "12 cooks" in body["drafts"][0]["message"]
-    assert body["communities"][0] == {"name": "Helsinki Chefs Meetup", "type": "event", "date_if_event": "2026-11-20",
-                                      "url": "https://meetup.com/x", "published": None}
-    assert body["communities"][1]["date_if_event"] is None  # dates only for events
-
-
-def test_referral_drafts_over_80_words_fall_back_to_template(monkeypatch, referral_exa):
-    long = " ".join(["word"] * 81)
-    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: {
-        "companies": [], "communities": [], "drafts": [{"id": "P1", "why_this_person": "x", "message": long}]})
-    msg = client.post("/referrals", json={"facts": {"field": "cook"}}).json()["drafts"][0]["message"]
-    assert len(msg.split()) <= 80 and "Restaurant 1 Oy" in msg
-
-
-def test_referrals_without_gemini_still_return_exa_results(monkeypatch, referral_exa):
-    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: None)
-    body = client.post("/referrals", json={"facts": {"field": "cook"}}).json()
-    assert body["mock"] is True
-    assert len(body["companies"]) == 4 and len(body["drafts"]) == 1
-    assert sorted(g["type"] for g in body["communities"]) == ["professional_group", "union"]
-
-
-def test_referrals_without_exa_list_only_real_help_services(monkeypatch):
-    monkeypatch.setattr(main.exa_search, "search_companies", lambda *a: None)
-    monkeypatch.setattr(main.exa_search, "search_communities", lambda *a: None)
-    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: pytest.fail("Gemini called without data"))
-    body = client.post("/referrals", json={"facts": {}}).json()
-    assert body["mock"] is True
-    assert body["companies"] == [] and body["contacts"] == [] and body["drafts"] == []
-    assert body["communities"]
-
-
 def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
     monkeypatch.setattr(main.config, "USE_MOCK", True)
     monkeypatch.setattr(main, "get_live_check", lambda rule_id: {"rule_id": rule_id, **ERROR})
@@ -272,9 +207,9 @@ def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
     def unexpected(*_args, **_kwargs):
         raise AssertionError("External service called while USE_MOCK is enabled")
 
-    for name in ("extract_facts", "write_plan", "write_referral_notes"):
+    for name in ("extract_facts", "write_plan"):
         monkeypatch.setattr(main.gemini, name, unexpected)
-    for name in ("search_plan_sources", "search_companies", "search_people", "search_communities"):
+    for name in ("search_plan_sources", "search_opportunities"):
         monkeypatch.setattr(main.exa_search, name, unexpected)
 
     intake_body = client.post("/intake", json={"text": "ignored in saved example mode"}).json()
@@ -285,14 +220,12 @@ def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
     assert plan_body["mock"] is True
     assert plan_body["deadline"]["deadline_date"] == "2027-02-01"
     assert len(plan_body["this_week"]) == 3
-    referrals_body = client.post("/referrals", json={"facts": intake_body["facts"]}).json()
-    assert referrals_body["mock"] is True and referrals_body["drafts"]
     assert client.get("/rules").json()["trusted_domains"]
 
 
 @pytest.mark.parametrize("name,model", [
     ("intake", "IntakeResponse"), ("intake_questions", "IntakeResponse"), ("intake_out_of_scope", "IntakeResponse"),
-    ("plan", "PlanResponse"), ("referrals", "ReferralResponse"), ("chat", "ChatResponse"),
+    ("plan", "PlanResponse"), ("chat", "ChatResponse"),
     ("opportunities", "OpportunitiesResponse")])
 def test_saved_examples_match_response_models(name, model):
     import models
@@ -313,7 +246,7 @@ def test_saved_plan_example_matches_the_rules_engine(monkeypatch):
 
 def test_openapi_docs_page_works():
     spec = client.get("/openapi.json").json()
-    assert {"/intake", "/plan", "/rules", "/referrals"} <= spec["paths"].keys()
+    assert {"/intake", "/plan", "/rules", "/opportunities"} <= spec["paths"].keys()
     assert "intake" in spec["paths"]["/intake"]["post"]["requestBody"]["content"]["application/json"]["examples"]
     assert client.get("/docs").status_code == 200
 
@@ -351,8 +284,7 @@ def test_chat_does_not_reextract_when_last_message_is_from_assistant(monkeypatch
     assert body["step"] == "deadline"
 
 
-def test_chat_moves_through_the_steps(verified, live_services, referral_exa, monkeypatch):
-    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: None)
+def test_chat_moves_through_the_steps(verified, live_services):
     session = {"messages": [], "facts": WORK_FACTS}
     d = client.post("/chat", json=session).json()
     assert d["step"] == "deadline" and d["deadline"]["deadline_date"] == "2027-02-01"
@@ -362,13 +294,10 @@ def test_chat_moves_through_the_steps(verified, live_services, referral_exa, mon
     w = client.post("/chat", json={**session, "step": "deadline", "action": "next"}).json()
     assert w["step"] == "this_week" and len(w["plan"]["this_week"]) == 3
 
-    f = client.post("/chat", json={**session, "step": "this_week", "action": "next"}).json()
-    assert f["step"] == "find_your_way_in" and f["referrals"]["companies"]
-    assert f["quick_replies"] == []
-
-    # Staying on the last step doesn't overflow.
-    again = client.post("/chat", json={**session, "step": "find_your_way_in", "action": "next"}).json()
-    assert again["step"] == "find_your_way_in"
+    # The roadmap ends at this week's plan; contacts are outside the current scope.
+    again = client.post("/chat", json={**session, "step": "this_week", "action": "next"}).json()
+    assert again["step"] == "this_week" and "referrals" not in again
+    assert client.post("/referrals", json={"facts": WORK_FACTS}).status_code == 404
 
 
 def test_chat_goes_back_to_questions_if_an_edit_makes_a_fact_unknown(verified):
@@ -381,13 +310,6 @@ def test_chat_out_of_scope(monkeypatch):
     monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"job_was_in_finland": False})
     body = client.post("/chat", json={"messages": _msg("I lost my job in Norway")}).json()
     assert body["out_of_scope"] is True and body["link"]
-
-
-def test_company_sentences_are_cleaned_to_one_short_line():
-    long = "**Great** fit: " + " ".join(["word"] * 30) + ". Second sentence."
-    out = main._clean_sentence(long)
-    assert "*" not in out and len(out.split()) <= 20 and "Second" not in out
-    assert main._clean_name("Rafla Oy | Careers") == "Rafla Oy"
 
 
 def test_chat_stream_sends_progress_then_result(verified, live_services):
@@ -437,39 +359,31 @@ def test_date_question_marks_vague_options():
     assert [o.value for o in q.options] == ["2026-11-14", "about:2026-11-07", "about:2026-10-15"]
 
 
-def test_referrals_are_capped_and_events_outside_30_days_lose_their_date(monkeypatch, referral_exa):
-    many = [{"name": f"Co {i}", "url": f"https://c{i}.fi", "highlight": "h", "hiring_evidence": None} for i in range(8)]
-    people = [{"name": f"P{i}", "role": "Chef", "company": "Co 0", "profile_url": f"https://p{i}", "highlight": "h"} for i in range(5)]
-    monkeypatch.setattr(main.exa_search, "search_companies", lambda *a: [dict(c) for c in many])
-    monkeypatch.setattr(main.exa_search, "search_people", lambda *a: [dict(p) for p in people])
-    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: {
-        "companies": [], "drafts": [],
-        "communities": [{"id": "G1", "type": "event", "date_if_event": "2030-01-01"}]})
-    body = client.post("/referrals", json={"facts": {"field": "cook"}}).json()
-    assert len(body["companies"]) == 5 and len(body["contacts"]) == 3 and len(body["communities"]) <= 3
-    far = [g for g in body["communities"] if g["name"] == "Helsinki Chefs Meetup"][0]
-    assert far["date_if_event"] is None and far["type"] == "professional_group"
-
-
-def test_question_order_is_fixed_required_then_optional():
+def test_question_order_stops_after_deadline_facts():
     from models import Facts
     from questions import next_field
     f = Facts()
     order = []
     answers = {"lost_job": True, "citizenship_group": "other", "permit_type": "work_based", "years_on_work_permit": "under_2",
-               "job_end_date": "2026-11-01", "city": "Helsinki", "field": ""}
+               "job_end_date": "2026-11-01"}
     while (field := next_field(f)) is not None:
         order.append(field)
         f = f.model_copy(update={field: answers[field]})
-    assert order == ["lost_job", "citizenship_group", "permit_type", "years_on_work_permit", "job_end_date", "city", "field"]
+    assert order == ["lost_job", "citizenship_group", "permit_type", "years_on_work_permit", "job_end_date"]
 
 
-def test_skipped_optional_question_is_not_asked_again(verified, live_services):
+def test_missing_search_context_does_not_delay_roadmap(verified, live_services):
     facts = {k: v for k, v in WORK_FACTS.items() if k != "city"}
-    q = client.post("/chat", json={"facts": facts}).json()
-    assert q["question"]["id"] == "city" and {"value": "", "label": "Skip"} in q["question"]["options"]
-    done = client.post("/chat", json={"facts": facts, "answers": {"city": ""}}).json()
+    facts.pop("field")
+    done = client.post("/chat", json={"facts": facts}).json()
     assert "question" not in done and done["step"] == "deadline"
+
+
+@pytest.mark.parametrize("phrase", ["laid off", "fired", "let go", "dismissed", "terminated", "made redundant", "position eliminated", "contract ended"])
+def test_job_loss_wording_is_recognized_by_fallback(phrase):
+    from services.mocks import extract_facts
+
+    assert extract_facts(f"I was {phrase} last week", main.date(2026, 11, 14))["lost_job"] is True
 
 
 # ---------- /ask ----------

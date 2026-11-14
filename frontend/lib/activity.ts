@@ -8,7 +8,6 @@ const PURPOSE_LABEL: Record<string, string> = {
   "rule check": "Migri's rule page",
   companies: "companies hiring near you",
   "job posts": "current job posts",
-  people: "people at those companies",
   events: "groups and events in the next 30 days",
   unions: "union career services",
 };

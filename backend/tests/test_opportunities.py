@@ -46,12 +46,8 @@ NOTES = {
 def mocked(monkeypatch):
     monkeypatch.setattr(opps.exa_search, "search_opportunities", lambda *a: {k: [dict(r) for r in v] for k, v in RAW.items()})
     monkeypatch.setattr(opps.gemini, "write_opportunities", lambda *a: NOTES)
-    people = [{"name": "Aino", "role": "Chef", "company": "Rafla", "profile_url": "https://linkedin.com/in/aino", "highlight": ""}]
-    calls = {}
-    monkeypatch.setattr(opps.exa_search, "search_people", lambda companies, *a, **k: calls.setdefault("top", companies) and people)
-    monkeypatch.setattr(opps.gemini, "write_contact_drafts", lambda facts, contacts, incentive: calls.setdefault("incentive", incentive) and
-                        {"drafts": [{"id": "P1", "why_this_person": "Head chef at Rafla", "message": "Hi Aino, congrats on Kallio! [Your name]"}]})
-    return calls
+    assert not hasattr(opps.exa_search, "search_people")
+    assert not hasattr(opps.gemini, "write_contact_drafts")
 
 
 def test_every_item_is_sourced_and_rules_are_enforced(mocked):
@@ -64,9 +60,6 @@ def test_every_item_is_sourced_and_rules_are_enforced(mocked):
     assert perks.certificate.source_url == "https://tyomarkkinatori.fi/cert"
     assert [d.discount for d in perks.discounts] == ["50% off"]  # invented discount dropped
     assert "may not work in time" in perks.incentives[0].caveat  # 3 months unemployed vs a 3-month deadline
-    assert out.people[0].draft.startswith("Hi Aino") and out.people[0].profile_url.startswith("https://linkedin")
-    assert mocked["top"] == [{"name": "Rafla", "signal": "Opening in Kallio"}]
-    assert mocked["incentive"] == "Helsinki benefit"  # draft may mention the incentive
     assert out.mock is False
 
 
@@ -75,12 +68,6 @@ def test_no_exa_means_no_invented_opportunities(monkeypatch):
     monkeypatch.setattr(opps.gemini, "write_opportunities", lambda *a: pytest.fail("Gemini called without data"))
     out = opps.build(FACTS, 3, TODAY)
     assert out.mock is True and not out.hidden_jobs and not out.events and out.perks_and_support.certificate is None
-
-
-def test_long_drafts_fall_back_to_template(mocked, monkeypatch):
-    monkeypatch.setattr(opps.gemini, "write_contact_drafts", lambda *a: {"drafts": [{"id": "P1", "why_this_person": "x", "message": "word " * 90}]})
-    out = opps.build(FACTS, 3, TODAY)
-    assert len(out.people[0].draft.split()) <= 80 and "Rafla" in out.people[0].draft
 
 
 def test_opportunity_searches_are_limited_and_scoped(monkeypatch):

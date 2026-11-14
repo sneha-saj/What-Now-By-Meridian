@@ -112,7 +112,8 @@ class Extracted(BaseModel):
 
 EXTRACT_PROMPT = """You read a short message from someone who lost (or is losing) their job and extract facts.
 Use null whenever something is not stated or unclear. Never guess. Today is {today}.
-- lost_job: true if they lost their job or are about to (laid off, fired, contract ending, notice); false if the
+- lost_job: true if they lost their job or are about to (laid off, let go, fired, dismissed, terminated,
+  made redundant, position eliminated, contract ending, notice); false if the
   message is clearly about something else; null if it doesn't say
 - job_was_in_finland: false only if they clearly say the job was outside Finland
 - citizenship_group: "eu_eea" (EU/EEA/Swiss citizen) | "other" (any other country) | "unknown"
@@ -206,68 +207,6 @@ def write_plan(facts: dict, deadline: dict, sources: list[dict], today: str, can
                            candidates="\n".join(f"[{c['id']}] {c['option']}: {c['who_it_fits']}" for c in candidates or []) or "(none)"),
         GeneratedPlan, f"writing your plan from {len(sources)} official pages Exa found"
     )
-
-
-# ---------- /referrals ----------
-
-class _CompanyNote(BaseModel):
-    id: str
-    why_relevant: str
-
-
-class _CommunityNote(BaseModel):
-    id: str
-    type: str
-    date_if_event: Optional[str] = None
-
-
-class _Draft(BaseModel):
-    id: str
-    why_this_person: str
-    message: str
-
-
-class ReferralNotes(BaseModel):
-    companies: list[_CompanyNote]
-    communities: list[_CommunityNote]
-    drafts: list[_Draft]
-
-
-REFERRALS_PROMPT = """You help a job seeker in Finland reach out to companies and people. Use ONLY the details below.
-Today is {today}.
-
-1. companies: for each company id, why_relevant: ONE plain sentence, at most 20 words, no markdown, no quotes,
-   on why it could fit this person, based on its highlight.
-2. communities: for each community id, type: "professional_group" | "event" | "union", and date_if_event
-   (YYYY-MM-DD) only if the highlight states a date within the next 30 days, else null.
-3. drafts: for each contact id, why_this_person (one sentence) and message: a short, polite, personal message
-   (max 80 words) from the job seeker. Mention exactly one real detail from that contact's or company's
-   highlight. No exaggeration, no attachments, end with "[Your name]". These are drafts; nothing is sent.
-
-Job seeker: {facts}
-
-COMPANIES:
-{companies}
-
-CONTACTS:
-{contacts}
-
-COMMUNITIES:
-{communities}"""
-
-
-def write_referral_notes(facts: dict, companies: list[dict], contacts: list[dict], communities: list[dict],
-                         today: str) -> dict | None:
-    def lines(items, fields):
-        return "\n".join(f"[{x['id']}] " + " | ".join(str(x.get(f) or "") for f in fields) for x in items) or "(none)"
-
-    prompt = REFERRALS_PROMPT.format(
-        today=today, facts=facts,
-        companies=lines(companies, ("name", "url", "highlight")),
-        contacts=lines(contacts, ("name", "role", "company", "highlight")),
-        communities=lines(communities, ("name", "url", "highlight")),
-    )
-    return structured_call(prompt, ReferralNotes, "writing why each company fits and drafting your messages")
 
 
 # ---------- /opportunities ----------
@@ -369,34 +308,3 @@ def write_opportunities(facts: dict, deadline_months, rows: list[dict], today: s
         OPPORTUNITIES_PROMPT.format(today=today, facts=facts, rows=lines or "(none)",
                                     deadline_months=deadline_months or "unknown"),
         OpportunityNotes, f"sorting {len(rows)} live finds into opportunities")
-
-
-class _ContactDraft(BaseModel):
-    id: str
-    why_this_person: str
-    message: str
-    title_short: Optional[str] = None
-    why_short: Optional[str] = None
-
-
-class ContactDrafts(BaseModel):
-    drafts: list[_ContactDraft]
-
-
-DRAFTS_PROMPT = """Draft one short, polite, personal message (max 80 words) from a job seeker to each contact below.
-Mention one real detail from the contact's company signal. No exaggeration. End with "[Your name]".
-{incentive}These are drafts; nothing is sent. Also give why_this_person in one sentence, and why_short (max 12 words).
-
-Job seeker: {facts}
-
-CONTACTS:
-{contacts}"""
-
-
-def write_contact_drafts(facts: dict, contacts: list[dict], incentive: str | None) -> dict | None:
-    hint = (f"If it fits naturally, mention briefly that the employer may be able to use this hiring incentive: "
-            f"{incentive}. Don't promise it applies.\n") if incentive else ""
-    lines = "\n".join(f"[{c['id']}] {c['name']}, {c['role']} at {c['company']}. Company signal: {c.get('signal', '')}"
-                      for c in contacts)
-    return structured_call(DRAFTS_PROMPT.format(incentive=hint, facts=facts, contacts=lines), ContactDrafts,
-                           "drafting your messages")

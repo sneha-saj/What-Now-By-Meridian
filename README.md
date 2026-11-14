@@ -6,7 +6,7 @@ You're a non-EU worker in Finland and you just lost your job. You type one sente
 
 1. **Your deadline**: how long you can stay to look for work. A plain rules engine works this out, not AI.
 2. **This week's 3 things**, each with a source from migri.fi, kela.fi, infofinland.fi or tyomarkkinatori.fi.
-3. **People who can help**, each with a message already drafted that you can copy and send.
+3. **Opportunities near you**: recent hiring signals, events, and support, each with a source.
 
 Calm, plain language, one thing at a time.
 
@@ -39,8 +39,8 @@ Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make
       │ Rules engine │        │    Gemini    │         │     Exa      │
       │  rules.py    │        │ extract facts│         │ official-site│
       │ deadlines,   │        │ write cited  │         │ search,      │
-      │ no AI        │        │ steps, draft │         │ people &     │
-      │              │        │ messages     │         │ companies    │
+      │ no AI        │        │ steps        │         │ hiring &     │
+      │              │        │              │         │ events       │
       └──────────────┘        └──────────────┘         └──────────────┘
 ```
 
@@ -48,7 +48,6 @@ Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make
 |---|---|
 | `POST /intake` | Gemini pulls facts out of the sentence. Code works out which facts are still missing and returns up to 3 questions. |
 | `POST /plan` | The rules engine computes the deadline. Exa searches the 4 official domains. Gemini writes 3 steps that cite only those results, and any step without a real source is dropped. |
-| `POST /referrals` | Exa company + people search (Websets is a TODO) finds contacts. Gemini drafts a message for each one. |
 
 ### Deadline rules (`backend/rules.py`)
 
@@ -77,10 +76,10 @@ frontend/
 ```
 
 ## Main challenge
-- [x] **Exa – The Internet Butler / Your Personal Assistant**: Exa finds and reads the facts: official sites (migri.fi, kela.fi, infofinland.fi, tyomarkkinatori.fi), full page contents with highlights, companies hiring, people for referrals, and live checks of the rule sources.
+- [x] **Exa – The Internet Butler / Your Personal Assistant**: Exa finds and reads the facts: official sites (migri.fi, kela.fi, infofinland.fi, tyomarkkinatori.fi), full page contents with highlights, hiring signals, events, support, and live checks of the rule sources.
 
 ## Tech challenges
-- [ ] **Gemini API (Google DeepMind)**: (in progress) understands the user's sentence, writes the plan with sources and drafts referral messages. Also confirms live that Migri's page still matches our stored rules.
+- [ ] **Gemini API (Google DeepMind)**: (in progress) understands the user's sentence, writes the plan with sources and describes opportunities. Also confirms live that Migri's page still matches our stored rules.
 - [x] **OpenAI Codex**: used to build the Finland country config, rules engine + tests, live rule check and the "How we know this" page (see commits marked "codex:" or "[codex]" and the related pull requests).
 - [ ] **Oxylabs Web API**: (planned) read live company career pages for the "companies hiring now" step.
 - [ ] **ElevenLabs**: (planned) read the plan aloud / voice input for accessibility.

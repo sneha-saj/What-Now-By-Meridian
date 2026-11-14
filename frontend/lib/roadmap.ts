@@ -1,5 +1,4 @@
-import { isSample } from "./format";
-import type { Deadline, ExaEvent, PlanResponse, ReferralResponse, RoadStep, Source, TimelineStep } from "./api";
+import type { Deadline, ExaEvent, PlanResponse, RoadStep, Source, TimelineStep } from "./api";
 
 export type NodeId = "today" | RoadStep;
 export type NodeState = "searching" | "found" | "done";
@@ -24,7 +23,6 @@ export type RoadmapInput = {
   ready: boolean;
   deadline?: Deadline;
   plan?: PlanResponse;
-  referrals?: ReferralResponse;
   searching: Searching;
   doneActions: Record<number, boolean>;
   doneNodes: Partial<Record<NodeId, boolean>>;
@@ -38,20 +36,10 @@ const PURPOSE_NODE: Record<string, NodeId> = {
   "official guidance": "week1",
   "labour-shortage sectors": "week4",
   "other permits": "final",
-  companies: "wayin",
-  "job posts": "wayin",
-  people: "wayin",
-  events: "wayin",
-  unions: "wayin",
 };
 
 const PURPOSE_TEXT: Record<string, string> = {
   "rule check": "Reading migri.fi",
-  companies: "Searching the web for companies hiring",
-  "job posts": "Looking for current job posts",
-  people: "Looking for people at those companies",
-  events: "Looking for events in the next 30 days",
-  unions: "Looking for union career services",
 };
 
 /** Searches still running, per node, with the text to show. */
@@ -79,20 +67,10 @@ const asFind = (s?: Source, note?: string): LiveFind | undefined =>
 /** The live, specific item for each step, only when it really came from Exa (not the saved guide). */
 export function liveFindFor(id: NodeId, i: RoadmapInput): LiveFind | undefined {
   const planLive = !!i.plan && !i.plan.mock;
-  const refs = i.referrals;
   if (id === "deadline")
     return i.deadline?.check_status === "verified"
       ? { label: "Migri: protection period after your job ends", url: i.deadline.source.url, note: "Checked against migri.fi today" }
       : undefined;
-  if (id === "wayin" && refs) {
-    if (refs.companies.some((x) => isSample(x.url))) return undefined; // saved example, not live
-    const c = refs.companies.find((x) => x.hiring_evidence);
-    if (c) return { label: `${c.name}: job post`, url: c.hiring_evidence!, date: c.hiring_evidence_date, note: "Hiring now" };
-    const e = refs.communities.find((g) => g.date_if_event);
-    if (e) return { label: e.name, url: e.url, date: e.date_if_event, note: "Event" };
-    if (refs.companies[0]) return asFind(refs.companies[0].source);
-    return undefined;
-  }
   if (!planLive) return undefined;
   if (id === "week1") return asFind(i.plan!.this_week[0]?.sources[0]);
   if (id === "final") return asFind(i.plan!.plan_b[0]?.sources[0]);
@@ -102,13 +80,13 @@ export function liveFindFor(id: NodeId, i: RoadmapInput): LiveFind | undefined {
 
 const DAY = 86_400_000;
 // The roadmap stays short: Today → this week's 3 steps → your deadline (Plan B lives in the deadline step).
-// Companies, people and events are on the Opportunities tab.
+// Hiring signals, support and events are on the Opportunities tab.
 const WEEKS: { id: NodeId; week: number; label: string }[] = [
   { id: "week1", week: 1, label: "This week" },
 ];
 
 export function buildNodes(i: RoadmapInput): RoadNode[] {
-  const { today, ready, deadline, plan, referrals, searching, doneActions, doneNodes } = i;
+  const { today, ready, deadline, plan, searching, doneActions, doneNodes } = i;
   if (!ready) return [];
   const end = deadline?.deadline_date ? new Date(deadline.deadline_date + "T00:00:00") : null;
   const nodes: RoadNode[] = [{ id: "today", label: "Today", startsOn: today, title: "Where you are now", state: "found", live: false }];
@@ -124,10 +102,6 @@ export function buildNodes(i: RoadmapInput): RoadNode[] {
       has = !!plan?.this_week.length;
       title = "3 things to do this week";
       source = plan?.this_week[0]?.sources[0];
-    } else if (w.id === "wayin") {
-      has = !!referrals && (referrals.companies.length + referrals.contacts.length + referrals.communities.length > 0);
-      title = "Find your way in";
-      source = referrals?.companies[0]?.source;
     } else if (w.id === "final") {
       const t = timelineFor(plan, "Final weeks");
       has = !!t || !!plan?.plan_b.length || !!plan?.plan_b_note;

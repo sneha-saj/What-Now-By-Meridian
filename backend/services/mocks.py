@@ -24,11 +24,6 @@ def example_facts() -> dict:
     return example("intake")["facts"]
 
 
-def example_referrals() -> dict:
-    out = example("referrals")
-    out.pop("mock", None)
-    return out
-
 SOURCES = {
     "migri": {"title": "Migri – Finnish Immigration Service", "url": "https://migri.fi/en/home"},
     "kela": {"title": "Kela – Unemployment", "url": "https://www.kela.fi/unemployment"},
@@ -89,7 +84,8 @@ def job_end_date(t: str, today: date) -> date | None:
     return None
 
 
-JOB_LOSS = re.compile(r"\b(laid off|layoff|lay-off|let go|fired|dismiss\w*|redundan\w*|lost (my|the|a) job|"
+JOB_LOSS = re.compile(r"\b(laid off|layoff|lay-off|let go|fired|dismiss\w*|terminat\w*|made redundant|redundan\w*|"
+                      r"position (was |is )?eliminated|role (was |is )?eliminated|lost (my|the|a) job|"
                       r"job (ended|ends|is ending)|contract (ended|ends|is ending)|unemploy\w*|notice period|"
                       r"last day (at|of) work)\b")
 
@@ -160,18 +156,4 @@ def plan(deadline_date: str | None) -> dict:
             {"option": "Another residence permit", "why": "Another permit type may fit your situation; check with Migri or your union.",
              "latest_start_date": None, "sources": [m, i]},
         ],
-    }
-
-
-def referrals(city: str) -> dict:
-    """No Exa: point to real, official help services only. No invented companies or people."""
-    ih = "International House Helsinki"
-    return {
-        "companies": [],
-        "contacts": [],
-        "communities": [
-            {"name": ih, "type": "professional_group", "url": "https://www.ihhelsinki.fi/"},
-            {"name": "Work in Finland", "type": "professional_group", "url": "https://www.workinfinland.com/"},
-        ],
-        "drafts": [],
     }

@@ -60,7 +60,7 @@ export type AskResponse = {
   facts_update?: Partial<Facts>;
   mock: boolean;
 };
-export type PrimaryAction = { kind: "open_link" | "reach_out" | "copy_draft" | "check_conditions"; label: string; url?: string | null };
+export type PrimaryAction = { kind: "open_link" | "reach_out" | "check_conditions"; label: string; url?: string | null };
 /** Short display fields on every roadmap and opportunity item (long fields stay for the expanded view). */
 export type Short = { title_short: string; why_short: string; primary_action?: PrimaryAction | null };
 export type Action = Short & { title: string; why: string; how: string[]; sources: Source[] };
@@ -83,38 +83,11 @@ export type PlanResponse = {
   mock: boolean;
 };
 
-export type Company = {
-  name: string;
-  why_relevant: string;
-  url: string;
-  hiring_now: boolean;
-  hiring_evidence?: string | null;
-  hiring_evidence_date?: string | null;
-  source: Source;
-};
-export type Contact = { name: string; role: string; company: string; why_this_person: string; profile_url: string };
-export type Community = {
-  name: string;
-  type: "professional_group" | "event" | "union";
-  date_if_event?: string | null;
-  url: string;
-  published?: string | null;
-};
-export type Draft = { to: string; profile_url: string; message: string };
-export type ReferralResponse = {
-  companies: Company[];
-  contacts: Contact[];
-  communities: Community[];
-  drafts: Draft[];
-  mock: boolean;
-};
-
-export type Step = "about_you" | "deadline" | "this_week" | "find_your_way_in";
+export type Step = "about_you" | "deadline" | "this_week";
 export const STEPS: { id: Step; label: string }[] = [
   { id: "about_you", label: "About you" },
   { id: "deadline", label: "Your deadline" },
   { id: "this_week", label: "This week" },
-  { id: "find_your_way_in", label: "Find your way in" },
 ];
 export type ChatMessage = { role: "user" | "assistant"; text: string };
 export type ChatRequest = {
@@ -134,14 +107,13 @@ export type ChatResponse = {
   quick_replies: Option[];
   deadline?: Deadline;
   plan?: PlanResponse;
-  referrals?: ReferralResponse;
   out_of_scope: boolean;
   link?: string;
   links?: Source[];
   mock: boolean;
 };
 
-export type ProgressStage = "reading_situation" | "checking_rules" | "finding_steps" | "finding_people";
+export type ProgressStage = "reading_situation" | "checking_rules" | "finding_steps";
 export type ExaEvent = {
   type: "exa";
   status: "searching" | "found" | "cached";
@@ -161,8 +133,7 @@ export type StreamEvent =
   | AppEvent
   | { type: "partial"; key: "deadline"; data: Deadline }
   | { type: "partial"; key: "plan"; data: PlanResponse }
-  | { type: "partial"; key: "referrals"; data: ReferralResponse }
-  | { type: "partial"; key: "hidden_jobs" | "people" | "support" | "events" | "perks_and_support"; data: unknown };
+  | { type: "partial"; key: "hidden_jobs" | "support" | "events" | "perks_and_support"; data: unknown };
 
 async function streamPost<T>(path: string, body: unknown, onEvent: (e: StreamEvent) => void): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -210,7 +181,6 @@ export async function opportunitiesStream(facts: Facts, onEvent: (e: StreamEvent
 }
 
 export type HiddenJob = Short & { company: string; signal: string; signal_date: string; source_url: string; why_it_fits: string; action: "reach_out" };
-export type OppContact = Short & { name: string; role: string; company: string; why_this_person: string; profile_url: string; draft: string };
 export type SupportItem = Short & { name: string; what_it_is: string; why_it_may_apply: string; eligibility_note: string; source_url: string; source_date?: string | null };
 export type EventItem = Short & { name: string; date: string; place?: string | null; url: string; why_relevant: string };
 export type Certificate = Short & { name: string; how_to_get: string; source_url: string; source_date?: string | null };
@@ -219,11 +189,10 @@ export type Incentive = Short & { name: string; what_it_is: string; conditions_p
 export type PerksAndSupport = { certificate?: Certificate | null; discounts: Discount[]; incentives: Incentive[] };
 export type OpportunitiesResponse = {
   hidden_jobs: HiddenJob[];
-  people: OppContact[];
   support: SupportItem[];
   events: EventItem[];
   perks_and_support: PerksAndSupport;
-  counts?: { hidden_jobs: number; people: number; support: number; events: number; certificate: number; discounts: number; incentives: number; total: number };
+  counts?: { hidden_jobs: number; support: number; events: number; certificate: number; discounts: number; incentives: number; total: number };
   mock: boolean;
 };
 
@@ -240,7 +209,6 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   intake: (text: string, answers: Partial<Facts> = {}) => post<IntakeResponse>("/intake", { text, answers }),
   plan: (facts: Facts) => post<PlanResponse>("/plan", { facts }),
-  referrals: (facts: Facts) => post<ReferralResponse>("/referrals", { facts }),
   chat: (req: ChatRequest) => post<ChatResponse>("/chat", req),
   ask: (question: string, facts: Facts) => post<AskResponse>("/ask", { question, facts }),
   rules: async () => {

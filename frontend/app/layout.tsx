@@ -12,7 +12,7 @@ const atkinson = Atkinson_Hyperlegible({
 
 const TITLE = "What Now? – Laid off on a work permit? Your deadline & next steps (Finland)";
 const DESCRIPTION =
-  "Find out how long you can stay, what to do this week, and who can refer you to a new job. Sourced from Migri and Kela.";
+  "Find out how long you can stay, what to do this week, and opportunities near you. Sourced from Migri and Kela.";
 
 export const metadata: Metadata = {
   title: TITLE,

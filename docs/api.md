@@ -7,12 +7,11 @@ http://localhost:8000/docs (every endpoint has the examples below built in).
 Finland, living in Helsinki, whose job ended on 1 November 2026.
 
 The example responses are saved in `backend/mocks/` and are what the API returns when `USE_MOCK=true`.
-Official sources in them are real pages. Companies and people are clearly marked samples
-(`example.com`), because we don't put invented businesses or people in front of users as real.
+Official sources in them are real pages. Example hiring signals are marked as samples (`example.com`).
 
 **Short display fields.** Every roadmap item (`this_week`, `timeline`, `plan_b`) and every opportunity item has
 `title_short` (max 6 words), `why_short` (max 12 words) and `primary_action` (`kind`: `open_link`, `reach_out`,
-`copy_draft` or `check_conditions`, `label`, `url`) for compact cards. Gemini writes them; code enforces the limits
+or `check_conditions`; `label` and `url`) for compact cards. Gemini writes them; code enforces the limits
 and derives them from the long fields when missing. Long fields (`how`, `steps`, `highlight`, `eligibility_note`)
 are for the expanded view. `/opportunities` also returns `counts` per section and `total`.
 
@@ -23,10 +22,9 @@ Every response has `mock: true` when a fallback was used (no API key, or a call 
 | `POST /intake` | Turn the user's sentence into facts; ask up to 3 questions the deadline still needs |
 | `POST /plan` | Deadline, 3 actions for this week, a timeline and plan B, all with official sources |
 | `GET /rules` | The deadline rules, their latest live check against Migri, and trusted domains |
-| `POST /referrals` | Companies hiring, people to contact, communities, and draft messages |
 | `POST /chat` | Guided chat: the same steps, one message at a time, with a live "Your situation" card |
 | `POST /chat/stream` | Same as `/chat`, streamed with live progress, Exa activity and partial results |
-| `POST /opportunities` (+ `/stream`) | Hidden jobs, people, support, events and perks, all from live Exa sources |
+| `POST /opportunities` (+ `/stream`) | Hiring signals, support, events and perks, all from live Exa sources |
 | `POST /ask` | Ask a question; Exa's Answer endpoint replies with sources |
 | `GET /health` | Which integrations have keys configured |
 
@@ -550,105 +548,6 @@ Response:
 
 ---
 
-## POST /referrals
-
-1. **Companies**: Exa company search, up to 8, hiring in the user's field or labour-shortage sectors, in or near their city.
-2. **People**: Exa people search at the top 3 companies, 2 each: public professional profiles only.
-3. **Communities**: international professional groups, events in the next 30 days, union career services.
-4. **Drafts**: Gemini writes one short, polite message per contact (max 80 words) mentioning one real
-   detail from the sources. Drafts only: nothing is ever sent.
-
-At most 7 Exa searches per request (run in parallel), cached for 24 hours, to control credits. Without Exa, only real
-help services are listed (no invented companies or people).
-
-**Input**: `{"facts": {...}}`. Uses `city`, `field` and the other facts.
-
-**Output**: `companies` (`name`, `why_relevant` (one sentence, max 20 words), `url`, `hiring_now`, `hiring_evidence` (a job post or careers page, when found), `source`; companies with hiring evidence come first), `contacts` (`name`, `role`,
-`company`, `why_this_person`, `profile_url`), `communities` (`name`, `type`, `date_if_event`, `url`),
-`drafts` (`to`, `profile_url`, `message`).
-
-### Example
-
-Request:
-```json
-{
-  "facts": {
-    "citizenship_group": "other",
-    "citizenship_country": "India",
-    "permit_type": "work_based",
-    "years_on_work_permit": 1,
-    "job_end_date": "2026-11-01",
-    "city": "Helsinki",
-    "field": "restaurant worker",
-    "studied_in_finland": false,
-    "family_in_finland": false
-  }
-}
-```
-
-Response:
-```json
-{
-  "companies": [
-    {
-      "name": "Example Bistro Oy (sample)",
-      "why_relevant": "A Helsinki restaurant group hiring kitchen staff who speak English.",
-      "url": "https://example.com/bistro",
-      "source": {
-        "title": "Example Bistro Oy (sample)",
-        "url": "https://example.com/bistro"
-      },
-      "hiring_now": true,
-      "hiring_evidence": "https://example.com/bistro/careers"
-    },
-    {
-      "name": "Example Hotels Finland (sample)",
-      "why_relevant": "Hotels are a labour-shortage sector and hire restaurant workers.",
-      "url": "https://example.com/hotels",
-      "source": {
-        "title": "Example Hotels Finland (sample)",
-        "url": "https://example.com/hotels"
-      },
-      "hiring_now": false,
-      "hiring_evidence": null
-    }
-  ],
-  "contacts": [
-    {
-      "name": "Sample Contact",
-      "role": "Head Chef",
-      "company": "Example Bistro Oy (sample)",
-      "why_this_person": "Leads the kitchen team that is hiring.",
-      "profile_url": "https://example.com/profile/sample-contact"
-    }
-  ],
-  "communities": [
-    {
-      "name": "International House Helsinki",
-      "type": "professional_group",
-      "date_if_event": null,
-      "url": "https://www.ihhelsinki.fi/"
-    },
-    {
-      "name": "Work in Finland",
-      "type": "professional_group",
-      "date_if_event": null,
-      "url": "https://www.workinfinland.com/"
-    }
-  ],
-  "drafts": [
-    {
-      "to": "Sample Contact",
-      "profile_url": "https://example.com/profile/sample-contact",
-      "message": "Hi, I saw that Example Bistro is hiring line cooks in Helsinki. I've worked in a Helsinki restaurant kitchen for a year and I'm looking for my next role. Would you have a few minutes for a short chat, or could you point me to the right person? Thank you! [Your name]"
-    }
-  ],
-  "mock": true
-}
-```
-
----
-
 ## POST /chat
 
 The guided chat behind the web app. There are no accounts and nothing is stored on the server: the
@@ -658,7 +557,7 @@ Facts are merged in this order (later wins): the current `facts`, facts Gemini r
 user message, tapped `answers`, then `edited_facts` (what the user corrected on the card always wins).
 Gemini only reads the latest message when it's from the user, so old messages aren't re-read.
 
-Steps: `about_you` → `deadline` → `this_week` → `find_your_way_in`. The chat stays on `about_you` and
+Steps: `about_you` → `deadline` → `this_week`. The chat stays on `about_you` and
 asks one question at a time until the deadline has what it needs. After that, send `action: "next"`
 (the quick reply) to move on. If an edit makes a needed fact unknown, it goes back to `about_you`.
 
@@ -685,7 +584,6 @@ asks one question at a time until the deadline has what it needs. After that, se
 | `quick_replies` | e.g. `{"value": "next", "label": "Show me this week"}` |
 | `deadline` | From step `deadline` on, same as in `/plan` |
 | `plan` | From step `this_week` on, the `/plan` response |
-| `referrals` | On step `find_your_way_in`, the `/referrals` response |
 | `out_of_scope`, `link` | If the job was outside Finland |
 
 ### Example
@@ -769,11 +667,11 @@ Each event is a line `data: {json}`:
 
 | Event | Meaning |
 | --- | --- |
-| `{"type": "progress", "stage": ...}` | `reading_situation`, `checking_rules`, `finding_steps`, `finding_people` |
+| `{"type": "progress", "stage": ...}` | `reading_situation`, `checking_rules`, `finding_steps` |
 | `{"type": "exa", "status": "searching", "purpose", "query", "domains", "category"}` | Exa started a search (e.g. purpose `unemployment benefits` on `kela.fi`) |
 | `{"type": "exa", "status": "found", "purpose", "query", "results": [{title, url, published}], "count"}` | What that search found |
 | `{"type": "exa", "status": "cached", "purpose", "count"}` | Reused a search from the last 24 hours |
-| `{"type": "partial", "key": "deadline" / "plan" / "referrals", "data": ...}` | A piece of the result is ready |
+| `{"type": "partial", "key": "deadline" / "plan", "data": ...}` | A piece of the result is ready |
 | `{"type": "result", "data": <ChatResponse>}` | The final `/chat` response |
 | `{"type": "error"}` | Something failed; the browser falls back to `/chat` |
 
@@ -817,18 +715,17 @@ Response (illustrative):
 
 ## POST /opportunities (and /opportunities/stream)
 
-Separate from the roadmap (which stays short: deadline and this week's 3 steps). About 11 Exa searches and
-2 Gemini calls per city and field, run in parallel and cached for 24 hours. Every item has an Exa source URL;
+Separate from the roadmap (which stays short: deadline and this week's 3 steps). About 9 Exa searches and
+1 Gemini call per city and field, run in parallel and cached for 24 hours. Every item has an Exa source URL;
 nothing is invented. Without Exa the sections come back empty with `mock: true`.
 
 | Section | What it is | Rules enforced in code |
 | --- | --- | --- |
 | `hidden_jobs` | Companies with hiring signals (new openings, expansions, funding, new locations) in the user's city and field: `company`, `signal`, `signal_date`, `source_url`, `why_it_fits`, `action: "reach_out"` | Signal page dated within the last 60 days |
-| `people` | Public professional contacts at the top 2 companies: `name`, `role`, `company`, `why_this_person`, `profile_url`, `draft` | Draft max 80 words (template otherwise); may mention an employer incentive that may apply |
 | `support` | Support types from the country config (labour market training, language courses, mentoring, start-up grant): `name`, `what_it_is`, `why_it_may_apply`, `eligibility_note`, `source_url`, `source_date` | Only plausible matches; always "May apply, check the conditions." |
 | `events` | Recruitment fairs, meetups and community events: `name`, `date`, `place`, `url`, `why_relevant` | Stated date within the next 30 days |
 | `perks_and_support` | `certificate` (how to get the job search certificate, first), `discounts` (`name`, `discount`, `proof_needed`, `city`, `source_url`, `source_date`), `incentives` (`name`, `what_it_is`, `conditions_plain`, `may_apply`, `caveat`, `source_url`, `source_date`) | Only discounts Exa found; incentive conditions like "3 months unemployed" that clash with the permit deadline get a plain caveat |
 
 Searches use the trusted domains plus the city's official sites (`CITY_DOMAINS` in the country config).
 The stream sends the same events as `/chat/stream`, with partial sections `hidden_jobs`, `support`, `events`,
-`perks_and_support` and `people`. Example: `backend/mocks/opportunities.json` (used for `USE_MOCK=true`).
+`perks_and_support`. Example: `backend/mocks/opportunities.json` (used for `USE_MOCK=true`).

@@ -5,7 +5,7 @@ const SOURCES = ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"];
 const GET = [
   { n: "1", title: "Your exact deadline", text: "3 or 6 months, checked against Migri today." },
   { n: "2", title: "3 steps this week", text: "Each one linked to its official source." },
-  { n: "3", title: "People who can refer you", text: "Companies hiring now, with a message to send." },
+  { n: "3", title: "Opportunities near you", text: "Recent hiring signals, events and support with sources." },
 ];
 
 /** A small, labelled example of the roadmap: the signature amber "meridian" line from today to the deadline. */
@@ -24,7 +24,7 @@ function RoadmapPreview() {
         {[
           { t: "Register as a jobseeker", s: "tyomarkkinatori.fi" },
           { t: "Check Kela support", s: "kela.fi" },
-          { t: "Message a hiring head chef", s: "job post, 3 days ago" },
+          { t: "Explore hiring signals nearby", s: "recent company news" },
         ].map((x, i) => (
           <li key={x.t} className="animate-fade-up relative flex items-start gap-4" style={{ animationDelay: `${200 + i * 120}ms` }}>
             <span aria-hidden className="relative z-10 mt-1 h-5 w-5 shrink-0 rounded-full border-2 border-accent bg-accent" />
@@ -47,12 +47,14 @@ export default function Home() {
       {/* Hero */}
       <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-12 sm:px-8 sm:pt-20 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16 lg:pb-24">
         <div>
-          <h1 className="animate-fade-up font-serif text-5xl font-semibold leading-[1.02] tracking-tight sm:text-7xl">
-            Laid off?<br />
+          <h1 aria-label="Lost your job? Let's figure out what's next." className="animate-fade-up font-serif text-5xl font-semibold leading-[1.02] tracking-tight sm:text-7xl">
+            <span aria-hidden="true" className="hero-rotating text-4xl sm:text-7xl">
+              <span>Laid off?</span><span>Fired?</span><span>Contract ended?</span>
+            </span><br />
             <span className="text-accent-ink">Let&apos;s figure out</span> what&apos;s next.
           </h1>
           <p className="mt-6 max-w-md text-xl text-ink-soft">
-            How long you can stay, what to do this week, and who can refer you.
+            How long you can stay, what to do this week, and opportunities near you.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
             <a href="/start" className="inline-flex min-h-14 items-center gap-2 rounded-2xl bg-ink px-7 text-lg font-bold text-paper shadow-sm hover:bg-ink/90">

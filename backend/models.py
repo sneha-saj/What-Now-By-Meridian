@@ -82,7 +82,7 @@ def _domain(url: str | None) -> str:
 
 
 class PrimaryAction(BaseModel):
-    kind: Literal["open_link", "reach_out", "copy_draft", "check_conditions"]
+    kind: Literal["open_link", "reach_out", "check_conditions"]
     label: str
     url: Optional[str] = None
 
@@ -184,52 +184,8 @@ class PlanResponse(BaseModel):
     mock: bool
 
 
-class ReferralRequest(BaseModel):
-    facts: Facts
-
-
-class Company(BaseModel):
-    name: str
-    why_relevant: str
-    url: str
-    hiring_now: bool = False
-    hiring_evidence: Optional[str] = None
-    hiring_evidence_date: Optional[str] = None
-    source: Source
-
-
-class Contact(BaseModel):
-    name: str
-    role: str
-    company: str
-    why_this_person: str
-    profile_url: str
-
-
-class Community(BaseModel):
-    name: str
-    type: Literal["professional_group", "event", "union"]
-    date_if_event: Optional[str] = None
-    url: str
-    published: Optional[str] = None
-
-
-class Draft(BaseModel):
-    to: str
-    profile_url: str
-    message: str
-
-
-class ReferralResponse(BaseModel):
-    companies: list[Company]
-    contacts: list[Contact]
-    communities: list[Community]
-    drafts: list[Draft]
-    mock: bool
-
-
-Step = Literal["about_you", "deadline", "this_week", "find_your_way_in"]
-STEPS: list[str] = ["about_you", "deadline", "this_week", "find_your_way_in"]
+Step = Literal["about_you", "deadline", "this_week"]
+STEPS: list[str] = ["about_you", "deadline", "this_week"]
 
 
 class ChatMessage(BaseModel):
@@ -260,7 +216,6 @@ class ChatResponse(BaseModel):
     quick_replies: list[QuickReply] = Field(default_factory=list)
     deadline: Optional[Deadline] = None
     plan: Optional[PlanResponse] = None
-    referrals: Optional[ReferralResponse] = None
     out_of_scope: bool = False
     link: Optional[str] = None
     links: list[Source] = Field(default_factory=list)
@@ -301,19 +256,6 @@ class HiddenJob(Display):
 
     def _defaults(self):
         return self.company, self.signal, PrimaryAction(kind="reach_out", label="Reach out", url=self.source_url)
-
-
-class OppContact(Display):
-    name: str
-    role: str
-    company: str
-    why_this_person: str
-    profile_url: str
-    draft: str
-
-    def _defaults(self):
-        return f"{self.name}, {self.role}", self.why_this_person, PrimaryAction(
-            kind="copy_draft", label="Copy message", url=self.profile_url)
 
 
 class SupportItem(Display):
@@ -389,7 +331,6 @@ class OpportunitiesRequest(BaseModel):
 
 class OpportunityCounts(BaseModel):
     hidden_jobs: int = 0
-    people: int = 0
     support: int = 0
     events: int = 0
     certificate: int = 0
@@ -400,7 +341,6 @@ class OpportunityCounts(BaseModel):
 
 class OpportunitiesResponse(BaseModel):
     hidden_jobs: list[HiddenJob] = Field(default_factory=list)
-    people: list[OppContact] = Field(default_factory=list)
     support: list[SupportItem] = Field(default_factory=list)
     events: list[EventItem] = Field(default_factory=list)
     perks_and_support: PerksAndSupport = Field(default_factory=PerksAndSupport)
@@ -410,9 +350,9 @@ class OpportunitiesResponse(BaseModel):
     @model_validator(mode="after")
     def _count_sections(self):
         p = self.perks_and_support
-        c = OpportunityCounts(hidden_jobs=len(self.hidden_jobs), people=len(self.people), support=len(self.support),
+        c = OpportunityCounts(hidden_jobs=len(self.hidden_jobs), support=len(self.support),
                               events=len(self.events), certificate=int(p.certificate is not None),
                               discounts=len(p.discounts), incentives=len(p.incentives))
-        c.total = c.hidden_jobs + c.people + c.support + c.events + c.certificate + c.discounts + c.incentives
+        c.total = c.hidden_jobs + c.support + c.events + c.certificate + c.discounts + c.incentives
         self.counts = c
         return self

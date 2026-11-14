@@ -1,6 +1,6 @@
 """Oxylabs — fetch a company's career page (optional tech challenge).
 
-Not wired in yet. Plan: after /referrals finds a company, fetch its careers page via
+Not wired in yet. Plan: after a hiring search finds a company, fetch its careers page via
 Oxylabs Web Scraper API and extract open roles matching the user's occupation.
 Enabled with ENABLE_OXYLABS=true plus OXYLABS_USERNAME / OXYLABS_PASSWORD.
 """

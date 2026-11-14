@@ -20,16 +20,6 @@
         "action": "reach_out"
       }
     ],
-    "people": [
-      {
-        "name": "Sample Contact",
-        "role": "Head Chef",
-        "company": "Example Bistro Group (sample)",
-        "why_this_person": "Leads the kitchen team for the new opening.",
-        "profile_url": "https://example.com/profile/sample",
-        "draft": "Hi, I read that Example Bistro is opening a new restaurant in Kallio. I've worked in a Helsinki kitchen for a year and would love to help with the opening. Could we have a short chat? [Your name]"
-      }
-    ],
     "support": [
       {
         "name": "Finnish language course (sample)",

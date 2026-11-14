@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from countries.finland import OPTIONAL_FIELDS, QUESTION_BANK, REQUIRED_FIELDS
+from countries.finland import QUESTION_BANK, REQUIRED_FIELDS
 from models import Facts, Option, Question
 from rules import _canonical_permit
 
@@ -46,21 +46,12 @@ def needed_fields(f: Facts) -> list[str]:
     return needed[:MAX_QUESTIONS]
 
 
-def optional_missing(f: Facts) -> list[str]:
-    """Optional fields never answered (None). Skipped ones are "" and not asked again."""
-    return [field for field in OPTIONAL_FIELDS if getattr(f, field) is None]
-
-
 def next_field(f: Facts) -> str | None:
-    """Deterministic: first check this is about losing a job, then the first missing required field,
-    then the first unanswered optional one."""
+    """Ask about job loss, then only the facts needed for the deadline."""
     if f.lost_job is None and f.job_end_date is None:
         return "lost_job"
     needed = needed_fields(f)
-    if needed:
-        return needed[0]
-    optional = optional_missing(f)
-    return optional[0] if optional else None
+    return needed[0] if needed else None
 
 
 def question(field: str, today: date | None = None) -> Question:

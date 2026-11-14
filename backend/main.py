@@ -2,13 +2,11 @@
 
 from datetime import date, timedelta
 
-import contextvars
 import json
 import logging
 import queue
 import re
 import threading
-from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import Body, FastAPI
 from fastapi.responses import StreamingResponse
@@ -17,8 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import activity
 import config
 import sources_log
-from models import (STEPS, OpportunitiesRequest, OpportunitiesResponse, Action, AskRequest, AskResponse, AskSource, ChatRequest, ChatResponse, Community, Company, Contact, Deadline, Draft, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
-                    PlanResponse, PossibleDate, ReferralRequest, ReferralResponse, Source,
+from models import (STEPS, OpportunitiesRequest, OpportunitiesResponse, Action, AskRequest, AskResponse, AskSource, ChatRequest, ChatResponse, Deadline, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
+                    PlanResponse, PossibleDate, Source,
                     TimelineStep)
 import ask as ask_rules
 import opportunities as opps
@@ -222,105 +220,15 @@ def build_full_plan(f: Facts, d: Deadline | None = None) -> PlanResponse:
     return PlanResponse(deadline=d, disclaimer=DISCLAIMER, mock=mock, **built)
 
 
-MAX_DRAFT_WORDS = 80
-MAX_WHY_WORDS = 20
-MAX_COMPANIES, MAX_CONTACTS, MAX_COMMUNITIES = 5, 3, 3
-
-
-def _clean_sentence(text: str | None) -> str | None:
-    """One plain sentence, max 20 words, no markdown. None if there's nothing usable."""
-    if not text:
-        return None
-    text = re.sub(r"[*_`#>\[\]]+", "", text).replace("\n", " ").strip()
-    text = re.split(r"(?<=[.!?])\s", text)[0]
-    words = text.split()
-    if len(words) > MAX_WHY_WORDS:
-        text = " ".join(words[:MAX_WHY_WORDS]).rstrip(",;:") + "."
-    return text or None
-
-
-def _clean_name(name: str) -> str:
-    return re.split(r"\s[|–—-]\s", name)[0].strip() or name
-
-
-def _template_draft(c: dict, field: str) -> str:
-    return (f"Hi {c['name']}, I'm a {field} in Finland looking for my next role. I came across your work at "
-            f"{c['company']} and would really value a short chat or a pointer to the right person. "
-            "Thank you for your time! [Your name]")
-
-
-@app.post("/referrals", response_model=ReferralResponse, summary="Companies, people, communities and draft messages")
-def referrals(req: ReferralRequest = Body(openapi_examples=_examples("referrals"))):
-    """Exa finds companies hiring, public professional profiles at the top companies and communities.
-    Gemini drafts one short message per contact. Drafts only: nothing is ever sent."""
-    return build_referrals(req.facts)
-
-
-def build_referrals(f: Facts) -> ReferralResponse:
-    field = f.field or "professional"
-    city = f.city or "Helsinki"
-    today = date.today().isoformat()
-
-    if config.USE_MOCK:
-        return ReferralResponse(**mocks.example_referrals(), mock=True)
-
-    companies = exa_search.search_companies(field, city) or []
-    contacts = exa_search.search_people(companies, field, city) if companies else []
-    contacts = contacts or []
-    communities = exa_search.search_communities(field, city, today) or []
-    if not (companies or communities):
-        return ReferralResponse(**mocks.referrals(city), mock=True)
-
-    companies = [{**c, "id": f"C{i + 1}"} for i, c in enumerate(companies)]
-    contacts = [{**c, "id": f"P{i + 1}"} for i, c in enumerate(contacts)]
-    communities = [{**c, "id": f"G{i + 1}"} for i, c in enumerate(communities)]
-    notes = gemini.write_referral_notes(f.model_dump(mode="json"), companies, contacts, communities, today) or {}
-    why = {n["id"]: n["why_relevant"] for n in notes.get("companies", [])}
-    kinds = {n["id"]: n for n in notes.get("communities", [])}
-    drafts = {n["id"]: n for n in notes.get("drafts", [])}
-
-    out_companies = [Company(name=_clean_name(c["name"]), url=c["url"],
-                             hiring_now=bool(c.get("hiring_evidence")), hiring_evidence=c.get("hiring_evidence"),
-                             hiring_evidence_date=c.get("hiring_evidence_date"),
-                             source=Source(title=_clean_name(c["name"]), url=c["url"], published=c.get("published")),
-                             why_relevant=_clean_sentence(why.get(c["id"])) or f"Came up in a search for {field} employers near {city}.")
-                     for c in companies][:MAX_COMPANIES]
-    out_contacts, out_drafts = [], []
-    for c in contacts[:MAX_CONTACTS]:
-        d = drafts.get(c["id"], {})
-        message = d.get("message", "")
-        if not message or len(message.split()) > MAX_DRAFT_WORDS:
-            message = _template_draft(c, field)
-        out_contacts.append(Contact(name=c["name"], role=c["role"] or "Professional", company=c["company"],
-                                    profile_url=c["profile_url"],
-                                    why_this_person=d.get("why_this_person") or f"Works at {c['company']}."))
-        out_drafts.append(Draft(to=c["name"], profile_url=c["profile_url"], message=message))
-    out_communities = []
-    for g in communities:
-        n = kinds.get(g["id"], {})
-        kind = n.get("type") if n.get("type") in ("professional_group", "event", "union") else g["kind"]
-        when = n.get("date_if_event") if kind == "event" else None
-        if when and not (today <= when <= (date.fromisoformat(today) + timedelta(days=30)).isoformat()):
-            when, kind = None, "professional_group"  # only events in the next 30 days keep a date
-        out_communities.append(Community(name=_clean_name(g["name"]), url=g["url"], type=kind,
-                                         date_if_event=when, published=g.get("published")))
-    out_communities.sort(key=lambda g: (g.date_if_event is None, g.type != "union"))  # dated events first
-    out_communities = out_communities[:MAX_COMMUNITIES]
-    return ReferralResponse(companies=out_companies, contacts=out_contacts, communities=out_communities,
-                            drafts=out_drafts, mock=not notes)
-
-
 # ---------- guided chat ----------
 
 FIELD_NAMES = {"lost_job": "whether you lost your job", "citizenship_group": "citizenship", "citizenship_country": "country", "permit_type": "permit type",
                "years_on_work_permit": "time on a work permit", "job_end_date": "last day of work", "city": "city",
                "field": "your work", "studied_in_finland": "studies in Finland", "family_in_finland": "family in Finland"}
-NEXT_LABEL = {"deadline": "Show me this week", "this_week": "Help me find my way in"}
+NEXT_LABEL = {"deadline": "Show me this week"}
 STEP_REPLY = {
     "deadline": "Thank you. Here is your deadline and the rule behind it. Take your time with it.",
     "this_week": "Here are the three most useful things to do this week, each with its official source.",
-    "find_your_way_in": ("Here are companies, people and communities that could help. The messages are drafts: "
-                         "read them, change anything, and send them yourself if you want to."),
 }
 FIRST_REPLY = "Thank you for telling me. One quick question: "
 CITIZEN_REPLY = ("Good news: as an EU/EEA or Finnish citizen, your right to stay in Finland doesn't depend on your job, "
@@ -361,18 +269,18 @@ def _merge_chat_facts(req: ChatRequest, extracted: dict) -> tuple[Facts, list[st
           summary="Guided chat that keeps a live 'Your situation' card")
 def chat(req: ChatRequest = Body(openapi_examples=_examples("chat"))):
     """The browser keeps the session and sends it each time (no accounts, nothing stored here).
-    Steps: about_you -> deadline -> this_week -> find_your_way_in. Send `action: "next"` to move on.
+    Steps: about_you -> deadline -> this_week. Send `action: "next"` to move on.
     `/chat/stream` returns the same result with progress events first."""
     return run_chat(req)
 
 
-PROGRESS = ("reading_situation", "checking_rules", "finding_steps", "finding_people")
+PROGRESS = ("reading_situation", "checking_rules", "finding_steps")
 
 
 @app.post("/chat/stream", summary="Same as /chat, streamed as server-sent events with progress")
 def chat_stream(req: ChatRequest):
     """Events: `{"type": "progress", "stage": ...}` for each of reading_situation, checking_rules,
-    finding_steps, finding_people (only the ones this step needs), then `{"type": "result", "data": <ChatResponse>}`
+    finding_steps (only the ones this step needs), then `{"type": "result", "data": <ChatResponse>}`
     or `{"type": "error"}`."""
     events: queue.Queue = queue.Queue()
 
@@ -443,7 +351,7 @@ def run_chat(req: ChatRequest) -> ChatResponse:
     if ask:
         q = question(ask, today)
         why = (f"still needed for your deadline: {', '.join(FIELD_NAMES[m] for m in missing)}" if missing
-               else f"optional, it makes the search specific to you")
+               else "checking whether this is about losing a job")
         activity.emit({"type": "app", "who": "code", "text": f"Asking about {FIELD_NAMES[ask]} ({why})"})
         reply = (FIRST_REPLY if first else "") + q.question
         return ChatResponse(reply=reply, step="about_you", facts=facts, confirmed_fields=confirmed,
@@ -462,30 +370,11 @@ def run_chat(req: ChatRequest) -> ChatResponse:
     resp = ChatResponse(reply=STEP_REPLY[step], step=step, facts=facts, confirmed_fields=confirmed,
                         deadline=deadline, mock=mock)
 
-    def plan_then_report():
-        out = build_full_plan(facts, deadline)
-        _partial("plan", out)
-        return out
-
-    def referrals_then_report():
-        out = build_referrals(facts)
-        _partial("referrals", out)
-        return out
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        plan_job = refs_job = None
-        if step in ("this_week", "find_your_way_in"):
-            _progress("finding_steps")
-            plan_job = pool.submit(contextvars.copy_context().run, plan_then_report)
-        if step == "find_your_way_in":
-            _progress("finding_people")
-            refs_job = pool.submit(contextvars.copy_context().run, referrals_then_report)
-        if plan_job:
-            resp.plan = plan_job.result()
-            resp.mock = resp.mock or resp.plan.mock
-        if refs_job:
-            resp.referrals = refs_job.result()
-            resp.mock = resp.mock or resp.referrals.mock
+    if step == "this_week":
+        _progress("finding_steps")
+        resp.plan = build_full_plan(facts, deadline)
+        _partial("plan", resp.plan)
+        resp.mock = resp.mock or resp.plan.mock
     if step in NEXT_LABEL:
         resp.quick_replies = [QuickReply(value="next", label=NEXT_LABEL[step])]
     return resp
@@ -561,7 +450,7 @@ def _deadline_months(f: Facts) -> int | None:
 
 
 @app.post("/opportunities", response_model=OpportunitiesResponse,
-          summary="Hidden jobs, people, support, events and perks, found live")
+          summary="Hiring signals, support, events and perks, found live")
 def opportunities(req: OpportunitiesRequest):
     """Separate from the roadmap. Every item comes from an Exa source. About 11 Exa searches and 2 Gemini calls
     per city + field, cached 24h. `/opportunities/stream` streams each section as it's ready."""

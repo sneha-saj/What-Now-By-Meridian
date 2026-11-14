@@ -1,4 +1,4 @@
-"""Opportunities: hidden jobs, people, support, events, perks. Separate from the roadmap.
+"""Opportunities: hiring signals, support, events, and perks. Separate from the roadmap.
 
 Exa finds (about 11 searches per city+field, cached 24h), Gemini sorts and writes (2 calls), plain code enforces
 the rules: every item has an Exa source, hiring signals are from the last 60 days, events are in the next 30 days,
@@ -12,23 +12,17 @@ from datetime import date, timedelta
 
 import activity
 from countries.finland import CITY_DOMAINS, PERK_QUERIES, SUPPORT_TYPES
-from models import (Certificate, Discount, EventItem, Facts, HiddenJob, Incentive, OppContact,
+from models import (Certificate, Discount, EventItem, Facts, HiddenJob, Incentive,
                     OpportunitiesResponse, PerksAndSupport, SupportItem)
 from services import exa_search, gemini
 
 MAX_ITEMS = 6  # the UI shows 3 and "Show more"
 MAY_APPLY = "May apply, check the conditions."
-MAX_DRAFT_WORDS = 80
 
 
 def _partial(key: str, value) -> None:
     data = value.model_dump(mode="json") if hasattr(value, "model_dump") else [v.model_dump(mode="json") for v in value]
     activity.emit({"type": "partial", "key": key, "data": data})
-
-
-def _template_draft(c: dict, field: str) -> str:
-    return (f"Hi {c['name']}, I'm a {field} in Finland and saw that {c['company']} is growing. I'd really value a "
-            "short chat about your team or a pointer to the right person. Thank you! [Your name]")
 
 
 def _short(n: dict) -> dict:
@@ -113,24 +107,5 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
     perks.incentives = perks.incentives[:MAX_ITEMS]
     _partial("perks_and_support", perks)
 
-    # People at the top companies with hiring signals, with a drafted message each.
-    people = []
-    top = [{"name": h.company, "signal": h.signal} for h in hidden[:2]]
-    found = exa_search.search_people(top, field, city, top=2, per_company=1) if top else None
-    if found:
-        signals = {t["name"]: t["signal"] for t in top}
-        contacts = [{**p, "id": f"P{i + 1}", "signal": signals.get(p["company"], "")} for i, p in enumerate(found[:3])]
-        incentive = next((i.name for i in perks.incentives if i.may_apply), None)
-        drafts = {d["id"]: d for d in (gemini.write_contact_drafts(f.model_dump(mode="json"), contacts, incentive) or {}).get("drafts", [])}
-        for c in contacts:
-            d = drafts.get(c["id"], {})
-            msg = d.get("message") or ""
-            if not msg or len(msg.split()) > MAX_DRAFT_WORDS:
-                msg = _template_draft(c, field)
-            people.append(OppContact(name=c["name"], role=c["role"] or "Professional", company=c["company"],
-                                     why_this_person=d.get("why_this_person") or f"Works at {c['company']}.",
-                                     profile_url=c["profile_url"], draft=msg, why_short=d.get("why_short") or ""))
-    _partial("people", people)
-
-    return OpportunitiesResponse(hidden_jobs=hidden, people=people, support=support, events=events,
+    return OpportunitiesResponse(hidden_jobs=hidden, support=support, events=events,
                                  perks_and_support=perks, mock=not notes)

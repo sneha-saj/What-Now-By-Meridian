@@ -69,9 +69,9 @@ DEADLINE_RULES = [
 
 # ---------- Intake questions ----------
 # Code (not AI) picks the next missing field in this order and asks its fixed question.
-# Required fields are what the deadline needs. Optional ones personalise the search; "Skip" stores "".
+# Only deadline facts are asked as follow-up questions. City and work can be
+# extracted from the opening message or added later when exploring opportunities.
 REQUIRED_FIELDS = ["citizenship_group", "permit_type", "years_on_work_permit", "job_end_date"]
-OPTIONAL_FIELDS = ["city", "field"]
 
 QUESTION_BANK = {
     # Asked first, only when the message didn't say anything about losing a job.
@@ -106,30 +106,6 @@ QUESTION_BANK = {
         "question": "When was (or is) your last day of work?",
         "kind": "date",
         "options": "relative_dates",  # Today / About a week ago / About a month ago, computed from today
-    },
-    "city": {
-        "question": "Which city do you live in?",
-        "options": [
-            {"value": "Helsinki", "label": "Helsinki"},
-            {"value": "Espoo", "label": "Espoo"},
-            {"value": "Vantaa", "label": "Vantaa"},
-            {"value": "Tampere", "label": "Tampere"},
-            {"value": "Turku", "label": "Turku"},
-            {"value": "Oulu", "label": "Oulu"},
-            {"value": "", "label": "Skip"},
-        ],
-    },
-    "field": {
-        "question": "What kind of work do you do?",
-        "options": [
-            {"value": "restaurant worker", "label": "Restaurant / hospitality"},
-            {"value": "software developer", "label": "IT / software"},
-            {"value": "nurse", "label": "Health and care"},
-            {"value": "construction worker", "label": "Construction"},
-            {"value": "warehouse worker", "label": "Logistics / warehouse"},
-            {"value": "cleaner", "label": "Cleaning"},
-            {"value": "", "label": "Skip"},
-        ],
     },
 }
 

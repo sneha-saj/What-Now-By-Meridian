@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AskSource, Deadline, Facts, PlanResponse, ReferralResponse, Source } from "@/lib/api";
+import type { AskSource, Deadline, Facts, PlanResponse, Source } from "@/lib/api";
 import { FIELDS, display, formatShortDate } from "@/lib/facts";
 import { ago } from "@/lib/format";
 import { firstSentence, timelineFor, type LiveFind, type NodeId, type RoadNode } from "@/lib/roadmap";
-import { FindYourWayIn } from "./FindYourWayIn";
 import { CheckIcon, GlobeIcon, PersonIcon, SearchIcon } from "./icons";
 import { GentleWarning, SourceChip, cx, formatDate, hostOf } from "./primitives";
 
@@ -84,7 +83,6 @@ function StatusLine({ n }: { n: RoadNode }) {
 
 const WHY: Partial<Record<NodeId, string>> = {
   week1: "These keep your money and your options open while you look for work.",
-  wayin: "Most jobs in Finland are found through people. A short, friendly message goes a long way.",
   week2: "Keep your search going: apply, follow up and keep your CV current.",
   week4: "A month in is a good moment to widen your search to sectors that are short of workers.",
   week8: "Two months in, check your plan and your backup options so nothing comes as a surprise.",
@@ -151,21 +149,18 @@ export type RoadmapData = {
   facts: Facts;
   deadline?: Deadline;
   plan?: PlanResponse;
-  referrals?: ReferralResponse;
   doneActions: Record<number, boolean>;
   doneNodes: Partial<Record<NodeId, boolean>>;
-  drafts: Record<string, string>;
   added: Partial<Record<NodeId, AddedItem[]>>;
 };
 
 export function Roadmap({
-  nodes, data, onToggleAction, onToggleNode, onDraft, onPickExactDate, focus,
+  nodes, data, onToggleAction, onToggleNode, onPickExactDate, focus,
 }: {
   nodes: RoadNode[];
   data: RoadmapData;
   onToggleAction: (i: number) => void;
   onToggleNode: (id: NodeId) => void;
-  onDraft: (url: string, text: string) => void;
   onPickExactDate: () => void;
   focus?: { id: NodeId; at: number } | null; // open, scroll to and briefly highlight this step
 }) {
@@ -179,7 +174,7 @@ export function Roadmap({
     const t2 = setTimeout(() => setFlash(null), 2500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [focus]);
-  const { plan, referrals, deadline, facts } = data;
+  const { plan, deadline, facts } = data;
   const planLive = !!plan && !plan.mock;
 
   function added(id: NodeId) {
@@ -262,7 +257,7 @@ export function Roadmap({
           {added("week1")}
         </div>
       );
-    const t = n.id === "wayin" ? undefined : timelineFor(plan, n.id === "final" ? "Final weeks" : n.label);
+    const t = timelineFor(plan, n.id === "final" ? "Final weeks" : n.label);
     return (
       <div className="space-y-5">
         {WHY[n.id] && <p className="text-ink-soft">{WHY[n.id]}</p>}
@@ -273,7 +268,6 @@ export function Roadmap({
             <Quotes sources={t.sources} live={planLive} />
           </>
         )}
-        {n.id === "wayin" && referrals && <FindYourWayIn r={referrals} drafts={data.drafts} onDraft={onDraft} bare />}
         {n.id === "final" && plan && (
           plan.plan_b.length ? (
             <ul className="space-y-4">

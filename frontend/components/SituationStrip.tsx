@@ -34,17 +34,18 @@ function Editor({ f, value, onSave, onClose }: { f: FieldDef; value: unknown; on
 /** "Your situation": one line of chips. Person icon = from you; dashed = still missing. Tap to edit.
  *  `open`/`onOpen` let the page open an editor (e.g. "Pick the exact date"). */
 export function SituationStrip({
-  facts, onEdit, open: openProp, onOpen,
+  facts, onEdit, open: openProp, onOpen, showSearchFields = false,
 }: {
   facts: Facts;
   onEdit: (field: Field, value: Facts[Field]) => void;
   open?: Field | null;
   onOpen?: (f: Field | null) => void;
+  showSearchFields?: boolean;
 }) {
   const [openLocal, setOpenLocal] = useState<Field | null>(null);
   const open = openProp !== undefined ? openProp : openLocal;
   const setOpen = onOpen ?? setOpenLocal;
-  const chips = FIELDS.filter((f) => f.required || display(f, facts[f.id]) !== null);
+  const chips = FIELDS.filter((f) => f.required || display(f, facts[f.id]) !== null || (showSearchFields && (f.id === "city" || f.id === "field")));
   const editing = FIELDS.find((f) => f.id === open);
   return (
     <section aria-labelledby="situation-title" className="rounded-2xl border border-rule bg-card px-4 py-3">

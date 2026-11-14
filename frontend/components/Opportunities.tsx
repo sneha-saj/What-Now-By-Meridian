@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { OpportunitiesResponse, OppContact } from "@/lib/api";
+import type { OpportunitiesResponse } from "@/lib/api";
 import { isSample } from "@/lib/format";
 import { GlobeIcon } from "./icons";
 import { Button, Card, SourceChip, cx, formatDate } from "./primitives";
@@ -37,40 +37,13 @@ function Section({ title, intro, empty, searching, children }: {
   );
 }
 
-function PersonCard({ p, text, onText }: { p: OppContact; text: string; onText: (t: string) => void }) {
-  const [copied, setCopied] = useState(false);
-  const id = `opp-draft-${p.profile_url}`;
-  return (
-    <li className="rounded-2xl border border-rule bg-paper p-4">
-      <p className="font-serif text-xl font-semibold">{p.name}</p>
-      <p className="text-ink-soft">{p.role} · {p.company}</p>
-      <p className="mt-1"><span className="text-ink-soft">Why this person: </span>{p.why_this_person}</p>
-      <div className="mt-2"><Src url={p.profile_url} title="Public profile" /></div>
-      <label htmlFor={id} className="mt-3 block font-bold">Your draft message</label>
-      <p className="text-sm text-ink-soft">Edit it so it sounds like you. Nothing is sent: copy it and send it yourself.</p>
-      <textarea id={id} rows={5} value={text} onChange={(e) => { onText(e.target.value); setCopied(false); }}
-        className="mt-2 w-full rounded-xl border border-ink/25 bg-card p-3" />
-      <div className="mt-2 flex items-center gap-3">
-        <Button variant="chip" onClick={async () => { try { await navigator.clipboard.writeText(text); setCopied(true); } catch {} }}>
-          {copied ? "Copied ✓" : "Copy message"}
-        </Button>
-        <span aria-live="polite" className="sr-only">{copied ? "Copied to clipboard" : ""}</span>
-        <span className="text-sm text-ink-soft">{text.trim().split(/\s+/).length} words</span>
-      </div>
-    </li>
-  );
-}
-
 export function Opportunities({
-  data, loading, drafts, onDraft,
+  data, loading,
 }: {
   data: Partial<OpportunitiesResponse>;
   loading: boolean;
-  drafts: Record<string, string>;
-  onDraft: (url: string, text: string) => void;
 }) {
   const jobs = useMore(data.hidden_jobs ?? []);
-  const people = useMore(data.people ?? []);
   const support = useMore(data.support ?? []);
   const events = useMore(data.events ?? []);
   const perks = data.perks_and_support;
@@ -82,7 +55,7 @@ export function Opportunities({
       <div>
         <h2 id="opp-title" className="font-serif text-3xl font-semibold sm:text-4xl">Opportunities</h2>
         <p className="mt-2 text-lg text-ink-soft">
-          Found live by Exa for your city and work. Every item links to where it came from.
+          Found live by Exa for your city and type of work. Every item links to where it came from.
         </p>
       </div>
 
@@ -103,16 +76,6 @@ export function Opportunities({
           ))}
         </ul>
         <div className="mt-3"><More {...jobs} /></div>
-      </Section>
-
-      <Section title="People who could refer you" intro="Public professional profiles at those companies, with a short draft you can edit and send yourself."
-        empty={!people.shown.length} searching={loading}>
-        <ul className="space-y-4">
-          {people.shown.map((p) => (
-            <PersonCard key={p.profile_url} p={p} text={drafts[p.profile_url] ?? p.draft} onText={(t) => onDraft(p.profile_url, t)} />
-          ))}
-        </ul>
-        <div className="mt-3"><More {...people} /></div>
       </Section>
 
       <Section title="Perks and support" intro="Proof you're a jobseeker, discounts, and help employers can get for hiring you."

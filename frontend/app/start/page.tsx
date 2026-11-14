@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   chatStream, opportunitiesStream, type ChatRequest, type OpportunitiesResponse, type Deadline, type Facts, type PlanResponse, type Question,
-  type ReferralResponse, type StreamEvent,
+  type StreamEvent,
 } from "@/lib/api";
 import type { Field } from "@/lib/facts";
 import { toLogLine, type LogLine } from "@/lib/activity";
@@ -32,11 +32,9 @@ type Saved = {
   tab: Tab;
   deadline?: Deadline;
   plan?: PlanResponse;
-  referrals?: ReferralResponse;
   outOfScope?: { message: string; link?: string; links?: { title: string; url: string }[] };
   doneActions: Record<number, boolean>;
   doneNodes: Partial<Record<NodeId, boolean>>;
-  drafts: Record<string, string>;
   asks: AskEntry[];
   added: Partial<Record<NodeId, AddedItem[]>>;
   opp?: Partial<OpportunitiesResponse>;
@@ -46,7 +44,7 @@ type Saved = {
 
 const KEY = "what-now-roadmap-v2";
 const empty = (): Saved => ({
-  started: false, facts: {}, built: false, tab: "roadmap", doneActions: {}, doneNodes: {}, drafts: {}, asks: [], added: {},
+  started: false, facts: {}, built: false, tab: "roadmap", doneActions: {}, doneNodes: {}, asks: [], added: {},
 });
 
 function load(): Saved {
@@ -143,11 +141,11 @@ export default function StartPage() {
   }
 
   const [oppLoading, setOppLoading] = useState(false);
-  const factsKey = JSON.stringify([s.facts.city, s.facts.field, s.facts.permit_type, s.facts.years_on_work_permit, s.facts.job_end_date]);
+  const factsKey = JSON.stringify(["no-contacts-v2", s.facts.city, s.facts.field, s.facts.permit_type, s.facts.years_on_work_permit, s.facts.job_end_date]);
 
   // Opportunities load once per situation, when the tab is first opened (results are cached server-side too).
   useEffect(() => {
-    if (!loaded || s.tab !== "opportunities" || !s.built || oppLoading || s.oppFor === factsKey) return;
+    if (!loaded || s.tab !== "opportunities" || !s.built || !s.facts.city || !s.facts.field || oppLoading || s.oppFor === factsKey) return;
     setOppLoading(true);
     setSearching({});
     update({ opp: {}, oppFor: factsKey });
@@ -163,7 +161,7 @@ export default function StartPage() {
   }, [loaded, s.tab, s.built, factsKey]);
 
   const nodes = useMemo(() => buildNodes({
-    today: new Date(), ready: s.built || !!s.deadline, deadline: s.deadline, plan: s.plan, referrals: s.referrals,
+    today: new Date(), ready: s.built || !!s.deadline, deadline: s.deadline, plan: s.plan,
     searching, doneActions: s.doneActions, doneNodes: s.doneNodes,
   }), [s, searching]);
 
@@ -253,7 +251,7 @@ export default function StartPage() {
   const opportunitiesHint = s.built && s.tab === "roadmap" && (
     <button onClick={() => goTab("opportunities")}
       className="flex w-full items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4 text-left font-bold text-accent-ink hover:border-accent">
-      Next: companies hiring, people who could refer you, perks and events <span aria-hidden>→</span>
+      Next: recent hiring signals, support and events near you <span aria-hidden>→</span>
     </button>
   );
   const live = allLive(nodes);
@@ -356,7 +354,6 @@ export default function StartPage() {
                     data={s}
                     onToggleAction={(i) => update({ doneActions: { ...s.doneActions, [i]: !s.doneActions[i] } })}
                     onToggleNode={(id) => update({ doneNodes: { ...s.doneNodes, [id]: !s.doneNodes[id] } })}
-                    onDraft={(url, text) => update({ drafts: { ...s.drafts, [url]: text } })}
                     onPickExactDate={pickExactDate}
                     focus={focus}
                   />
@@ -366,9 +363,21 @@ export default function StartPage() {
               )}
               {tab === "opportunities" && (
                 <div className="space-y-6">
-                  {oppLoading && <ActivityLog lines={log} busy last={3} />}
-                  <Opportunities data={s.opp ?? {}} loading={oppLoading} drafts={s.drafts}
-                    onDraft={(url, text) => update({ drafts: { ...s.drafts, [url]: text } })} />
+                  {(!s.facts.city || !s.facts.field) ? (
+                    <section className="rounded-2xl border border-rule bg-card px-5 py-5">
+                      <h2 className="font-serif text-3xl font-semibold">Find opportunities near you</h2>
+                      <p className="mt-2 text-ink-soft">City and type of work make the hiring, support, and event searches relevant. Add them here when you want to explore this tab.</p>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        {!s.facts.city && <Button variant="chip" onClick={() => { setEditing("city"); stripRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>Add city</Button>}
+                        {!s.facts.field && <Button variant="chip" onClick={() => { setEditing("field"); stripRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>Add type of work</Button>}
+                      </div>
+                    </section>
+                  ) : (
+                    <>
+                      {oppLoading && <ActivityLog lines={log} busy last={3} />}
+                      <Opportunities data={s.opp ?? {}} loading={oppLoading} />
+                    </>
+                  )}
                   {ask}
                 </div>
               )}
@@ -380,7 +389,7 @@ export default function StartPage() {
 
       {/* Row 3: your situation, one line, tap to edit */}
       <div ref={stripRef} className="space-y-3">
-        <SituationStrip facts={s.facts} open={editing} onOpen={setEditing}
+        <SituationStrip facts={s.facts} open={editing} onOpen={setEditing} showSearchFields={s.built && tab === "opportunities"}
           onEdit={(field: Field, value) => send({ edited_facts: { [field]: value } as Partial<Facts> })} />
         {error && <GentleWarning>{error}</GentleWarning>}
       </div>

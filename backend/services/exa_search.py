@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import contextvars
 from concurrent.futures import ThreadPoolExecutor
-import re
 from urllib.parse import urlparse
 import hashlib
 import json
@@ -152,7 +151,7 @@ def search_official(queries: list[str], per_query: int = 3) -> list[dict] | None
 
 
 def _cached_search(kind: str, params: dict, run):
-    """Shared cache + error handling for the referral searches. `run(exa)` returns a list."""
+    """Shared cache and error handling for searches. `run(exa)` returns a list."""
     key = _cache_key(kind, params)
     cached = _cache_read(key)
     if cached is not None:
@@ -189,99 +188,9 @@ def _hl(r) -> str:
     return " ... ".join(getattr(r, "highlights", None) or [])[:600]
 
 
-CAREERS_PATH = re.compile(r"/(careers?|jobs?|rekry\w*|tyopaikat|avoimet|open-positions|join-us|vacanc\w*)(/|$|\?)", re.I)
-
-
 def _domain(url: str) -> str:
     host = urlparse(url).netloc.lower()
     return host[4:] if host.startswith("www.") else host
-
-
-def search_companies(field: str, city: str, n: int = 8) -> list[dict] | None:
-    """Companies in or near the user's city in their field or labour-shortage sectors, with hiring evidence.
-
-    Two searches: companies, then current job posts. A company counts as hiring now if its own URL is a
-    careers page, or a job post on its domain turned up.
-    """
-    def run(exa):
-        objective = (f"Companies in or near {city}, Finland that hire {field} roles or work in sectors with a "
-                     "labour shortage, and hire international workers. Prefer company and careers pages.")
-        calls = [
-            dict(query=f"companies in or near {city}, Finland hiring {field} or in labour-shortage sectors",
-                 category="company", num_results=n, contents={"highlights": True}, objective=objective),
-            dict(query=f"{field} jobs {city} Finland open positions",
-                 num_results=10, contents={"highlights": True},
-                 objective=(f"Current job posts or careers pages for {field} roles in or near {city}, Finland. "
-                            "Prefer the employer's own careers page or a live job listing.")),
-        ]
-        purposes = ["companies", "job posts"]
-        companies, posts = _parallel(lambda i: _search(exa, calls[i].pop("query"), purposes[i], **calls[i]).results, [0, 1])
-        evidence = {}
-        for p in posts:
-            evidence.setdefault(_domain(p.url), (p.url, _date(p)))
-        out = []
-        for r in companies[:n]:
-            if CAREERS_PATH.search(urlparse(r.url).path + "/"):
-                proof, proof_date = r.url, _date(r)
-            else:
-                proof, proof_date = evidence.get(_domain(r.url), (None, None))
-            out.append({"name": r.title or _domain(r.url), "url": r.url, "highlight": _hl(r), "published": _date(r),
-                        "hiring_evidence": proof, "hiring_evidence_date": proof_date})
-        out.sort(key=lambda c: c["hiring_evidence"] is None)  # companies with evidence first
-        return out
-    return _cached_search("companies", {"field": field, "city": city, "n": n, "v": 3}, run)
-
-
-def _split_profile_title(title: str) -> tuple[str, str]:
-    """'Jane Doe - Head Chef - Restaurant Oy | LinkedIn' -> ('Jane Doe', 'Head Chef')."""
-    parts = [p.strip() for p in title.split("|")[0].split(" - ") if p.strip()]
-    return (parts[0] if parts else title), (parts[1] if len(parts) > 1 else "")
-
-
-def search_people(companies: list[dict], field: str, city: str, top: int = 3, per_company: int = 1) -> list[dict] | None:
-    """Public professional profiles of likely contacts at the top companies."""
-    names = [c["name"] for c in companies[:top]]
-
-    def run(exa):
-        def one(company):
-            res = _search(
-                exa, f"{field} hiring manager, team lead or recruiter at {company} in {city}, Finland", "people",
-                category="people", num_results=per_company, contents={"highlights": True},
-                objective=(f"Public professional profiles of people at {company} who hire for {field} roles "
-                           "or have a similar background, so a job seeker can reach out politely."),
-            )
-            found = []
-            for r in res.results:
-                name, role = _split_profile_title(r.title or "")
-                if name:
-                    found.append({"name": name, "role": role, "company": company, "profile_url": r.url,
-                                  "highlight": _hl(r)})
-            return found
-        return [p for group in _parallel(one, names) for p in group]
-    return _cached_search("people", {"companies": names, "field": field, "city": city,
-                                     "per_company": per_company}, run)
-
-
-def search_communities(field: str, city: str, today: str, n: int = 3) -> list[dict] | None:
-    """International professional groups, upcoming meetups/events and union career services."""
-    month = datetime.fromisoformat(today).strftime("%B %Y")
-    queries = [
-        ("professional_group", f"{field} events and meetups in {city} {month} for international professionals"),
-        ("union", f"trade union for {field} workers in Finland career services in English"),
-    ]
-
-    def run(exa):
-        def one(item):
-            kind, q = item
-            res = _search(
-                exa, q, "events" if kind == "professional_group" else "unions", num_results=n, contents={"highlights": True},
-                objective=("Help an international job seeker in Finland find professional groups, upcoming events "
-                           "(next 30 days) and union career services. Pull event dates when stated."),
-            )
-            return [{"name": r.title or r.url, "url": r.url, "kind": kind, "highlight": _hl(r), "published": _date(r)}
-                    for r in res.results]
-        return [g for group in _parallel(one, queries) for g in group]
-    return _cached_search("communities", {"field": field, "city": city, "today": today, "n": n, "v": 2}, run)
 
 
 PLAN_OBJECTIVE = (
@@ -395,7 +304,7 @@ def _rows(res, purpose: str) -> list[dict]:
 def search_opportunities(field: str, city: str, today: str, city_domains: list[str], support_types: list[dict],
                          perk_queries: dict) -> dict | None:
     """All Opportunities searches for one city + field, in parallel, cached 24h. About 9 Exa searches:
-    hiring signals (last 60 days), events (next 30 days), 4 support types and 3 perks. People come after,
+    hiring signals (last 60 days), events (next 30 days), 4 support types and 3 perks,
     from the top companies. Returns raw rows per section, or None if Exa is unavailable."""
     since = (datetime.fromisoformat(today) - timedelta(days=60)).date().isoformat()
     month = datetime.fromisoformat(today).strftime("%B %Y")

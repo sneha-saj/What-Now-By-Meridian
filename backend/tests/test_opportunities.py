@@ -36,7 +36,7 @@ def mocked(monkeypatch):
 
 def test_only_perks_and_support_every_item_sourced_and_rules_enforced(mocked):
     out = opps.build(FACTS, 3, TODAY)
-    assert set(out.model_dump()) == {"perks_and_support", "counts", "mock"}
+    assert set(out.model_dump()) == {"perks_and_support", "counts", "mock", "demo"}
     perks = out.perks_and_support
     assert perks.certificate.source_url == "https://tyomarkkinatori.fi/cert" and perks.certificate.source_date == "2026-10-01"
     assert [d.discount for d in perks.discounts] == ["50% off"]  # invented discount dropped

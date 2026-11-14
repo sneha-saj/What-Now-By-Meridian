@@ -136,7 +136,8 @@ def extract_facts(text: str, today: date) -> dict:
 def plan(deadline_date: str | None) -> dict:
     """Generic plan used when Exa or Gemini is unavailable. Sources are official landing pages, no quotes."""
     m, k, i, t = SOURCES["migri"], SOURCES["kela"], SOURCES["infofinland"], SOURCES["tyomarkkinatori"]
-    final = f"before {deadline_date}" if deadline_date else "before your deadline"
+    final = (f"before {date.fromisoformat(deadline_date).strftime('%-d %B %Y')}" if deadline_date
+             else "before the date you can stay until")
     return {
         "this_week": [
             {"title": "Register as a jobseeker", "why": "Registering early keeps your benefit options open.",

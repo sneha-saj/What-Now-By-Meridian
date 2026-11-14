@@ -8,6 +8,7 @@ import {
 import type { Field } from "@/lib/facts";
 import { toLogLine, type LogLine } from "@/lib/activity";
 import { applyExaEvent, type Searching } from "@/lib/roadmap";
+import { flattenSteps } from "@/lib/steps";
 import { ActivityLog } from "@/components/ActivityLog";
 import { Checklist } from "@/components/Checklist";
 import { AskPanel, type AskEntry } from "@/components/AskPanel";
@@ -47,6 +48,7 @@ type Saved = {
   doneSteps: Record<string, boolean>;
   asks: AskEntry[];
   qHistory?: { q: Question; value: string }[]; // questions answered in this session, for Back/Forward
+  demo?: boolean; // the saved sample person is shown, not this person's situation
   added: Partial<Record<StepAnchor, AddedItem[]>>;
   opp?: Partial<OpportunitiesResponse>;
   oppFor?: string; // the facts the opportunities were found for
@@ -137,6 +139,7 @@ export default function StartPage() {
     try {
       const res = await chatStream({ messages: [], facts: s.facts, step: "this_week", ...req }, onEvent);
       setQVersion((v) => v + 1);
+      update({ demo: !!res.demo });
       if (res.out_of_scope) {
         update({ facts: res.facts, outOfScope: { message: res.reply, link: res.link, links: res.links }, question: undefined });
       } else if (res.question) {
@@ -326,6 +329,17 @@ export default function StartPage() {
         {newSituation}
       </div>
 
+      {/* Demo mode: say plainly that this is a sample person, so nobody mistakes it for their own situation */}
+      {(s.demo || (tab === "opportunities" && s.opp?.demo)) && (
+        <div role="note" className="rounded-2xl border-2 border-accent/60 bg-accent-soft px-5 py-4 text-accent-ink">
+          <p className="font-bold">Demo with a sample person, not your situation</p>
+          <p className="mt-1">
+            Live checks are off, so you&apos;re seeing a saved example (a restaurant worker in Helsinki on a work permit).
+            Your own answers aren&apos;t used for these steps or perks.
+          </p>
+        </div>
+      )}
+
       {/* Row 2: only the current step */}
       <div>
         {s.outOfScope ? (
@@ -426,7 +440,9 @@ export default function StartPage() {
                     onAccept={() => {
                       if (!proposal) return;
                       update({ plan: proposal.plan, deadline: proposal.plan.deadline, facts: proposal.facts });
-                      setStepMsg({ n: proposal.n, text: "Updated with what you added." });
+                      const key = (p?: PlanResponse) => JSON.stringify(flattenSteps(p).map((x) => [x.title, x.why ?? "", x.points]));
+                      const changed = !proposal.mock && key(proposal.plan) !== key(s.plan);
+                      setStepMsg({ n: proposal.n, text: changed ? "Updated with what you added." : "Saved what you added. Your steps stay the same." });
                       setProposal(null);
                     }}
                     onDiscard={() => { if (proposal) setStepMsg({ n: proposal.n, text: "Kept your current steps." }); setProposal(null); }}

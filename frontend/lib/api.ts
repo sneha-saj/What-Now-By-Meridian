@@ -115,6 +115,8 @@ export type ChatResponse = {
   link?: string;
   links?: Source[];
   mock: boolean;
+  /** True when the saved sample person is shown (demo mode), not this person's situation. */
+  demo?: boolean;
 };
 
 export type ProgressStage = "reading_situation" | "checking_rules" | "finding_steps";
@@ -221,6 +223,7 @@ export type OpportunitiesResponse = {
   perks_and_support: PerksAndSupport;
   counts?: { certificate: number; discounts: number; incentives: number; support?: number; total: number };
   mock: boolean;
+  demo?: boolean;
 };
 
 async function post<T>(path: string, body: unknown): Promise<T> {

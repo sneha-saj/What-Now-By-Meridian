@@ -276,14 +276,14 @@ def steps_update(req: StepsUpdateRequest):
     facts = Facts.model_validate({**now, **update})
     if config.USE_MOCK:
         return StepsUpdateResponse(plan=req.plan, facts=facts, facts_update=update, updated_from=req.step, mock=True,
-                                   message="Saved what you added. Live updates are off in demo mode.")
+                                   message="Live updates are off in demo mode. You can still save what you added.")
     _progress("checking_rules")
     d = build_deadline(facts, today)
     _progress("finding_steps")
     built = build_plan(facts, d, today, note=req.note.strip())
     if built is None:
         return StepsUpdateResponse(plan=req.plan, facts=facts, facts_update=update, updated_from=req.step, mock=True,
-                                   message="Couldn't update your steps live right now. What you added is saved; try again soon.")
+                                   message="Couldn't update your steps live right now. You can still save what you added, and try the update again later.")
     new = PlanResponse(deadline=d, disclaimer=DISCLAIMER, mock=False, **built)
     merged = merge_from_step(req.plan, new, req.step)
     _partial("plan", merged)
@@ -433,6 +433,12 @@ def _off_topic_start(mock: bool) -> ChatResponse:
 
 
 def run_chat(req: ChatRequest) -> ChatResponse:
+    resp = _run_chat(req)
+    resp.demo = config.USE_MOCK  # the app then says clearly that it's a sample person, not you
+    return resp
+
+
+def _run_chat(req: ChatRequest) -> ChatResponse:
     today = date.today()
     latest = req.messages[-1] if req.messages else None
     extracted, mock = {}, config.USE_MOCK
@@ -587,7 +593,7 @@ def opportunities(req: OpportunitiesRequest):
     site, with the page date. 3 Exa searches and 1 Gemini call per city, cached 24h.
     `/opportunities/stream` streams the result with live activity."""
     if config.USE_MOCK:
-        return OpportunitiesResponse(**mocks.example("opportunities"))
+        return OpportunitiesResponse(**mocks.example("opportunities"), demo=True)
     return opps.build(req.facts, _deadline_months(req.facts))
 
 

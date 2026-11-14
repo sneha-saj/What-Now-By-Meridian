@@ -5,6 +5,7 @@
   },
   "response": {
     "facts": {
+      "lost_job": true,
       "citizenship_group": "other",
       "citizenship_country": "India",
       "permit_type": "work_based",

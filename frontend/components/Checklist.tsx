@@ -53,7 +53,11 @@ export function Checklist({
   // The deadline facts, the personal questions chosen for this person, then anything else we happen to know.
   const personal = ((facts.to_ask ?? DEFAULT_PERSONAL) as Field[]).filter((id) => FIELDS.some((x) => x.id === id));
   const known = FIELDS.filter((f) => display(f, facts[f.id], facts) !== null).map((f) => f.id);
-  const ids = [...new Set<Field>([...REQUIRED, ...personal, ...also, ...known])];
+  // "Time on a work permit" only matters for a work-based permit (or while the permit is still unknown).
+  const permit = facts.permit_type;
+  const required = REQUIRED.filter((id) => id !== "years_on_work_permit" || !permit || permit === "work_based" || permit === "not_sure"
+    || facts.years_on_work_permit !== undefined && facts.years_on_work_permit !== null);
+  const ids = [...new Set<Field>([...required, ...personal, ...also, ...known])];
 
   const row = (id: Field) => {
     const f = FIELDS.find((x) => x.id === id)!;

@@ -32,7 +32,7 @@ function SourceLink({ s, live }: { s: Source; live: boolean }) {
         <span className="sr-only"> (opens in a new tab){quote ? `. Quote: ${quote}` : ""}</span>
       </a>
       <span role="tooltip" aria-hidden
-        className="pointer-events-none invisible absolute bottom-full left-0 z-20 mb-2 w-[min(22rem,80vw)] rounded-xl border border-rule bg-card p-3 text-sm opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+        className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-[min(22rem,80vw)] rounded-xl border border-rule bg-card p-3 text-sm shadow-lg group-hover:block group-focus-within:block">
         <span className="block font-bold">{s.title}</span>
         {quote && <span className="mt-1 block font-serif">“{quote}”</span>}
         <span className="mt-1 block text-ink-soft">{hostOf(s.url)}{fresh ? ` · updated ${fresh}` : ""}</span>
@@ -148,7 +148,7 @@ function AddInfo({ step, disabled, onSubmit }: { step: StepItem; disabled: boole
       <Button variant="quiet" disabled={disabled} onClick={() => setOpen(true)}>+ Add info about this step</Button>
     );
   return (
-    <form className="mt-2 space-y-2" onSubmit={(e) => { e.preventDefault(); if (text.trim()) { onSubmit(text.trim()); setOpen(false); setText(""); } }}>
+    <form className="mt-2 basis-full space-y-2" onSubmit={(e) => { e.preventDefault(); if (text.trim()) { onSubmit(text.trim()); setOpen(false); setText(""); } }}>
       <label htmlFor={id} className="block font-bold">What should we know about step {step.n}?</label>
       <textarea id={id} rows={2} value={text} autoFocus maxLength={500} onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === "Escape" && setOpen(false)}

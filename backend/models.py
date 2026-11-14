@@ -240,6 +240,7 @@ class ChatResponse(BaseModel):
     link: Optional[str] = None
     links: list[Source] = Field(default_factory=list)
     mock: bool = False
+    demo: bool = False  # the saved sample person is shown (USE_MOCK), not this person's situation
 
 
 class AskRequest(BaseModel):
@@ -353,6 +354,7 @@ class OpportunitiesResponse(BaseModel):
     perks_and_support: PerksAndSupport = Field(default_factory=PerksAndSupport)
     counts: OpportunityCounts = Field(default_factory=OpportunityCounts)
     mock: bool = False
+    demo: bool = False  # saved sample perks (USE_MOCK)
 
     @model_validator(mode="after")
     def _count_sections(self):

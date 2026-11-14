@@ -221,7 +221,7 @@ def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
     assert plan_body["deadline"]["deadline_date"] == "2027-02-01"
     assert len(plan_body["this_week"]) == 3
     opp_body = client.post("/opportunities", json={"facts": intake_body["facts"]}).json()
-    assert set(opp_body) == {"perks_and_support", "counts", "mock"}
+    assert set(opp_body) == {"perks_and_support", "counts", "mock", "demo"}
     assert opp_body["mock"] is True and opp_body["perks_and_support"]["certificate"]
     assert client.get("/rules").json()["trusted_domains"]
 
@@ -602,3 +602,13 @@ def test_step_update_in_mock_mode_makes_no_external_calls(monkeypatch):
     body = client.post("/steps/update", json={"facts": WORK_FACTS, "plan": old, "step": 1,
                                               "note": "I'm in an unemployment fund"}).json()
     assert body["mock"] is True and body["facts"]["unemployment_fund"] == "yes"
+
+
+def test_demo_mode_is_flagged_so_the_app_can_say_it_is_a_sample_person(monkeypatch):
+    monkeypatch.setattr(main.config, "USE_MOCK", True)
+    body = client.post("/chat", json={"messages": _msg("I was laid off")}).json()
+    assert body["demo"] is True and body["facts"]["city"] == "Helsinki"  # the saved sample person
+    assert client.post("/opportunities", json={"facts": {}}).json()["demo"] is True
+    monkeypatch.setattr(main.config, "USE_MOCK", False)
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"lost_job": True})
+    assert client.post("/chat", json={"messages": _msg("I was laid off")}).json().get("demo") in (None, False)

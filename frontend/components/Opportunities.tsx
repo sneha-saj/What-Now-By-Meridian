@@ -27,7 +27,7 @@ function ReadBy({ by }: { by?: "context.dev" | null }) {
         className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-ink/20 bg-card px-3 py-1 text-sm font-bold text-ink">
         <span aria-hidden>▤</span> Read from the page by Context.dev<span className="sr-only">. {why}</span>
       </span>
-      <span role="tooltip" aria-hidden className="pointer-events-none invisible absolute bottom-full left-0 z-20 mb-2 w-[min(20rem,80vw)] rounded-xl border border-rule bg-card p-3 text-sm font-normal opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+      <span role="tooltip" aria-hidden className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-[min(20rem,80vw)] rounded-xl border border-rule bg-card p-3 text-sm font-normal shadow-lg group-hover:block group-focus-within:block">
         {why}
       </span>
     </span>
@@ -96,7 +96,7 @@ export function Opportunities({
               <p className="mt-1">{inc.what_it_is}</p>
               <p className="mt-1"><span className="text-ink-soft">Conditions: </span>{inc.conditions_plain}</p>
               <p className={cx("mt-2 rounded-lg px-3 py-2", inc.may_apply ? "bg-verified-soft text-verified" : "bg-warn-soft text-warn")}>
-                {inc.may_apply ? "May apply to you. " : "Probably doesn't apply right now. "}{inc.caveat}
+                {/^may apply/i.test(inc.caveat) ? "" : inc.may_apply ? "May apply to you. " : "Probably doesn't apply right now. "}{inc.caveat}
               </p>
               <p className="mt-2 text-sm text-ink-soft">You can mention this to an employer when you apply.</p>
               <div className="mt-2 flex flex-wrap gap-2"><Src url={inc.source_url} title="Conditions" date={inc.source_date} /><ReadBy by={inc.read_by} /></div>

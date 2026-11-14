@@ -19,7 +19,7 @@ image = (
     )
 )
 
-# Send only the app's API keys, never the Modal deployment token or the entire .env.
+# Send only the app's runtime secrets, never the Modal deployment token or the entire .env.
 if modal.is_local():
     from dotenv import dotenv_values
 

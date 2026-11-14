@@ -202,22 +202,26 @@ PLAN_OBJECTIVE = (
 
 
 TOPIC_PURPOSE = {"register_jobseeker": "registering as a jobseeker", "unemployment_benefits": "unemployment benefits",
-                 "labour_shortage": "labour-shortage sectors", "plan_b": "other permits"}
+                 "labour_shortage": "labour-shortage sectors", "plan_b": "other permits", "your_update": "what you added"}
 
 
-def plan_topics(field: str | None, candidates: list[dict], city: str | None = None) -> list[tuple[str, str]]:
+def plan_topics(field: str | None, candidates: list[dict], city: str | None = None, fund: str | None = None,
+                registered: str | None = None, note: str | None = None) -> list[tuple[str, str]]:
     """(topic, query) pairs for the /plan search: the 3 core topics plus one per Plan B candidate.
-    Personalised with the user's field, city and region so results are specific, not generic."""
+    Personalised with the user's field, city, region, unemployment fund and registration so results are specific."""
     region = region_of(city)
     shortage = f"labour shortage occupations {region or 'Finland'} occupational barometer"
     if field:
         shortage += f" {field}"
     where = f"in {city} " if city else "in Finland "
     return [
-        ("register_jobseeker", f"register as an unemployed jobseeker {where}employment services foreigner"),
-        ("unemployment_benefits", "unemployment benefits Finland Kela or unemployment fund for immigrants"),
+        ("register_jobseeker", f"after registering as a jobseeker {where}employment plan obligations" if registered == "yes"
+         else f"register as an unemployed jobseeker {where}employment services foreigner"),
+        ("unemployment_benefits", "earnings-related unemployment allowance apply to your unemployment fund" if fund == "yes"
+         else "unemployment benefits Finland Kela basic unemployment allowance labour market subsidy for immigrants"),
         ("labour_shortage", shortage),
         *[(f"plan_b:{c['id']}", c["query"]) for c in candidates],
+        *([("your_update", f"{' '.join(note.split())[:150]} Finland {city or ''}".strip())] if note else []),
     ]
 
 

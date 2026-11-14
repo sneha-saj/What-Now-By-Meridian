@@ -96,6 +96,10 @@ def extract_facts(text: str, today: date) -> dict:
     facts: dict = {"job_was_in_finland": not OUTSIDE_FINLAND.search(t)}
     if JOB_LOSS.search(t):
         facts["lost_job"] = True
+    if re.search(r"\b(unemployment fund|työttömyyskassa|kassa|union member)", t):
+        facts["unemployment_fund"] = "no" if re.search(r"\b(not|no|never)\b[^.]{0,30}(fund|kassa|union)", t) else "yes"
+    if re.search(r"\balready registered\b|\bregistered as (an? )?(unemployed )?jobseeker", t):
+        facts["registered_jobseeker"] = "yes"
 
     if m := re.search(r"\bfrom (" + "|".join(EU_COUNTRIES) + r")\b", t):
         facts.update(citizenship_group="eu_eea", citizenship_country=m.group(1).title())

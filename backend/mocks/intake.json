@@ -13,7 +13,8 @@
       "city": "Helsinki",
       "field": "restaurant worker",
       "studied_in_finland": false,
-      "family_in_finland": false
+      "family_in_finland": false,
+      "unemployment_fund": "no"
     },
     "missing_questions": [],
     "out_of_scope": false,

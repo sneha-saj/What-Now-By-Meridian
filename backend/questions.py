@@ -1,13 +1,14 @@
-"""Which facts the deadline still needs, as short tap-to-answer questions (max 3).
+"""Which facts are still missing, as short tap-to-answer questions.
 
-Only asks what the deadline calculation needs. Never asks for permit numbers or passport details.
+First what the deadline calculation needs, then up to 3 personal questions (picked by Gemini from a fixed list)
+that make the steps specific. Never asks for permit numbers or passport details.
 """
 
 from __future__ import annotations
 
 from datetime import date, timedelta
 
-from countries.finland import QUESTION_BANK, REQUIRED_FIELDS
+from countries.finland import DEFAULT_PERSONAL, MAX_PERSONAL, PERSONAL_QUESTIONS, QUESTION_BANK, REQUIRED_FIELDS
 from models import Facts, Option, Question
 from rules import _canonical_permit
 
@@ -46,12 +47,23 @@ def needed_fields(f: Facts) -> list[str]:
     return needed[:MAX_QUESTIONS]
 
 
+def personal_missing(f: Facts) -> list[str]:
+    """Personal questions chosen for this person (or the default ones) that are still unanswered.
+    A skipped one is stored as "" and not asked again."""
+    chosen = f.to_ask if f.to_ask is not None else DEFAULT_PERSONAL
+    chosen = [x for x in chosen if x in PERSONAL_QUESTIONS][:MAX_PERSONAL]
+    return [x for x in chosen if getattr(f, x) is None]
+
+
 def next_field(f: Facts) -> str | None:
-    """Ask about job loss, then only the facts needed for the deadline."""
+    """Ask about job loss, then the facts the deadline needs, then the personal questions for the steps."""
     if f.lost_job is None and f.job_end_date is None:
         return "lost_job"
     needed = needed_fields(f)
-    return needed[0] if needed else None
+    if needed:
+        return needed[0]
+    personal = personal_missing(f)
+    return personal[0] if personal else None
 
 
 def question(field: str, today: date | None = None) -> Question:

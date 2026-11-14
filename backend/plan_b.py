@@ -7,7 +7,7 @@ from models import Facts
 NO_PERMIT_RISK = ("Your right to stay in Finland doesn't depend on this job, so you don't need a backup permit. "
                   "Focus on income and your job search.")
 NONE_FIT = ("We couldn't find another permit that clearly fits your situation. "
-            "Check with Migri or your union before your deadline.")
+            "Check with Migri or your union before the date you can stay until.")
 
 
 def candidates(f: Facts, permit: str | None) -> list[dict]:
@@ -18,7 +18,7 @@ def candidates(f: Facts, permit: str | None) -> list[dict]:
         "id": "new_employer",
         "title_short": "New permit, new employer",
         "option": "A new work-based residence permit",
-        "who_it_fits": "Anyone who gets a job offer from a new employer before the deadline.",
+        "who_it_fits": "Anyone who gets a job offer from a new employer before the date they can stay until.",
         "query": "apply for a new work-based residence permit with a new employer Finland",
     }]
     if f.studied_in_finland:

@@ -22,6 +22,10 @@ class Facts(BaseModel):
     field: Optional[str] = None
     studied_in_finland: Optional[bool] = None
     family_in_finland: Optional[bool] = None
+    unemployment_fund: Optional[Literal["yes", "no", "not_sure"]] = None  # earnings-related allowance vs Kela
+    registered_jobseeker: Optional[Literal["yes", "no"]] = None
+    # Personal questions Gemini picked for this person (ids from PERSONAL_QUESTIONS), asked before the steps.
+    to_ask: Optional[list[str]] = None
 
     def years(self) -> Optional[float]:
         """Years as a number for the rules engine; buckets map to a value on the right side of 2."""
@@ -182,6 +186,22 @@ class PlanResponse(BaseModel):
     plan_b_note: Optional[str] = None
     disclaimer: str
     mock: bool
+
+
+class StepsUpdateRequest(BaseModel):
+    facts: Facts
+    plan: PlanResponse
+    step: int = Field(ge=1)  # 1-based, in the order the steps are shown: this week's 3, later weeks, Plan B
+    note: str = Field(min_length=1, max_length=500)
+
+
+class StepsUpdateResponse(BaseModel):
+    plan: PlanResponse
+    facts: Facts
+    facts_update: dict = Field(default_factory=dict)
+    updated_from: int
+    mock: bool = False
+    message: Optional[str] = None
 
 
 Step = Literal["about_you", "deadline", "this_week"]

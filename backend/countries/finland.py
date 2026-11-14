@@ -68,10 +68,20 @@ DEADLINE_RULES = [
 
 
 # ---------- Intake questions ----------
-# Code (not AI) picks the next missing field in this order and asks its fixed question.
-# Only deadline facts are asked as follow-up questions. City and work can be
-# extracted from the opening message or added later when exploring opportunities.
+# Code (not AI) picks the next missing field and asks its fixed question. First the facts the deadline needs,
+# then up to 3 personal questions that make the steps specific. Gemini picks which personal questions matter for
+# this person (from this list only); without Gemini, DEFAULT_PERSONAL is used.
 REQUIRED_FIELDS = ["citizenship_group", "permit_type", "years_on_work_permit", "job_end_date"]
+PERSONAL_QUESTIONS = {
+    "city": "where they live: local employment services, city perks and support",
+    "field": "their kind of work: in-demand sectors and jobs that fit",
+    "unemployment_fund": "unemployment fund membership: earnings-related allowance from the fund, or basic support from Kela",
+    "registered_jobseeker": "already registered as a jobseeker: whether registering is still the first step",
+    "studied_in_finland": "a degree from Finland: the permit to look for work after graduating",
+    "family_in_finland": "a spouse or partner in Finland: a family-based permit as a backup",
+}
+DEFAULT_PERSONAL = ["city", "field", "unemployment_fund"]
+MAX_PERSONAL = 3
 
 QUESTION_BANK = {
     # Asked first, only when the message didn't say anything about losing a job.
@@ -106,6 +116,51 @@ QUESTION_BANK = {
         "question": "When was (or is) your last day of work?",
         "kind": "date",
         "options": "relative_dates",  # Today / About a week ago / About a month ago, computed from today
+    },
+    # Personal questions ("" = skipped, not asked again)
+    "city": {
+        "question": "Which city do you live in?",
+        "options": [
+            {"value": "Helsinki", "label": "Helsinki"},
+            {"value": "Espoo", "label": "Espoo"},
+            {"value": "Vantaa", "label": "Vantaa"},
+            {"value": "Tampere", "label": "Tampere"},
+            {"value": "Turku", "label": "Turku"},
+            {"value": "Oulu", "label": "Oulu"},
+            {"value": "", "label": "Skip"},
+        ],
+    },
+    "field": {
+        "question": "What kind of work do you do?",
+        "options": [
+            {"value": "restaurant worker", "label": "Restaurant / hospitality"},
+            {"value": "software developer", "label": "IT / software"},
+            {"value": "nurse", "label": "Health and care"},
+            {"value": "construction worker", "label": "Construction"},
+            {"value": "warehouse worker", "label": "Logistics / warehouse"},
+            {"value": "cleaner", "label": "Cleaning"},
+            {"value": "", "label": "Skip"},
+        ],
+    },
+    "unemployment_fund": {
+        "question": "Are you a member of an unemployment fund (often through a union)?",
+        "options": [
+            {"value": "yes", "label": "Yes"},
+            {"value": "no", "label": "No"},
+            {"value": "not_sure", "label": "Not sure"},
+        ],
+    },
+    "registered_jobseeker": {
+        "question": "Have you already registered as an unemployed jobseeker?",
+        "options": [{"value": "yes", "label": "Yes"}, {"value": "no", "label": "Not yet"}],
+    },
+    "studied_in_finland": {
+        "question": "Have you completed a degree in Finland?",
+        "options": [{"value": "true", "label": "Yes"}, {"value": "false", "label": "No"}],
+    },
+    "family_in_finland": {
+        "question": "Do you have a spouse or partner living in Finland?",
+        "options": [{"value": "true", "label": "Yes"}, {"value": "false", "label": "No"}],
     },
 }
 

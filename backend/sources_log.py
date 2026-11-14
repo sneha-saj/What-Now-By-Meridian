@@ -22,6 +22,7 @@ STEP_FOR_PURPOSE = {
     "unemployment benefits": "This week",
     "labour-shortage sectors": "Week 4",
     "other permits": "Plan B",
+    "what you added": "Steps",
     "perks": "Opportunities",
     "ask": "Ask",
 }

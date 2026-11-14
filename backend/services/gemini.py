@@ -8,7 +8,7 @@ from pathlib import Path
 import logging
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import activity
 import config
@@ -108,6 +108,9 @@ class Extracted(BaseModel):
     field: Optional[str] = None
     studied_in_finland: Optional[bool] = None
     family_in_finland: Optional[bool] = None
+    unemployment_fund: Optional[str] = None
+    registered_jobseeker: Optional[str] = None
+    useful_questions: list[str] = Field(default_factory=list)
 
 
 EXTRACT_PROMPT = """You read a short message from someone who lost (or is losing) their job and extract facts.
@@ -125,16 +128,24 @@ Use null whenever something is not stated or unclear. Never guess. Today is {tod
 - city: city in Finland
 - field: their job or industry, short, in English
 - studied_in_finland, family_in_finland: true/false if stated
+- unemployment_fund: "yes" if they say they are in an unemployment fund (työttömyyskassa) or a union with one,
+  "no" if they say they are not; null otherwise
+- registered_jobseeker: "yes" if they say they already registered as a jobseeker, "no" if they say they haven't
+- useful_questions: up to 3 ids from the list below whose answers would most change THIS person's next steps,
+  most useful first. Leave out anything the message already answers. Ids:
+{personal}
 Do not extract permit numbers, passport numbers, ID numbers, names or addresses.
 
 Message: {text!r}"""
 
 
 def extract_facts(text: str, today: str) -> dict | None:
-    from countries.finland import PERMIT_TYPES
+    from countries.finland import PERMIT_TYPES, PERSONAL_QUESTIONS
 
     ids = ", ".join(f'"{p["id"]}"' for p in PERMIT_TYPES)
-    return structured_call(EXTRACT_PROMPT.format(text=text, today=today, permit_ids=ids), Extracted, "reading your message")
+    personal = "\n".join(f"  - {k}: {why}" for k, why in PERSONAL_QUESTIONS.items())
+    return structured_call(EXTRACT_PROMPT.format(text=text, today=today, permit_ids=ids, personal=personal), Extracted,
+                           "reading your message and choosing what to ask you")
 
 
 # ---------- /plan ----------
@@ -173,6 +184,13 @@ PLAN_PROMPT = """You help a worried person in Finland who has lost their job. Be
 Use ONLY facts from the SOURCES below. Do not use outside knowledge. Cite sources by id.
 If the sources do not cover something they need, write "Check with Migri or your union" instead of guessing.
 The deadline below was computed by our rules engine: do not change it or invent another date.
+Never use the word "deadline" in what you write; say "the date you can stay until" instead.
+The steps are shown simply as Step 1, Step 2, ... in order, so don't write "this week", "next week" or "in week N"
+inside titles, why or how; the week labels below are only for ordering.
+Make every action specific to this person, using their facts and the sources: their city's services, their kind
+of work, their permit and deadline. If registered_jobseeker is "yes", don't tell them to register again; give the
+next step after registering. If unemployment_fund is "yes", point them to their fund for the earnings-related
+allowance; if "no" or unknown, to Kela.
 
 For every item also give title_short (max 6 words) and why_short (max 12 words): plain, complete phrases
 for a compact card, e.g. "Register as a jobseeker" / "Keeps your benefit options open from day one".
@@ -192,19 +210,23 @@ PLAN B CANDIDATES:
 Person: {facts}
 Deadline: {deadline}
 Today: {today}
-
+{note}
 SOURCES:
 {sources}"""
 
 
-def write_plan(facts: dict, deadline: dict, sources: list[dict], today: str, candidates: list[dict] | None = None) -> dict | None:
+def write_plan(facts: dict, deadline: dict, sources: list[dict], today: str, candidates: list[dict] | None = None,
+               note: str | None = None) -> dict | None:
     src = "\n\n".join(
         f"[{s['id']}] {s['title']} ({s['url']})\n{(s.get('highlight') or '')[:1000]}" for s in sources
     )
     return structured_call(
         PLAN_PROMPT.format(facts=facts, deadline=deadline, today=today, sources=src,
-                           candidates="\n".join(f"[{c['id']}] {c['option']}: {c['who_it_fits']}" for c in candidates or []) or "(none)"),
-        GeneratedPlan, f"writing your plan from {len(sources)} official pages Exa found"
+                           candidates="\n".join(f"[{c['id']}] {c['option']}: {c['who_it_fits']}" for c in candidates or []) or "(none)",
+                           note=(f"\nNEW INFORMATION from the person: {note}\nTake it into account in every step it affects.\n"
+                                 if note else "")),
+        GeneratedPlan, (f"rewriting your steps with what you added, from {len(sources)} pages Exa found" if note
+                        else f"writing your plan from {len(sources)} official pages Exa found")
     )
 
 

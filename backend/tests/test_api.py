@@ -15,7 +15,7 @@ client = TestClient(app)
 VERIFIED = {"status": "verified", "checked_at": "2026-11-14T10:00:00+00:00", "evidence_snippet": "3 months"}
 ERROR = {"status": "error", "checked_at": "2026-11-14T10:00:00+00:00", "evidence_snippet": "Unavailable"}
 WORK_FACTS = {"citizenship_group": "other", "permit_type": "work_based", "years_on_work_permit": "under_2",
-              "job_end_date": "2026-11-01", "field": "nurse", "city": "Espoo"}
+              "job_end_date": "2026-11-01", "field": "nurse", "city": "Espoo", "unemployment_fund": "no"}
 
 EXA_SOURCES = [
     {"topic": "register_jobseeker", "title": "Register as a jobseeker", "url": "https://tyomarkkinatori.fi/en/register",
@@ -284,7 +284,7 @@ def test_chat_edited_facts_win_over_answers_and_extraction(monkeypatch):
 def test_chat_does_not_reextract_when_last_message_is_from_assistant(monkeypatch):
     monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: pytest.fail("re-extracted an old message"))
     msgs = [*_msg("hi"), {"role": "assistant", "text": "Which permit?"}]
-    body = client.post("/chat", json={"messages": msgs, "facts": {"lost_job": True, "citizenship_group": "other", "permit_type": "permanent", "city": "Espoo", "field": ""}}).json()
+    body = client.post("/chat", json={"messages": msgs, "facts": {"lost_job": True, "citizenship_group": "other", "permit_type": "permanent", "city": "Espoo", "field": "", "unemployment_fund": "not_sure"}}).json()
     assert body["step"] == "deadline"
 
 
@@ -335,7 +335,7 @@ def test_chat_stream_explains_who_did_what(monkeypatch, verified):
         events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
     texts = [e["text"] for e in events if e["type"] == "app"]
     assert texts[0] == "Picked out from your message: whether you lost your job, citizenship, city"
-    assert texts[1].startswith("Asking about permit type (still needed for your deadline: permit type")
+    assert texts[1].startswith("Asking about permit type (still needed to work out how long you can stay: permit type")
 
     with client.stream("POST", "/chat/stream", json={"facts": WORK_FACTS, "step": "deadline"}) as r:
         events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
@@ -363,24 +363,59 @@ def test_date_question_marks_vague_options():
     assert [o.value for o in q.options] == ["2026-11-14", "about:2026-11-07", "about:2026-10-15"]
 
 
-def test_question_order_stops_after_deadline_facts():
+def test_question_order_deadline_facts_then_personal_questions():
     from models import Facts
     from questions import next_field
     f = Facts()
     order = []
     answers = {"lost_job": True, "citizenship_group": "other", "permit_type": "work_based", "years_on_work_permit": "under_2",
-               "job_end_date": "2026-11-01"}
+               "job_end_date": "2026-11-01", "city": "Helsinki", "field": "", "unemployment_fund": "no"}
     while (field := next_field(f)) is not None:
         order.append(field)
         f = f.model_copy(update={field: answers[field]})
-    assert order == ["lost_job", "citizenship_group", "permit_type", "years_on_work_permit", "job_end_date"]
+    # Without Gemini's picks: the default personal questions, after the deadline facts.
+    assert order == ["lost_job", "citizenship_group", "permit_type", "years_on_work_permit", "job_end_date",
+                     "city", "field", "unemployment_fund"]
 
 
-def test_missing_search_context_does_not_delay_roadmap(verified, live_services):
-    facts = {k: v for k, v in WORK_FACTS.items() if k != "city"}
-    facts.pop("field")
-    done = client.post("/chat", json={"facts": facts}).json()
+def test_gemini_picks_which_personal_questions_to_ask(verified, monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {
+        "lost_job": True, "citizenship_group": "other", "permit_type": "work_based", "years_on_work_permit": 3,
+        "job_end_date": "2026-10-31", "city": "Espoo", "field": "software developer",
+        "useful_questions": ["registered_jobseeker", "city", "made_up", "studied_in_finland", "family_in_finland"]})
+    first = client.post("/chat", json={"messages": _msg("I'm from Brazil, software developer in Espoo, 3 years...")}).json()
+    assert first["facts"]["to_ask"] == ["registered_jobseeker", "city", "studied_in_finland"]  # only our ids, max 3
+    assert first["question"]["id"] == "registered_jobseeker"  # city is already known, so it's skipped
+
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: pytest.fail("taps don't call Gemini"))
+    second = client.post("/chat", json={"facts": first["facts"], "answers": {"registered_jobseeker": "no"}}).json()
+    assert second["question"]["id"] == "studied_in_finland"
+    done = client.post("/chat", json={"facts": second["facts"], "answers": {"studied_in_finland": "false"}}).json()
     assert "question" not in done and done["step"] == "deadline"
+    assert done["deadline"]["months"] == 6 and done["deadline"]["deadline_date"] == "2027-04-30"
+
+
+def test_personal_questions_can_be_skipped_and_are_not_asked_again(verified, live_services):
+    facts = {k: v for k, v in WORK_FACTS.items() if k != "city"}
+    q = client.post("/chat", json={"facts": facts}).json()
+    assert q["question"]["id"] == "city" and {"value": "", "label": "Skip"} in q["question"]["options"]
+    done = client.post("/chat", json={"facts": facts, "answers": {"city": ""}}).json()
+    assert "question" not in done and done["step"] == "deadline"
+
+
+def test_bad_gemini_values_are_dropped_not_crashing(monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {
+        "lost_job": True, "unemployment_fund": "maybe", "registered_jobseeker": "sort of", "useful_questions": None})
+    body = client.post("/chat", json={"messages": _msg("I was laid off")}).json()
+    assert "unemployment_fund" not in body["facts"] and body["question"]["id"] == "citizenship_group"
+
+
+def test_steps_search_follows_fund_and_registration():
+    from services import exa_search
+    plain = dict(exa_search.plan_topics("cook", [], "Helsinki"))
+    tailored = dict(exa_search.plan_topics("cook", [], "Helsinki", fund="yes", registered="yes"))
+    assert "Kela" in plain["unemployment_benefits"] and "unemployment fund" in tailored["unemployment_benefits"]
+    assert plain["register_jobseeker"].startswith("register") and tailored["register_jobseeker"].startswith("after registering")
 
 
 @pytest.mark.parametrize("phrase", ["laid off", "fired", "let go", "dismissed", "terminated", "made redundant", "position eliminated", "contract ended"])
@@ -505,3 +540,65 @@ def test_job_loss_wording_is_not_mistaken_for_off_topic(monkeypatch, text):
     monkeypatch.setattr(main.config, "USE_MOCK", True)
     body = client.post("/chat", json={"messages": _msg(text)}).json()
     assert body.get("out_of_scope") is not True
+
+
+# ---------- /steps/update ----------
+
+def _plan(tag: str, n_weeks: int = 2, n_b: int = 1):
+    from models import Action, PlanBOption, PlanResponse, Source, TimelineStep
+    src = [Source(title="Kela", url="https://www.kela.fi/x")]
+    return PlanResponse(
+        deadline={"status": "ok", "explanation": "x", "source": {"title": "Migri", "url": "https://migri.fi"}},
+        this_week=[Action(title=f"{tag} a{i}", why="w", how=["h"], sources=src) for i in range(1, 4)],
+        timeline=[TimelineStep(week="Week 1", steps=[f"{tag} w1"], sources=src)]
+        + [TimelineStep(week=f"Week {2 ** (i + 1)}", steps=[f"{tag} w{i}"], sources=src) for i in range(n_weeks)],
+        plan_b=[PlanBOption(id=f"b{i}", option=f"{tag} b{i}", why="y", sources=src) for i in range(n_b)],
+        disclaimer="d", mock=False)
+
+
+@pytest.mark.parametrize("k,expect_actions,expect_weeks,expect_b", [
+    (1, ["new a1", "new a2", "new a3"], ["new w0", "new w1"], ["new b0"]),
+    (2, ["old a1", "new a2", "new a3"], ["new w0", "new w1"], ["new b0"]),
+    (5, ["old a1", "old a2", "old a3"], ["old w0", "new w1"], ["new b0"]),   # steps 4-5 are the later weeks
+    (6, ["old a1", "old a2", "old a3"], ["old w0", "old w1"], ["new b0"]),   # step 6 is Plan B
+])
+def test_steps_before_the_edited_one_stay_the_rest_are_rewritten(k, expect_actions, expect_weeks, expect_b):
+    out = main.merge_from_step(_plan("old"), _plan("new"), k)
+    assert [a.title for a in out.this_week] == expect_actions
+    assert [w.steps[0] for w in main._later_weeks(out)] == expect_weeks
+    assert [p.option for p in out.plan_b] == expect_b
+
+
+def test_step_update_picks_up_facts_searches_what_you_wrote_and_keeps_earlier_steps(verified, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(main.gemini, "available", lambda: True)
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: pytest.fail("no Gemini call just to read the note"))
+    monkeypatch.setattr(main.exa_search, "search_plan_sources",
+                        lambda topics: seen.setdefault("topics", dict(topics)) and [dict(s) for s in EXA_SOURCES])
+    monkeypatch.setattr(main.gemini, "write_plan", lambda *a: seen.setdefault("note", a[-1]) and GEMINI_PLAN)
+    old = _plan("old").model_dump(mode="json")
+    body = client.post("/steps/update", json={"facts": WORK_FACTS, "plan": old, "step": 2,
+                                              "note": "I already registered as a jobseeker last week"}).json()
+    assert body["facts_update"] == {"registered_jobseeker": "yes"} and body["facts"]["registered_jobseeker"] == "yes"
+    assert "registered" in seen["topics"]["your_update"] and seen["topics"]["register_jobseeker"].startswith("after registering")
+    assert "already registered" in seen["note"]
+    titles = [a["title"] for a in body["plan"]["this_week"]]
+    assert titles == ["old a1", "Apply for support", "Check permits"]  # step 1 kept, 2-3 rewritten
+    assert body["updated_from"] == 2 and body["mock"] is False
+
+
+def test_step_update_without_live_services_keeps_the_steps_and_says_so(verified, monkeypatch):
+    monkeypatch.setattr(main.gemini, "available", lambda: False)
+    old = _plan("old").model_dump(mode="json")
+    body = client.post("/steps/update", json={"facts": WORK_FACTS, "plan": old, "step": 1, "note": "I have a job offer"}).json()
+    assert body["mock"] is True and body["message"] and body["plan"]["this_week"][0]["title"] == "old a1"
+
+
+def test_step_update_in_mock_mode_makes_no_external_calls(monkeypatch):
+    monkeypatch.setattr(main.config, "USE_MOCK", True)
+    monkeypatch.setattr(main.exa_search, "search_plan_sources", lambda *a: pytest.fail("Exa called in mock mode"))
+    monkeypatch.setattr(main.gemini, "write_plan", lambda *a: pytest.fail("Gemini called in mock mode"))
+    old = _plan("old").model_dump(mode="json")
+    body = client.post("/steps/update", json={"facts": WORK_FACTS, "plan": old, "step": 1,
+                                              "note": "I'm in an unemployment fund"}).json()
+    assert body["mock"] is True and body["facts"]["unemployment_fund"] == "yes"

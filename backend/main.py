@@ -16,13 +16,15 @@ import config
 import sources_log
 from models import (STEPS, OpportunitiesRequest, OpportunitiesResponse, Action, AskRequest, AskResponse, AskSource,
                     ChatRequest, ChatResponse, Deadline, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption,
-                    PlanRequest, PlanResponse, PossibleDate, Source, TimelineStep)
+                    PlanRequest, PlanResponse, PossibleDate, Source, StepsUpdateRequest, StepsUpdateResponse,
+                    TimelineStep)
 import ask as ask_rules
 import opportunities as opps
 import plan_b
 from questions import APPROX, canonical_permit, needed_fields, next_field, question, questions_for
 from rules import calculate_deadline
-from countries.finland import DEADLINE_RULES, SOURCE_TITLE, SOURCE_URL, TRUSTED_DOMAINS
+from countries.finland import (DEADLINE_RULES, MAX_PERSONAL, PERSONAL_QUESTIONS, SOURCE_TITLE, SOURCE_URL,
+                               TRUSTED_DOMAINS)
 from live_check import check_all_rules, get_live_check
 from services import exa_search, gemini, mocks
 
@@ -148,18 +150,18 @@ def _cite(ids: list[str], by_id: dict) -> list[Source]:
             for i in ids if i in by_id]
 
 
-def build_plan(f: Facts, d: Deadline, today: date) -> dict | None:
+def build_plan(f: Facts, d: Deadline, today: date, note: str | None = None) -> dict | None:
     """Exa finds official pages, Gemini writes the plan from them. None if either is unavailable."""
     if not gemini.available():  # no point spending Exa credits if Gemini can't write the plan
         return None
     cands = plan_b.candidates(f, canonical_permit(f))
-    topics = exa_search.plan_topics(f.field, cands, f.city)
+    topics = exa_search.plan_topics(f.field, cands, f.city, f.unemployment_fund, f.registered_jobseeker, note)
     sources = exa_search.search_plan_sources(topics)
     if not sources:
         return None
     sources = [{**s, "id": f"S{i + 1}"} for i, s in enumerate(sources)]
     by_id = {s["id"]: s for s in sources}
-    out = gemini.write_plan(f.model_dump(mode="json"), d.model_dump(mode="json"), sources, today.isoformat(), cands)
+    out = gemini.write_plan(f.model_dump(mode="json"), d.model_dump(mode="json"), sources, today.isoformat(), cands, note)
     if not out:
         return None
 
@@ -219,11 +221,108 @@ def build_full_plan(f: Facts, d: Deadline | None = None) -> PlanResponse:
     return PlanResponse(deadline=d, disclaimer=DISCLAIMER, mock=mock, **built)
 
 
+# ---------- /steps/update ----------
+# The steps are shown as one numbered list: this week's 3 actions, then the later weeks (not "Week 1", which is the
+# same as this week), then the Plan B options. Adding info to step k rewrites step k and everything after it.
+
+def _later_weeks(p: PlanResponse) -> list[TimelineStep]:
+    return [w for w in p.timeline if w.week.strip().lower() != "week 1"]
+
+
+def merge_from_step(old: PlanResponse, new: PlanResponse, k: int) -> PlanResponse:
+    """Steps before k stay exactly as they were; step k onward come from the new plan."""
+    n_a, old_weeks = len(old.this_week), _later_weeks(old)
+    if k <= n_a:
+        this_week = old.this_week[:k - 1] + new.this_week[k - 1:3]
+        if len(this_week) < len(old.this_week):  # the new plan had fewer actions: keep the old ones
+            this_week += old.this_week[len(this_week):]
+        timeline, plan_b, note = new.timeline, new.plan_b, new.plan_b_note
+    elif k <= n_a + len(old_weeks):
+        kept = old_weeks[:k - n_a - 1]
+        labels = {w.week for w in kept}
+        week1 = [w for w in old.timeline if w not in old_weeks]
+        this_week = old.this_week
+        timeline = week1 + kept + [w for w in _later_weeks(new) if w.week not in labels]
+        plan_b, note = new.plan_b, new.plan_b_note
+    else:
+        kept_b = old.plan_b[:k - n_a - len(old_weeks) - 1]
+        ids = {p.id or p.option for p in kept_b}
+        this_week, timeline = old.this_week, old.timeline
+        plan_b = kept_b + [p for p in new.plan_b if (p.id or p.option) not in ids]
+        note = new.plan_b_note if not plan_b else None
+    return PlanResponse(deadline=new.deadline, this_week=this_week, timeline=timeline, plan_b=plan_b,
+                        plan_b_note=note, disclaimer=new.disclaimer, mock=new.mock)
+
+
+# Facts a step note may change. The ones behind the date (permit, years, last day) are only changed in
+# "What we know so far", so a loose phrase like "last week" in a note can't silently move the date.
+STEP_FACTS = {"unemployment_fund", "registered_jobseeker", "studied_in_finland", "family_in_finland", "city"}
+
+
+@app.post("/steps/update", response_model=StepsUpdateResponse, response_model_exclude_none=True,
+          summary="Add info to one step; that step and the ones after it are rewritten")
+def steps_update(req: StepsUpdateRequest):
+    """New facts in the note are picked up with plain keyword rules (no AI). Then one extra Exa search on what the
+    person wrote, plus the usual searches (cached), and one Gemini call rewrite the plan; steps before `step` are
+    kept exactly as they were. `/steps/update/stream` sends live Exa activity first."""
+    today = date.today()
+    found = _clean_extracted(mocks.extract_facts(req.note, today))
+    now = req.facts.model_dump(mode="json")
+    update = {k: v for k, v in found.items()
+              if k in STEP_FACTS and v not in (None, "") and now.get(k) != v}
+    if update:
+        activity.emit({"type": "app", "who": "code",
+                       "text": f"Noted from what you wrote: {', '.join(FIELD_NAMES.get(k, k) for k in update)}"})
+    facts = Facts.model_validate({**now, **update})
+    if config.USE_MOCK:
+        return StepsUpdateResponse(plan=req.plan, facts=facts, facts_update=update, updated_from=req.step, mock=True,
+                                   message="Saved what you added. Live updates are off in demo mode.")
+    _progress("checking_rules")
+    d = build_deadline(facts, today)
+    _progress("finding_steps")
+    built = build_plan(facts, d, today, note=req.note.strip())
+    if built is None:
+        return StepsUpdateResponse(plan=req.plan, facts=facts, facts_update=update, updated_from=req.step, mock=True,
+                                   message="Couldn't update your steps live right now. What you added is saved; try again soon.")
+    new = PlanResponse(deadline=d, disclaimer=DISCLAIMER, mock=False, **built)
+    merged = merge_from_step(req.plan, new, req.step)
+    _partial("plan", merged)
+    return StepsUpdateResponse(plan=merged, facts=facts, facts_update=update, updated_from=req.step)
+
+
+@app.post("/steps/update/stream", summary="Same as /steps/update, streamed with live Exa activity")
+def steps_update_stream(req: StepsUpdateRequest):
+    return _stream(lambda: steps_update(req).model_dump(mode="json", exclude_none=True), "steps update")
+
+
+def _stream(run, what: str):
+    events: queue.Queue = queue.Queue()
+
+    def work():
+        activity.set_emitter(events.put)
+        try:
+            events.put({"type": "result", "data": run()})
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).exception("%s stream failed: %s", what, e)
+            events.put({"type": "error"})
+        events.put(None)
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def gen():
+        while (event := events.get()) is not None:
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 # ---------- guided chat ----------
 
 FIELD_NAMES = {"lost_job": "whether you lost your job", "citizenship_group": "citizenship", "citizenship_country": "country", "permit_type": "permit type",
                "years_on_work_permit": "time on a work permit", "job_end_date": "last day of work", "city": "city",
-               "field": "your work", "studied_in_finland": "studies in Finland", "family_in_finland": "family in Finland"}
+               "field": "your work", "studied_in_finland": "studies in Finland", "family_in_finland": "family in Finland",
+               "unemployment_fund": "unemployment fund", "registered_jobseeker": "registering as a jobseeker"}
 NEXT_LABEL = {"deadline": "Show me this week"}
 STEP_REPLY = {
     "deadline": "Thank you. Here is your deadline and the rule behind it. Take your time with it.",
@@ -231,13 +330,13 @@ STEP_REPLY = {
 }
 FIRST_REPLY = "Thank you for telling me. One quick question: "
 CITIZEN_REPLY = ("Good news: as an EU/EEA or Finnish citizen, your right to stay in Finland doesn't depend on your job, "
-                 "so there's no permit deadline to worry about. What Now? is built for people on a residence permit, "
+                 "so there's no permit end date to worry about. What Now? is built for people on a residence permit, "
                  "but these official services can help you with income and your next job.")
 NOT_JOB_LOSS_REPLY = ("I'm sorry you're going through this. What Now? only helps with losing a job in Finland and "
                       "what it means for your residence permit. If your permit is based on a relationship that has "
                       "ended, Migri explains what happens next.")
 OFF_TOPIC_START_REPLY = ("I focus on job loss in Finland, so I can't help with that one. If you've lost your job or "
-                         "are about to, tell me what happened and I'll work out your deadline and next steps.")
+                         "are about to, tell me what happened and I'll work out how long you can stay and your next steps.")
 NOT_JOB_LOSS_LINKS = [
     Source(title="Residence permits and changes in your situation (Migri)", url="https://migri.fi/en/home"),
     Source(title="Living in Finland (InfoFinland)", url="https://www.infofinland.fi/en"),
@@ -249,11 +348,26 @@ CITIZEN_LINKS = [
 ]
 
 
+def _clean_extracted(extracted: dict) -> dict:
+    """Keep only values our models accept, and Gemini's picks only from our list of personal questions."""
+    out = dict(extracted)
+    for k, allowed in (("unemployment_fund", {"yes", "no", "not_sure"}), ("registered_jobseeker", {"yes", "no"})):
+        if out.get(k) not in allowed:
+            out.pop(k, None)
+    if "useful_questions" in out:
+        picks = [q for q in out.pop("useful_questions") or [] if q in PERSONAL_QUESTIONS]
+        out["to_ask"] = list(dict.fromkeys(picks))[:MAX_PERSONAL]
+    return out
+
+
 def _merge_chat_facts(req: ChatRequest, extracted: dict) -> tuple[Facts, list[str]]:
     """edited_facts always win, then tapped answers, then what Gemini read from the latest message."""
     known = Facts.model_fields
+    extracted = _clean_extracted(extracted)
     merged = {k: v for k, v in req.facts.items() if k in known and v is not None}
-    merged.update({k: v for k, v in extracted.items() if k in known and v is not None})
+    merged.update({k: v for k, v in extracted.items() if k in known and v is not None and k != "to_ask"})
+    if merged.get("to_ask") is None and "to_ask" in extracted:  # chosen once, from the first message
+        merged["to_ask"] = extracted["to_ask"]
     merged.update({k: v for k, v in req.answers.items() if k in known})
     merged.update({k: v for k, v in req.edited_facts.items() if k in known})
     # "About a week ago" arrives as "about:2026-11-07"; an exact date (tapped, picked or edited) clears the flag.
@@ -267,7 +381,7 @@ def _merge_chat_facts(req: ChatRequest, extracted: dict) -> tuple[Facts, list[st
 
 
 @app.post("/chat", response_model=ChatResponse, response_model_exclude_none=True,
-          summary="Guided chat that keeps a live 'Your situation' card")
+          summary="Guided chat that keeps a live 'What we know so far' card")
 def chat(req: ChatRequest = Body(openapi_examples=_examples("chat"))):
     """The browser keeps the session and sends it each time (no accounts, nothing stored here).
     Steps: about_you -> deadline -> this_week. Send `action: "next"` to move on.
@@ -352,7 +466,7 @@ def run_chat(req: ChatRequest) -> ChatResponse:
                             out_of_scope=True, links=NOT_JOB_LOSS_LINKS, mock=mock)
     if facts.citizenship_group == "eu_eea":
         # Not who What Now? is for: a kind message and useful links, no roadmap.
-        activity.emit({"type": "app", "who": "code", "text": "EU/EEA citizen: no permit deadline, showing useful links"})
+        activity.emit({"type": "app", "who": "code", "text": "EU/EEA citizen: no permit end date, showing useful links"})
         return ChatResponse(reply=CITIZEN_REPLY, step="about_you", facts=facts, confirmed_fields=confirmed,
                             out_of_scope=True, links=CITIZEN_LINKS, mock=mock)
     if extracted:
@@ -364,8 +478,9 @@ def run_chat(req: ChatRequest) -> ChatResponse:
     ask = next_field(facts)
     if ask:
         q = question(ask, today)
-        why = (f"still needed for your deadline: {', '.join(FIELD_NAMES[m] for m in missing)}" if missing
-               else "checking whether this is about losing a job")
+        why = (f"still needed to work out how long you can stay: {', '.join(FIELD_NAMES[m] for m in missing)}" if missing
+               else "checking whether this is about losing a job" if ask == "lost_job"
+               else "so your steps fit you")
         activity.emit({"type": "app", "who": "code", "text": f"Asking about {FIELD_NAMES[ask]} ({why})"})
         reply = (FIRST_REPLY if first else "") + q.question
         return ChatResponse(reply=reply, step="about_you", facts=facts, confirmed_fields=confirmed,
@@ -377,7 +492,7 @@ def run_chat(req: ChatRequest) -> ChatResponse:
     deadline = build_deadline(facts, today) if not config.USE_MOCK else PlanResponse(**mocks.example("plan")).deadline
     if deadline.months and deadline.deadline_date:
         activity.emit({"type": "app", "who": "code",
-                       "text": f"Worked out your deadline with plain code: {deadline.months} months → {deadline.deadline_date.isoformat()}"})
+                       "text": f"Worked out how long you can stay, with plain code: {deadline.months} months → {deadline.deadline_date.isoformat()}"})
     elif deadline.status == "not_applicable":
         activity.emit({"type": "app", "who": "code", "text": "Checked the rules: your permit doesn't depend on this job"})
     _partial("deadline", deadline)
@@ -429,7 +544,7 @@ def ask_question(req: AskRequest):
                        official_only=official, facts_update=update)
 
 
-ASK_IGNORED = {"lost_job", "job_was_in_finland", "job_end_date_approximate"}
+ASK_IGNORED = {"lost_job", "job_was_in_finland", "job_end_date_approximate", "to_ask"}
 
 
 def _facts_in_question(q: str, current: Facts) -> dict:
@@ -440,6 +555,7 @@ def _facts_in_question(q: str, current: Facts) -> dict:
     found = gemini.extract_facts(q, today) if gemini.available() else None
     if found is None:
         found = mocks.extract_facts(q, date.today())
+    found = _clean_extracted(found)
     now = current.model_dump(mode="json")
     update = {}
     for k, v in found.items():

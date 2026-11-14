@@ -126,9 +126,13 @@ export type ExaEvent = {
   results?: { title: string; url: string; published?: string | null }[];
   count?: number;
 };
+export type GeminiEvent = { type: "gemini"; status: "working" | "done" | "cached"; purpose: string };
+export type AppEvent = { type: "app"; who: "gemini" | "code" | "app"; text: string };
 export type StreamEvent =
   | { type: "progress"; stage: ProgressStage }
   | ExaEvent
+  | GeminiEvent
+  | AppEvent
   | { type: "partial"; key: "deadline"; data: Deadline }
   | { type: "partial"; key: "plan"; data: PlanResponse }
   | { type: "partial"; key: "referrals"; data: ReferralResponse };

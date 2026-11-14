@@ -295,6 +295,9 @@ def build_referrals(f: Facts) -> ReferralResponse:
 
 # ---------- guided chat ----------
 
+FIELD_NAMES = {"citizenship_group": "citizenship", "citizenship_country": "country", "permit_type": "permit type",
+               "years_on_work_permit": "time on a work permit", "job_end_date": "last day of work", "city": "city",
+               "field": "your work", "studied_in_finland": "studies in Finland", "family_in_finland": "family in Finland"}
 NEXT_LABEL = {"deadline": "Show me this week", "this_week": "Help me find my way in"}
 STEP_REPLY = {
     "deadline": "Thank you. Here is your deadline and the rule behind it. Take your time with it.",
@@ -381,9 +384,16 @@ def run_chat(req: ChatRequest) -> ChatResponse:
                                 step="about_you", facts=Facts(), out_of_scope=True, link=OUT_OF_SCOPE_LINK, mock=mock)
 
     facts, confirmed = _merge_chat_facts(req, extracted)
+    if extracted:
+        found = [FIELD_NAMES[k] for k, v in extracted.items() if k in FIELD_NAMES and v is not None]
+        activity.emit({"type": "app", "who": "gemini" if not mock else "app",
+                       "text": f"Picked out from your message: {', '.join(found)}" if found else "Nothing clear in that message yet"})
     first = sum(m.role == "user" for m in req.messages) <= 1 and not req.answers and not req.edited_facts
-    if needed_fields(facts):
+    missing = needed_fields(facts)
+    if missing:
         q = questions_for(facts, today)[0]
+        activity.emit({"type": "app", "who": "code",
+                       "text": f"Still needed for your deadline: {', '.join(FIELD_NAMES[m] for m in missing)}. Asking about {FIELD_NAMES[missing[0]]}"})
         reply = (FIRST_REPLY if first else "") + q.question
         return ChatResponse(reply=reply, step="about_you", facts=facts, confirmed_fields=confirmed,
                             question=q, mock=mock)
@@ -392,6 +402,11 @@ def run_chat(req: ChatRequest) -> ChatResponse:
     step = STEPS[max(1, min(current + (req.action == "next"), len(STEPS) - 1))]
     _progress("checking_rules")
     deadline = build_deadline(facts, today) if not config.USE_MOCK else PlanResponse(**mocks.example("plan")).deadline
+    if deadline.months and deadline.deadline_date:
+        activity.emit({"type": "app", "who": "code",
+                       "text": f"Worked out your deadline with plain code: {deadline.months} months → {deadline.deadline_date.isoformat()}"})
+    elif deadline.status == "not_applicable":
+        activity.emit({"type": "app", "who": "code", "text": "Checked the rules: your permit doesn't depend on this job"})
     _partial("deadline", deadline)
     resp = ChatResponse(reply=STEP_REPLY[step], step=step, facts=facts, confirmed_fields=confirmed,
                         deadline=deadline, mock=mock)

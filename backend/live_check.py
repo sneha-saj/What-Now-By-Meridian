@@ -75,7 +75,7 @@ def _ask_gemini(rule: dict, page: str) -> tuple[bool, str]:
         f"Rule: {json.dumps({k: rule[k] for k in ('description', 'months', 'applies_to')})}\n"
         f"Page text:\n{page}"
     )
-    result = gemini.structured_call(prompt, _Verdict)
+    result = gemini.structured_call(prompt, _Verdict, "checking that Migri's page still says the same")
     if result is None:
         raise RuntimeError("Gemini gave no answer")
     log.info("Live check %s: verified=%s reasoning=%r", rule["id"], result["verified"], result["reasoning"])

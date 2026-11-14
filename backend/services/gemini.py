@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+import activity
 import config
 import filecache
 import limits
@@ -37,7 +38,7 @@ def available() -> bool:
     return bool(config.gemini_key()) and not limits.paused("Gemini")
 
 
-def _call(prompt: str, schema: Any = None) -> Any | None:
+def _call(prompt: str, schema: Any = None, purpose: str = "") -> Any | None:
     """Ask Gemini for JSON. With a Pydantic `schema`, uses structured output.
 
     Answers are cached on disk for 24h (same model + prompt + schema), so reloads and repeats are free.
@@ -46,12 +47,14 @@ def _call(prompt: str, schema: Any = None) -> Any | None:
     k = filecache.key(config.GEMINI_MODEL, prompt, getattr(schema, "__name__", None))
     cached = filecache.read(CACHE_PATH, k)
     if cached is not None:
+        activity.emit({"type": "gemini", "status": "cached", "purpose": purpose})
         return cached
     if limits.paused("Gemini"):
         return None
     client = _get_client()
     if client is None:
         return None
+    activity.emit({"type": "gemini", "status": "working", "purpose": purpose})
     try:
         from google.genai import types
 
@@ -68,11 +71,12 @@ def _call(prompt: str, schema: Any = None) -> Any | None:
             log.warning("Gemini call failed, using fallback: %s", type(e).__name__)
         return None
     filecache.write(CACHE_PATH, k, out, CACHE_TTL)
+    activity.emit({"type": "gemini", "status": "done", "purpose": purpose})
     return out
 
 
-def structured_call(prompt: str, schema: type[BaseModel]) -> dict | None:
-    out = _call(prompt, schema)
+def structured_call(prompt: str, schema: type[BaseModel], purpose: str = "") -> dict | None:
+    out = _call(prompt, schema, purpose)
     return out if isinstance(out, dict) else None
 
 
@@ -115,7 +119,7 @@ def extract_facts(text: str, today: str) -> dict | None:
     from countries.finland import PERMIT_TYPES
 
     ids = ", ".join(f'"{p["id"]}"' for p in PERMIT_TYPES)
-    return structured_call(EXTRACT_PROMPT.format(text=text, today=today, permit_ids=ids), Extracted)
+    return structured_call(EXTRACT_PROMPT.format(text=text, today=today, permit_ids=ids), Extracted, "reading your message")
 
 
 # ---------- /plan ----------
@@ -178,7 +182,7 @@ def write_plan(facts: dict, deadline: dict, sources: list[dict], today: str, can
     return structured_call(
         PLAN_PROMPT.format(facts=facts, deadline=deadline, today=today, sources=src,
                            candidates="\n".join(f"[{c['id']}] {c['option']}: {c['who_it_fits']}" for c in candidates or []) or "(none)"),
-        GeneratedPlan
+        GeneratedPlan, f"writing your plan from {len(sources)} official pages Exa found"
     )
 
 
@@ -241,4 +245,4 @@ def write_referral_notes(facts: dict, companies: list[dict], contacts: list[dict
         contacts=lines(contacts, ("name", "role", "company", "highlight")),
         communities=lines(communities, ("name", "url", "highlight")),
     )
-    return structured_call(prompt, ReferralNotes)
+    return structured_call(prompt, ReferralNotes, "writing why each company fits and drafting your messages")

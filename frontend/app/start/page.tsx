@@ -7,6 +7,8 @@ import {
 } from "@/lib/api";
 import type { Field } from "@/lib/facts";
 import { applyExaEvent, buildNodes, type NodeId, type Searching } from "@/lib/roadmap";
+import { toLogLine, type LogLine } from "@/lib/activity";
+import { ActivityLog } from "@/components/ActivityLog";
 import { Legend, Roadmap } from "@/components/Roadmap";
 import { QuestionCard, Welcome } from "@/components/QuestionCard";
 import { SituationStrip } from "@/components/SituationStrip";
@@ -46,6 +48,7 @@ export default function StartPage() {
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState<Searching>({});
   const [confirmClear, setConfirmClear] = useState(false);
+  const [log, setLog] = useState<LogLine[]>([]);
 
   useEffect(() => { setS(load()); setLoaded(true); }, []);
   useEffect(() => {
@@ -56,6 +59,8 @@ export default function StartPage() {
   const update = (patch: Partial<Saved>) => setS((prev) => ({ ...prev, ...patch }));
 
   function onEvent(e: StreamEvent) {
+    const line = toLogLine(e);
+    if (line) setLog((cur) => [...cur, line].slice(-60));
     if (e.type === "exa") setSearching((cur) => applyExaEvent(cur, e));
     else if (e.type === "partial") update({ [e.key]: e.data, ready: true, question: undefined } as Partial<Saved>);
   }
@@ -95,6 +100,7 @@ export default function StartPage() {
     try { window.sessionStorage.removeItem(KEY); } catch {}
     setS(empty());
     setSearching({});
+    setLog([]);
     setConfirmClear(false);
     setError(null);
   }
@@ -137,6 +143,8 @@ export default function StartPage() {
           )}
 
           <SituationStrip facts={s.facts} onEdit={(field: Field, value) => send({ edited_facts: { [field]: value } as Partial<Facts> })} />
+
+          <ActivityLog lines={log} busy={busy} />
 
           {error && <GentleWarning>{error}</GentleWarning>}
 

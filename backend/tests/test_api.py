@@ -399,3 +399,17 @@ def test_chat_stream_sends_progress_then_result(verified, live_services):
     assert partials == ["deadline", "plan"]  # roadmap nodes can fill in before the final result
     assert events[-1]["type"] == "result" and events[-1]["data"]["step"] == "this_week"
     assert events[-1]["data"]["deadline"]["rule_in_force_since"] == "2025-06-11"
+
+
+def test_chat_stream_explains_who_did_what(monkeypatch, verified):
+    import json
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"citizenship_group": "other", "city": "Helsinki"})
+    with client.stream("POST", "/chat/stream", json={"messages": _msg("I lost my job in Helsinki")}) as r:
+        events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
+    texts = [e["text"] for e in events if e["type"] == "app"]
+    assert texts[0] == "Picked out from your message: citizenship, city"
+    assert texts[1].startswith("Still needed for your deadline: permit type") and "Asking about permit type" in texts[1]
+
+    with client.stream("POST", "/chat/stream", json={"facts": WORK_FACTS, "step": "deadline"}) as r:
+        events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
+    assert any(e["type"] == "app" and e["who"] == "code" and "plain code: 3 months → 2027-02-01" in e["text"] for e in events)

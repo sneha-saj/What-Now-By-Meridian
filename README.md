@@ -34,6 +34,8 @@ Optional: add `CONTEXT_DEV_API_KEY` to `.env` (get one at context.dev/dashboard/
 
 It's called with plain HTTP from `backend/integrations/context_dev.py`: cached 24h, `maxAgeMs` 1 day, 30 s deadline with partial results, no retries, paused on 429/402. Only the public page URL is sent, never your answers. If it fails, Exa's summary is used. Try one page by hand (one live call): `cd backend && .venv/bin/python -m integrations.context_dev https://migri.fi/en/home`
 
+For a future Modal deployment, `.env` has placeholders for `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. Modal uses this token pair to authenticate its CLI; these values are not needed to run the app locally, and Modal does not automatically read this project's `.env`. You can also configure the CLI with `modal setup`.
+
 Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make test`, `make backend`, `make frontend`, `make clean`.
 
 ## Architecture

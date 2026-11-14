@@ -1,6 +1,7 @@
 """Deploy the user-facing Next.js site with ``modal deploy frontend/modal_app.py``."""
 
 from pathlib import Path
+import os
 import subprocess
 
 import modal
@@ -30,8 +31,8 @@ if modal.is_local():
     from dotenv import dotenv_values
 
     values = dotenv_values(ROOT_DIR / ".env")
-    runtime_keys = {name: values[name] for name in ("EXA_API_KEY", "GEMINI_API_KEY", "CONTEXT_DEV_API_KEY")
-                    if values.get(name)}
+    runtime_keys = {name: value for name in ("EXA_API_KEY", "GEMINI_API_KEY", "CONTEXT_DEV_API_KEY")
+                    if (value := os.getenv(name) or values.get(name))}
 else:
     runtime_keys = {}
 runtime_secret = modal.Secret.from_dict(runtime_keys)

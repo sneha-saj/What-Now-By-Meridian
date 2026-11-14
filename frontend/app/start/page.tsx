@@ -17,6 +17,7 @@ import { HowWeKnow } from "@/components/HowWeKnow";
 import { Opportunities } from "@/components/Opportunities";
 import { QuestionCard, Welcome } from "@/components/QuestionCard";
 import { Legend, Steps, type AddedItem, type Proposal } from "@/components/Steps";
+import { DemoModeNote } from "@/components/AccessCode";
 import { deleteSaved, listSaved, saveRoadmap, type SavedRoadmap } from "@/lib/saved";
 import { FIELDS, display } from "@/lib/facts";
 import { Button, GentleWarning, cx } from "@/components/primitives";
@@ -339,6 +340,8 @@ export default function StartPage() {
           </p>
         </div>
       )}
+
+      {!s.demo && <DemoModeNote />}
 
       {/* Row 2: only the current step */}
       <div>

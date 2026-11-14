@@ -6,6 +6,7 @@ import { Button, cx } from "./primitives";
 import { RotatingPhrase } from "./RotatingPhrase";
 import { ListenButton, MicButton, VOICE_NOTE, useVoice } from "./Voice";
 import { MicIcon } from "./icons";
+import { AccessCode } from "./AccessCode";
 
 /** One question at a time: serif question, tap buttons (incl. "Not sure"), or answer in your own words.
  *  `previous` is the answer already given when the person went back to this question: it's shown as chosen and
@@ -120,6 +121,7 @@ export function Welcome({ busy, onSubmit, onStart, saved = [], onOpen, onDelete,
         <Button onClick={onStart} disabled={busy} className="min-h-14 px-7 text-lg">Ask me questions <span aria-hidden>→</span></Button>
         <span className="text-sm text-ink-soft">About 2 minutes. No account. Never asks for permit or passport numbers.</span>
       </div>
+      <AccessCode />
 
       <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) onSubmit(text.trim()); }}
         className="space-y-3 rounded-2xl border border-rule bg-card/60 p-5">

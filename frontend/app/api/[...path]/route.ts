@@ -7,7 +7,7 @@ async function proxy(request: NextRequest): Promise<Response> {
   const path = request.nextUrl.pathname.slice("/api".length);
   const url = new URL(path + request.nextUrl.search, base);
   const headers = new Headers();
-  for (const name of ["accept", "content-type"]) {
+  for (const name of ["accept", "content-type", "x-access-code"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }

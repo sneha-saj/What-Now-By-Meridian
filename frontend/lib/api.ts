@@ -1,3 +1,4 @@
+import { accessHeaders } from "./access";
 export type Facts = {
   lost_job?: boolean | null;
   citizenship_group?: "eu_eea" | "other" | "unknown" | null;
@@ -146,7 +147,7 @@ export type StreamEvent =
 async function streamPost<T>(path: string, body: unknown, onEvent: (e: StreamEvent) => void): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: accessHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!res.ok || !res.body) throw new Error(`stream failed (${res.status})`);
@@ -229,7 +230,7 @@ export type OpportunitiesResponse = {
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: accessHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`${path} failed (${res.status})`);
@@ -242,7 +243,7 @@ export const api = {
   chat: (req: ChatRequest) => post<ChatResponse>("/chat", req),
   ask: (question: string, facts: Facts) => post<AskResponse>("/ask", { question, facts }),
   rules: async () => {
-    const res = await fetch("/api/rules");
+    const res = await fetch("/api/rules", { headers: accessHeaders() });
     if (!res.ok) throw new Error(`/rules failed (${res.status})`);
     return res.json() as Promise<RulesResponse>;
   },

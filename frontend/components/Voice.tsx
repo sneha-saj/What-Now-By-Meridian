@@ -3,16 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { MicIcon, SpeakerIcon, StopIcon } from "./icons";
 import { cx } from "./primitives";
+import { accessHeaders, useHealth } from "@/lib/access";
 
-/** Whether the backend has voice (ElevenLabs) set up. Asked once per page load; buttons stay hidden until it says yes. */
-let voicePromise: Promise<boolean> | null = null;
+/** Whether voice (ElevenLabs) is available for this browser: set up on the server and, if access codes are used,
+ *  a valid code entered. Buttons stay hidden until the server says yes. */
 export function useVoice(): boolean {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    voicePromise ??= fetch("/api/health").then((r) => r.json()).then((h) => !!h.voice).catch(() => false);
-    voicePromise.then(setOn);
-  }, []);
-  return on;
+  return !!useHealth()?.voice;
 }
 
 export const VOICE_NOTE = "Your recording is sent to ElevenLabs to turn it into text. We don't keep it.";
@@ -43,7 +39,7 @@ export function MicButton({ onText, disabled, className, inside = false }: {
         setState("working");
         const blob = new Blob(chunks, { type: r.mimeType || "audio/webm" });
         try {
-          const res = await fetch("/api/voice/transcribe", { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
+          const res = await fetch("/api/voice/transcribe", { method: "POST", headers: accessHeaders({ "Content-Type": blob.type }), body: blob });
           if (!res.ok) throw new Error(String(res.status));
           const { text } = await res.json();
           if (text) onText(text);
@@ -107,7 +103,7 @@ export function ListenButton({ text, label = "Listen", className, iconOnly = fal
     playing?.pause();
     setState("loading");
     try {
-      const res = await fetch("/api/voice/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 1500) }) });
+      const res = await fetch("/api/voice/speak", { method: "POST", headers: accessHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ text: text.slice(0, 1500) }) });
       if (!res.ok) throw new Error(String(res.status));
       const a = new Audio(URL.createObjectURL(await res.blob()));
       a.onended = a.onpause = () => setState("idle");

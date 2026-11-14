@@ -47,6 +47,7 @@ export function ActivityLog({ lines, busy, last = 3 }: { lines: LogLine[]; busy:
       <p className="mt-2 text-xs">
         <span className="text-accent-ink">✦ Gemini</span> asks and writes ·{" "}
         <span className="text-verified">Exa</span> finds live pages ·{" "}
+        <span className="text-ink">▤ Context.dev</span> reads whole official pages ·{" "}
         <span className="text-ink">⚙ Rules</span> = plain code, no AI
       </p>
     </section>

@@ -80,8 +80,10 @@ export function QuestionCard({
 }
 
 /** First screen: the warm opening line and one text box, plus any roadmaps saved in this browser. */
-export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete, phrases = ["Lost your job?"] }: {
+export function Welcome({ busy, onSubmit, onStart, saved = [], onOpen, onDelete, phrases = ["Lost your job?"] }: {
   busy?: boolean;
+  /** Main way in: go straight to the tap-to-answer questions. */
+  onStart: () => void;
   /** Rotating first half of the headline. "Lost your job?" is what screen readers and reduced-motion users get. */
   phrases?: string[];
   onSubmit: (text: string) => void;
@@ -102,19 +104,22 @@ export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete, phrases 
         <span aria-hidden="true" className="block">Let&apos;s figure out what&apos;s next.</span>
       </h1>
       <p className="text-xl text-ink-soft">
-        Tell me in a sentence or two what happened. I&apos;ll ask only what&apos;s missing, then give you your steps, in order, from
-        official Finnish sources, found live.
+        A few quick questions, one at a time, then your steps, in order, from official Finnish sources, found live.
       </p>
-      <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) onSubmit(text.trim()); }} className="space-y-4">
-        <label htmlFor="welcome-text" className="sr-only">What happened?</label>
-        <textarea id="welcome-text" rows={4} value={text} onChange={(e) => setText(e.target.value)}
+      <div className="flex flex-wrap items-center gap-4">
+        <Button onClick={onStart} disabled={busy} className="min-h-14 px-7 text-lg">Ask me questions <span aria-hidden>→</span></Button>
+        <span className="text-sm text-ink-soft">About 2 minutes. No account. Never asks for permit or passport numbers.</span>
+      </div>
+
+      <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) onSubmit(text.trim()); }}
+        className="space-y-3 rounded-2xl border border-rule bg-card/60 p-5">
+        <label htmlFor="welcome-text" className="block font-bold">Or tell me in your own words</label>
+        <p className="text-sm text-ink-soft">Write what happened in a sentence or two and I&apos;ll skip the questions you&apos;ve already answered.</p>
+        <textarea id="welcome-text" rows={3} value={text} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (text.trim()) onSubmit(text.trim()); } }}
           placeholder="For example: I worked as a cook in Helsinki for a year on a work permit. I was laid off last Friday."
-          className="w-full rounded-2xl border border-ink/25 bg-card p-5 text-lg shadow-sm outline-none placeholder:text-ink-soft/80 focus:border-ink" />
-        <div className="flex flex-wrap items-center gap-4">
-          <Button type="submit" disabled={busy || !text.trim()} className="text-lg">Show my steps</Button>
-          <span className="text-sm text-ink-soft">No account. Stays in this browser. Never asks for permit or passport numbers.</span>
-        </div>
+          className="w-full rounded-xl border border-ink/25 bg-card p-4 outline-none placeholder:text-ink-soft/80 focus:border-ink" />
+        <Button type="submit" variant="chip" disabled={busy || !text.trim()}>Show my steps</Button>
       </form>
       {saved.length > 0 && (
         <section aria-labelledby="saved-title" className="space-y-3 border-t border-rule pt-6">

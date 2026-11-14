@@ -223,6 +223,7 @@ export default function StartPage() {
     return (
       <main id="main" className="mx-auto max-w-7xl px-5 sm:px-8">
         <Welcome busy={busy} onSubmit={(text) => { update({ started: true }); send({ messages: [{ role: "user", text }] }); }}
+          onStart={() => { update({ started: true }); send({}); }}
           saved={saved} phrases={HEADLINE_PHRASES}
           onOpen={(id) => { const r = saved.find((x) => x.id === id); if (r) setS({ ...empty(), ...r.state, savedId: r.id }); }}
           onDelete={(id) => { deleteSaved(id); setSaved(listSaved<Saved>()); }} />

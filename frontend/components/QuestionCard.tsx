@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Question } from "@/lib/api";
 import { Button, cx } from "./primitives";
+import { RotatingPhrase } from "./RotatingPhrase";
 
 /** One question at a time: serif question, tap buttons (incl. "Not sure"), or answer in your own words. */
 export function QuestionCard({
@@ -59,18 +60,26 @@ export function QuestionCard({
 }
 
 /** First screen: the warm opening line and one text box, plus any roadmaps saved in this browser. */
-export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete }: {
+export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete, phrases = ["Lost your job?"] }: {
   busy?: boolean;
+  /** Rotating first half of the headline. "Lost your job?" is what screen readers and reduced-motion users get. */
+  phrases?: string[];
   onSubmit: (text: string) => void;
   saved?: { id: string; title: string; summary?: string[]; savedAt: string }[];
   onOpen?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
   const [text, setText] = useState("");
+  const [holdHeadline, setHoldHeadline] = useState(false);
   return (
     <section aria-labelledby="welcome-title" className="animate-fade-up mx-auto max-w-3xl space-y-6 py-6 sm:py-12">
-      <h1 id="welcome-title" className="font-serif text-4xl font-semibold leading-tight sm:text-6xl">
-        I&apos;m sorry this happened. Let&apos;s figure out what&apos;s next, together.
+      <h1 id="welcome-title" className="font-serif text-4xl font-semibold leading-tight text-ink sm:text-6xl"
+        onMouseEnter={() => setHoldHeadline(true)} onMouseLeave={() => setHoldHeadline(false)}
+        onFocus={() => setHoldHeadline(true)} onBlur={() => setHoldHeadline(false)}>
+        <span className="sr-only">Lost your job? Let&apos;s figure out what&apos;s next.</span>
+        <RotatingPhrase phrases={phrases} interval={2500} paused={holdHeadline} staticPhrase="Lost your job?"
+          className="text-accent-ink" />
+        <span aria-hidden="true" className="block">Let&apos;s figure out what&apos;s next.</span>
       </h1>
       <p className="text-xl text-ink-soft">
         Tell me in a sentence or two what happened. I&apos;ll ask only what&apos;s missing, then build your roadmap from

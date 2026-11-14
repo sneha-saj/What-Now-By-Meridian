@@ -21,6 +21,17 @@ import { deleteSaved, listSaved, saveRoadmap, type SavedRoadmap } from "@/lib/sa
 import { FIELDS, display } from "@/lib/facts";
 import { Button, GentleWarning, cx } from "@/components/primitives";
 
+/** Rotating first half of the landing headline ("… Let's figure out what's next."), shown in this order. */
+const HEADLINE_PHRASES = [
+  "Laid off?",
+  "Contract ended?",
+  "Lost your job?",
+  "Fixed-term contract over?",
+  "Probation ended?",
+  "Company closed down?",
+  "Made redundant?",
+];
+
 type Tab = "roadmap" | "opportunities" | "how";
 
 /** Everything about this person lives in this browser tab only (sessionStorage). No accounts. */
@@ -186,7 +197,7 @@ export default function StartPage() {
     return (
       <main id="main" className="mx-auto max-w-7xl px-5 sm:px-8">
         <Welcome busy={busy} onSubmit={(text) => { update({ started: true }); send({ messages: [{ role: "user", text }] }); }}
-          saved={saved}
+          saved={saved} phrases={HEADLINE_PHRASES}
           onOpen={(id) => { const r = saved.find((x) => x.id === id); if (r) setS({ ...empty(), ...r.state, savedId: r.id }); }}
           onDelete={(id) => { deleteSaved(id); setSaved(listSaved<Saved>()); }} />
       </main>

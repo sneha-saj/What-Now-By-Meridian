@@ -101,13 +101,10 @@ export function liveFindFor(id: NodeId, i: RoadmapInput): LiveFind | undefined {
 }
 
 const DAY = 86_400_000;
+// The roadmap stays short: Today → this week's 3 steps → your deadline (Plan B lives in the deadline step).
+// Companies, people and events are on the Opportunities tab.
 const WEEKS: { id: NodeId; week: number; label: string }[] = [
-  { id: "week1", week: 1, label: "Week 1" },
-  { id: "wayin", week: 1, label: "Week 1" },
-  { id: "week2", week: 2, label: "Week 2" },
-  { id: "week4", week: 4, label: "Week 4" },
-  { id: "week8", week: 8, label: "Week 8" },
-  { id: "final", week: 0, label: "Final weeks" },
+  { id: "week1", week: 1, label: "This week" },
 ];
 
 export function buildNodes(i: RoadmapInput): RoadNode[] {

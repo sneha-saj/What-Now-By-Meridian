@@ -156,39 +156,70 @@ export type StreamEvent =
   | AppEvent
   | { type: "partial"; key: "deadline"; data: Deadline }
   | { type: "partial"; key: "plan"; data: PlanResponse }
-  | { type: "partial"; key: "referrals"; data: ReferralResponse };
+  | { type: "partial"; key: "referrals"; data: ReferralResponse }
+  | { type: "partial"; key: "hidden_jobs" | "people" | "support" | "events" | "perks_and_support"; data: unknown };
 
-/** POST /chat/stream: calls onEvent for each live event, resolves with the result. Falls back to /chat. */
+async function streamPost<T>(path: string, body: unknown, onEvent: (e: StreamEvent) => void): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok || !res.body) throw new Error(`stream failed (${res.status})`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      if (!part.startsWith("data: ")) continue;
+      const event = JSON.parse(part.slice(6));
+      if (event.type === "result") return event.data as T;
+      if (event.type === "error") throw new Error(`${path} failed`);
+      onEvent(event as StreamEvent);
+    }
+  }
+  throw new Error("stream ended without a result");
+}
+
+/** POST /chat/stream: live events, then the result. Falls back to /chat. */
 export async function chatStream(req: ChatRequest, onEvent: (e: StreamEvent) => void): Promise<ChatResponse> {
   try {
-    const res = await fetch("/api/chat/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req),
-    });
-    if (!res.ok || !res.body) throw new Error(`stream failed (${res.status})`);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split("\n\n");
-      buffer = parts.pop() ?? "";
-      for (const part of parts) {
-        if (!part.startsWith("data: ")) continue;
-        const event = JSON.parse(part.slice(6));
-        if (event.type === "result") return event.data as ChatResponse;
-        if (event.type === "error") throw new Error("chat failed");
-        onEvent(event as StreamEvent);
-      }
-    }
-    throw new Error("stream ended without a result");
+    return await streamPost<ChatResponse>("/chat/stream", req, onEvent);
   } catch {
     return api.chat(req);
   }
 }
+
+/** POST /opportunities/stream: live events and sections, then the result. Falls back to /opportunities. */
+export async function opportunitiesStream(facts: Facts, onEvent: (e: StreamEvent) => void): Promise<OpportunitiesResponse> {
+  try {
+    return await streamPost<OpportunitiesResponse>("/opportunities/stream", { facts }, onEvent);
+  } catch {
+    return post<OpportunitiesResponse>("/opportunities", { facts });
+  }
+}
+
+export type HiddenJob = { company: string; signal: string; signal_date: string; source_url: string; why_it_fits: string; action: "reach_out" };
+export type OppContact = { name: string; role: string; company: string; why_this_person: string; profile_url: string; draft: string };
+export type SupportItem = { name: string; what_it_is: string; why_it_may_apply: string; eligibility_note: string; source_url: string; source_date?: string | null };
+export type EventItem = { name: string; date: string; place?: string | null; url: string; why_relevant: string };
+export type Certificate = { name: string; how_to_get: string; source_url: string; source_date?: string | null };
+export type Discount = { name: string; discount: string; proof_needed: string; city: string; source_url: string; source_date?: string | null };
+export type Incentive = { name: string; what_it_is: string; conditions_plain: string; may_apply: boolean; caveat: string; source_url: string; source_date?: string | null };
+export type PerksAndSupport = { certificate?: Certificate | null; discounts: Discount[]; incentives: Incentive[] };
+export type OpportunitiesResponse = {
+  hidden_jobs: HiddenJob[];
+  people: OppContact[];
+  support: SupportItem[];
+  events: EventItem[];
+  perks_and_support: PerksAndSupport;
+  mock: boolean;
+};
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {

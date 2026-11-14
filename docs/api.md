@@ -20,6 +20,7 @@ Every response has `mock: true` when a fallback was used (no API key, or a call 
 | `POST /referrals` | Companies hiring, people to contact, communities, and draft messages |
 | `POST /chat` | Guided chat: the same steps, one message at a time, with a live "Your situation" card |
 | `POST /chat/stream` | Same as `/chat`, streamed with live progress, Exa activity and partial results |
+| `POST /opportunities` (+ `/stream`) | Hidden jobs, people, support, events and perks, all from live Exa sources |
 | `POST /ask` | Ask a question; Exa's Answer endpoint replies with sources |
 | `GET /health` | Which integrations have keys configured |
 
@@ -802,3 +803,23 @@ Response (illustrative):
   "mock": false
 }
 ```
+
+---
+
+## POST /opportunities (and /opportunities/stream)
+
+Separate from the roadmap (which stays short: deadline and this week's 3 steps). About 11 Exa searches and
+2 Gemini calls per city and field, run in parallel and cached for 24 hours. Every item has an Exa source URL;
+nothing is invented. Without Exa the sections come back empty with `mock: true`.
+
+| Section | What it is | Rules enforced in code |
+| --- | --- | --- |
+| `hidden_jobs` | Companies with hiring signals (new openings, expansions, funding, new locations) in the user's city and field: `company`, `signal`, `signal_date`, `source_url`, `why_it_fits`, `action: "reach_out"` | Signal page dated within the last 60 days |
+| `people` | Public professional contacts at the top 2 companies: `name`, `role`, `company`, `why_this_person`, `profile_url`, `draft` | Draft max 80 words (template otherwise); may mention an employer incentive that may apply |
+| `support` | Support types from the country config (labour market training, language courses, mentoring, start-up grant): `name`, `what_it_is`, `why_it_may_apply`, `eligibility_note`, `source_url`, `source_date` | Only plausible matches; always "May apply, check the conditions." |
+| `events` | Recruitment fairs, meetups and community events: `name`, `date`, `place`, `url`, `why_relevant` | Stated date within the next 30 days |
+| `perks_and_support` | `certificate` (how to get the job search certificate, first), `discounts` (`name`, `discount`, `proof_needed`, `city`, `source_url`, `source_date`), `incentives` (`name`, `what_it_is`, `conditions_plain`, `may_apply`, `caveat`, `source_url`, `source_date`) | Only discounts Exa found; incentive conditions like "3 months unemployed" that clash with the permit deadline get a plain caveat |
+
+Searches use the trusted domains plus the city's official sites (`CITY_DOMAINS` in the country config).
+The stream sends the same events as `/chat/stream`, with partial sections `hidden_jobs`, `support`, `events`,
+`perks_and_support` and `people`. Example: `backend/mocks/opportunities.json` (used for `USE_MOCK=true`).

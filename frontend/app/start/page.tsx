@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  chatStream, type ChatRequest, type Deadline, type Facts, type PlanResponse, type Question,
+  chatStream, opportunitiesStream, type ChatRequest, type OpportunitiesResponse, type Deadline, type Facts, type PlanResponse, type Question,
   type ReferralResponse, type StreamEvent,
 } from "@/lib/api";
 import type { Field } from "@/lib/facts";
@@ -13,12 +13,13 @@ import { Checklist } from "@/components/Checklist";
 import { AskPanel, type AskEntry } from "@/components/AskPanel";
 import { FlowProgress } from "@/components/FlowProgress";
 import { HowWeKnow } from "@/components/HowWeKnow";
+import { Opportunities } from "@/components/Opportunities";
 import { QuestionCard, Welcome } from "@/components/QuestionCard";
 import { Legend, Roadmap, type AddedItem } from "@/components/Roadmap";
 import { SituationStrip } from "@/components/SituationStrip";
 import { Button, GentleWarning, cx } from "@/components/primitives";
 
-type Tab = "roadmap" | "ask" | "how";
+type Tab = "roadmap" | "opportunities" | "ask" | "how";
 
 /** Everything about this person lives in this browser tab only (sessionStorage). No accounts. */
 type Saved = {
@@ -36,6 +37,8 @@ type Saved = {
   drafts: Record<string, string>;
   asks: AskEntry[];
   added: Partial<Record<NodeId, AddedItem[]>>;
+  opp?: Partial<OpportunitiesResponse>;
+  oppFor?: string; // the facts the opportunities were found for
 };
 
 const KEY = "what-now-roadmap-v2";
@@ -54,6 +57,7 @@ function load(): Saved {
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "roadmap", label: "Roadmap" },
+  { id: "opportunities", label: "Opportunities" },
   { id: "ask", label: "Ask" },
   { id: "how", label: "How we know this" },
 ];
@@ -84,7 +88,7 @@ export default function StartPage() {
     if (line) setLog((cur) => [...cur, line].slice(-60));
     if (e.type === "progress" && e.stage !== "reading_situation") setFinding(true);
     if (e.type === "exa") setSearching((cur) => applyExaEvent(cur, e));
-    if (e.type === "partial") update({ [e.key]: e.data } as Partial<Saved>);
+    if (e.type === "partial" && (e.key === "deadline" || e.key === "plan")) update({ [e.key]: e.data } as Partial<Saved>);
   }
 
   async function send(req: Partial<ChatRequest>) {
@@ -92,7 +96,7 @@ export default function StartPage() {
     setError(null);
     setSearching({});
     try {
-      const res = await chatStream({ messages: [], facts: s.facts, step: "find_your_way_in", ...req }, onEvent);
+      const res = await chatStream({ messages: [], facts: s.facts, step: "this_week", ...req }, onEvent);
       setQVersion((v) => v + 1);
       if (res.out_of_scope) {
         update({ facts: res.facts, outOfScope: { message: res.reply, link: res.link, links: res.links }, question: undefined });
@@ -101,7 +105,7 @@ export default function StartPage() {
       } else {
         update({
           facts: res.facts, question: undefined, outOfScope: undefined, built: true,
-          deadline: res.deadline, plan: res.plan ?? s.plan, referrals: res.referrals ?? s.referrals,
+          deadline: res.deadline, plan: res.plan ?? s.plan,
         });
       }
     } catch {
@@ -112,6 +116,26 @@ export default function StartPage() {
       setSearching({});
     }
   }
+
+  const [oppLoading, setOppLoading] = useState(false);
+  const factsKey = JSON.stringify([s.facts.city, s.facts.field, s.facts.permit_type, s.facts.years_on_work_permit, s.facts.job_end_date]);
+
+  // Opportunities load once per situation, when the tab is first opened (results are cached server-side too).
+  useEffect(() => {
+    if (!loaded || s.tab !== "opportunities" || !s.built || oppLoading || s.oppFor === factsKey) return;
+    setOppLoading(true);
+    setSearching({});
+    update({ opp: {}, oppFor: factsKey });
+    opportunitiesStream(s.facts, (e) => {
+      const line = toLogLine(e);
+      if (line) setLog((cur) => [...cur, line].slice(-60));
+      if (e.type === "partial") setS((prev) => ({ ...prev, opp: { ...prev.opp, [e.key]: e.data } }));
+    })
+      .then((res) => update({ opp: res }))
+      .catch(() => setError("Couldn't load opportunities right now. Please try again in a moment."))
+      .finally(() => setOppLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, s.tab, s.built, factsKey]);
 
   const nodes = useMemo(() => buildNodes({
     today: new Date(), ready: s.built || !!s.deadline, deadline: s.deadline, plan: s.plan, referrals: s.referrals,
@@ -142,6 +166,12 @@ export default function StartPage() {
     );
 
   const phase = s.built ? (s.tab === "ask" ? "ask" : "roadmap") : finding ? "finding" : "tell";
+  const opportunitiesHint = s.built && s.tab === "roadmap" && (
+    <button onClick={() => update({ tab: "opportunities" })}
+      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4 text-left font-bold text-accent-ink hover:border-accent">
+      Next: companies hiring, people who could refer you, perks and events <span aria-hidden>→</span>
+    </button>
+  );
   const live = allLive(nodes);
   const anyLive = nodes.some((n) => n.live);
 
@@ -225,7 +255,15 @@ export default function StartPage() {
                     onDraft={(url, text) => update({ drafts: { ...s.drafts, [url]: text } })}
                     onPickExactDate={pickExactDate}
                   />
+                  {opportunitiesHint}
                   <Legend />
+                </div>
+              )}
+              {s.tab === "opportunities" && (
+                <div className="space-y-6">
+                  {oppLoading && <ActivityLog lines={log} busy last={3} />}
+                  <Opportunities data={s.opp ?? {}} loading={oppLoading} drafts={s.drafts}
+                    onDraft={(url, text) => update({ drafts: { ...s.drafts, [url]: text } })} />
                 </div>
               )}
               {s.tab === "ask" && (

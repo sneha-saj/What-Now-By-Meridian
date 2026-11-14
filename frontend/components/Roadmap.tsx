@@ -200,7 +200,32 @@ export function Roadmap({
           ))}
         </ul>
       );
-    if (n.id === "deadline" && deadline) return <div className="space-y-5"><DeadlineBody d={deadline} onPickExactDate={onPickExactDate} />{added("deadline")}</div>;
+    if (n.id === "deadline" && deadline)
+      return (
+        <div className="space-y-6">
+          <DeadlineBody d={deadline} onPickExactDate={onPickExactDate} />
+          {plan && (plan.plan_b.length > 0 || plan.plan_b_note) && (
+            <div className="space-y-3">
+              <h3 className="font-serif text-2xl font-semibold">If no job comes in time: Plan B</h3>
+              {plan.plan_b.length ? (
+                <ul className="space-y-4">
+                  {plan.plan_b.map((p) => (
+                    <li key={p.id || p.option} className="rounded-2xl border border-rule bg-card p-4 sm:p-5">
+                      <p className="font-serif text-xl font-semibold">{p.option}</p>
+                      {p.who_it_fits && <p className="mt-1"><span className="text-ink-soft">Who it fits: </span>{p.who_it_fits}</p>}
+                      <p className="mt-1">{p.why}</p>
+                      {p.latest_start_date && <p className="mt-1"><span className="text-ink-soft">Start by: </span><strong>{formatDate(p.latest_start_date)}</strong></p>}
+                      <Quotes sources={p.sources} live={planLive} />
+                    </li>
+                  ))}
+                </ul>
+              ) : <p>{plan.plan_b_note}</p>}
+            </div>
+          )}
+          {added("deadline")}
+          {added("final")}
+        </div>
+      );
     const find = n.liveFind && n.id !== "deadline" ? <LiveFindCallout f={n.liveFind} /> : null;
     if (n.id === "week1" && plan)
       return (
@@ -283,10 +308,7 @@ export function Roadmap({
                   disabled={n.state === "searching"}
                   className="w-full rounded-xl text-left disabled:cursor-default"
                 >
-                  <p className="text-sm font-bold text-accent-ink">
-                    {n.label}{n.id === "wayin" ? " · find your way in" : ""}
-                    {n.startsOn && n.id !== "today" && !isEnd && n.id !== "wayin" ? ` · from ${formatShortDate(n.startsOn.toISOString().slice(0, 10))}` : ""}
-                  </p>
+                  <p className="text-sm font-bold text-accent-ink">{n.label}</p>
                   <p className={cx("font-serif font-semibold", isEnd ? "text-3xl" : "text-xl sm:text-2xl", n.state === "done" && "text-ink-soft")}>
                     {title}
                     {n.state !== "searching" && <span aria-hidden className="ml-2 text-base text-ink-soft">{expanded ? "−" : "+"}</span>}

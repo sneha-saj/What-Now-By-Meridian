@@ -42,7 +42,7 @@ export function AccessCode({ className }: { className?: string }) {
     <div className={cx("text-sm", className)}>
       {!open ? (
         <p className="text-ink-soft">
-          Demo mode: no live search.{" "}
+          Demo mode: live search and voice are off.{" "}
           <button className="min-h-9 font-bold text-ink underline" onClick={() => setOpen(true)}>Judge? Enter access code</button>
         </p>
       ) : (

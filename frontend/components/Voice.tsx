@@ -58,16 +58,18 @@ export function MicButton({ onText, disabled, className, inside = false }: {
   }
 
   const label = state === "recording" ? "Stop recording" : state === "working" ? "Turning your voice into text" : "Speak instead of typing";
+  const visibleLabel = state === "recording" ? "Stop recording" : state === "working" ? "Writing it down…" : "Speak instead";
   const status = state === "recording" ? "Listening… tap stop when you're done" : state === "working" ? "Writing it down…"
     : state === "error" ? "Couldn't use the microphone. Please type instead." : "";
   const button = (
     <button type="button" disabled={disabled || state === "working"} aria-label={label} title={`${label}. ${VOICE_NOTE}`}
       onClick={() => (state === "recording" ? rec.current?.stop() : start())}
       className={cx("inline-flex shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50",
-        inside ? "h-9 w-9 border shadow-sm" : "h-11 w-11 border",
+        inside ? "h-9 w-9 border shadow-sm" : "min-h-11 gap-2 border px-3",
         state === "recording" ? "border-accent bg-accent text-paper motion-safe:animate-pulse"
           : state === "error" ? "border-warn text-warn" : "border-ink/25 bg-card text-ink-soft hover:border-ink hover:text-ink")}>
       {state === "recording" ? <StopIcon /> : state === "working" ? <span aria-hidden className="motion-safe:animate-pulse">…</span> : <MicIcon className={inside ? "h-4 w-4" : "h-5 w-5"} />}
+      {!inside && <span className="text-sm font-bold">{visibleLabel}</span>}
     </button>
   );
   if (inside)

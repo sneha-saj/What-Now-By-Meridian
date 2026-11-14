@@ -1,0 +1,613 @@
+# What Now? API
+
+Backend: FastAPI in `backend/`. Run `make dev`, then open the interactive docs at
+http://localhost:8000/docs (every endpoint has the examples below built in).
+
+**Example persona** used throughout: a restaurant worker from India on a work-based permit, 1 year in
+Finland, living in Helsinki, whose job ended on 1 November 2026.
+
+The example responses are saved in `backend/mocks/` and are what the API returns when `USE_MOCK=true`.
+Official sources in them are real pages. Companies and people are clearly marked samples
+(`example.com`), because we don't put invented businesses or people in front of users as real.
+
+Every response has `mock: true` when a fallback was used (no API key, or a call failed). The demo always runs.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /intake` | Turn the user's sentence into facts; ask up to 3 questions the deadline still needs |
+| `POST /plan` | Deadline, 3 actions for this week, a timeline and plan B, all with official sources |
+| `GET /rules` | The deadline rules, their latest live check against Migri, and trusted domains |
+| `POST /referrals` | Companies hiring, people to contact, communities, and draft messages |
+| `GET /health` | Which integrations have keys configured |
+
+---
+
+## POST /intake
+
+Gemini extracts facts from free text (structured JSON output). Facts are merged with `answers` to
+earlier questions; answers win. `missing_questions` only covers what the deadline needs
+(citizenship group, permit type, years on a work permit, job end date), at most 3, with "Not sure"
+where it makes sense. It never asks for permit numbers or passport details.
+
+**Input**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `text` | string | What the user wrote |
+| `answers` | object | Optional. Answers to earlier questions, keyed by question `id` |
+
+**Output**: `facts`, `missing_questions` (`id`, `question`, `kind`: `choice` or `date`, `options`: `value` + `label`), `mock`.
+If the job was outside Finland: `out_of_scope: true`, `message`, `link` instead of facts.
+
+Facts: `citizenship_group` (`eu_eea` / `other` / `unknown`), `citizenship_country`, `permit_type`,
+`years_on_work_permit` (number, or `under_2` / `over_2` / `not_sure`), `job_end_date`, `city`, `field`,
+`studied_in_finland`, `family_in_finland`.
+
+### Example: everything known
+
+Request:
+```json
+{
+  "text": "I'm from India and worked in a restaurant in Helsinki for a year on a work permit. My job ended on 1 November.",
+  "answers": {}
+}
+```
+
+Response:
+```json
+{
+  "facts": {
+    "citizenship_group": "other",
+    "citizenship_country": "India",
+    "permit_type": "work_based",
+    "years_on_work_permit": 1,
+    "job_end_date": "2026-11-01",
+    "city": "Helsinki",
+    "field": "restaurant worker",
+    "studied_in_finland": false,
+    "family_in_finland": false
+  },
+  "missing_questions": [],
+  "out_of_scope": false,
+  "mock": true
+}
+```
+
+### Example: questions still needed
+
+Request:
+```json
+{
+  "text": "I'm from India and lost my restaurant job in Helsinki.",
+  "answers": {}
+}
+```
+
+Response:
+```json
+{
+  "facts": {
+    "citizenship_group": "other",
+    "citizenship_country": "India",
+    "city": "Helsinki",
+    "field": "restaurant worker"
+  },
+  "missing_questions": [
+    {
+      "id": "permit_type",
+      "question": "What kind of residence permit do you have?",
+      "kind": "choice",
+      "options": [
+        {
+          "value": "work_based",
+          "label": "Work-based"
+        },
+        {
+          "value": "specialist_blue_card",
+          "label": "Specialist / EU Blue Card"
+        },
+        {
+          "value": "student",
+          "label": "Student"
+        },
+        {
+          "value": "family_based",
+          "label": "Family-based"
+        },
+        {
+          "value": "permanent",
+          "label": "Permanent"
+        },
+        {
+          "value": "not_sure",
+          "label": "Not sure"
+        }
+      ]
+    },
+    {
+      "id": "job_end_date",
+      "question": "When was (or is) your last day of work?",
+      "kind": "date",
+      "options": [
+        {
+          "value": "2026-11-14",
+          "label": "Today"
+        },
+        {
+          "value": "2026-11-07",
+          "label": "About a week ago"
+        },
+        {
+          "value": "2026-10-15",
+          "label": "About a month ago"
+        }
+      ]
+    }
+  ],
+  "out_of_scope": false,
+  "mock": true
+}
+```
+
+### Example: job outside Finland
+
+Request:
+```json
+{
+  "text": "I lost my job in Sweden last week.",
+  "answers": {}
+}
+```
+
+Response:
+```json
+{
+  "missing_questions": [],
+  "out_of_scope": true,
+  "message": "What Now? only covers jobs in Finland. If your job was in another country, check that country's official services. InfoFinland explains unemployment in Finland.",
+  "link": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+  "mock": true
+}
+```
+
+---
+
+## POST /plan
+
+1. The rules engine (`rules.calculate_deadline`, plain code) computes the deadline from the facts.
+2. The live check confirms the rule against the official Migri page. If it isn't `verified`,
+   `deadline_date` is left out and the response carries a calm `warning` with `warning_link`.
+3. Exa searches only the trusted domains (preferring pages updated after June 2025) for: registering
+   as a jobseeker, unemployment benefits, alternative permits for this person, and labour-shortage sectors.
+4. Gemini writes the plan from those pages only. Every action must cite at least one real source;
+   if the sources don't cover something, it says "Check with Migri or your union".
+
+**Input**: `{"facts": {...}}`, the facts from `/intake`.
+
+**Output**
+
+| Field | Notes |
+| --- | --- |
+| `deadline` | `status` (`ok` / `not_applicable` / `needs_info` / `unclear`), `explanation`, `months`, `deadline_date`, `days_left`, `possible_dates` (when the permit or years are unclear), `source`, `verified`, `live_checks`, `warning`, `warning_link` |
+| `this_week` | Exactly 3 actions: `title`, `why` (one calm sentence), `how` (short steps), `sources` (`title`, `url`, `highlight`) |
+| `timeline` | Steps back from the deadline: Week 1, 2, 4, 8, Final weeks. Each has `steps` and `sources` |
+| `plan_b` | Alternatives: `option`, `why`, `latest_start_date`, `sources` |
+| `disclaimer` | Not legal advice |
+
+### Example
+
+Request:
+```json
+{
+  "facts": {
+    "citizenship_group": "other",
+    "citizenship_country": "India",
+    "permit_type": "work_based",
+    "years_on_work_permit": 1,
+    "job_end_date": "2026-11-01",
+    "city": "Helsinki",
+    "field": "restaurant worker",
+    "studied_in_finland": false,
+    "family_in_finland": false
+  }
+}
+```
+
+Response:
+```json
+{
+  "deadline": {
+    "status": "ok",
+    "explanation": "If employment ends early, a work-based permit held for 2 years or less has a 3-month protection period to find a new job. Based on your last day of work, the date is 2027-02-01.",
+    "applies": true,
+    "months": 3,
+    "deadline_date": "2027-02-01",
+    "days_left": 79,
+    "possible_dates": [],
+    "missing": [],
+    "rule_id": "work-based-three-months",
+    "source": {
+      "title": "Migri – Changes to work-based residence permits",
+      "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+      "highlight": null
+    },
+    "verified": true,
+    "live_checks": [
+      {
+        "rule_id": "work-based-three-months",
+        "status": "verified",
+        "checked_at": "2026-11-14T09:00:00+00:00",
+        "evidence_snippet": "Example check result: the page states a 3-month period for permits held 2 years or less."
+      }
+    ],
+    "warning": null,
+    "warning_link": null
+  },
+  "this_week": [
+    {
+      "title": "Register as an unemployed jobseeker",
+      "why": "Registering early keeps your benefit options open.",
+      "how": [
+        "Open Job Market Finland (Työmarkkinatori)",
+        "Log in with your online banking codes",
+        "Register as an unemployed jobseeker"
+      ],
+      "sources": [
+        {
+          "title": "Job Market Finland (Työmarkkinatori)",
+          "url": "https://tyomarkkinatori.fi/en",
+          "highlight": null
+        },
+        {
+          "title": "InfoFinland – Unemployment",
+          "url": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+          "highlight": null
+        }
+      ]
+    },
+    {
+      "title": "Check what support you can get",
+      "why": "Knowing your income for the next months makes planning calmer.",
+      "how": [
+        "Read Kela's unemployment page",
+        "If you belong to an unemployment fund, ask about earnings-related allowance"
+      ],
+      "sources": [
+        {
+          "title": "Kela – Unemployment",
+          "url": "https://www.kela.fi/unemployment",
+          "highlight": null
+        },
+        {
+          "title": "InfoFinland – Unemployment",
+          "url": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+          "highlight": null
+        }
+      ]
+    },
+    {
+      "title": "Note your deadline: 1 February 2027",
+      "why": "You have 3 months to find a new job under your current permit.",
+      "how": [
+        "Write the date down",
+        "If anything about your permit is unclear, check with Migri or your union"
+      ],
+      "sources": [
+        {
+          "title": "Migri – Changes to work-based residence permits",
+          "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+          "highlight": null
+        }
+      ]
+    }
+  ],
+  "timeline": [
+    {
+      "week": "Week 1",
+      "steps": [
+        "Register as a jobseeker",
+        "Check Kela support"
+      ],
+      "sources": [
+        {
+          "title": "Job Market Finland (Työmarkkinatori)",
+          "url": "https://tyomarkkinatori.fi/en",
+          "highlight": null
+        },
+        {
+          "title": "Kela – Unemployment",
+          "url": "https://www.kela.fi/unemployment",
+          "highlight": null
+        }
+      ]
+    },
+    {
+      "week": "Week 2",
+      "steps": [
+        "Update your CV and apply for restaurant and kitchen roles"
+      ],
+      "sources": [
+        {
+          "title": "Job Market Finland (Työmarkkinatori)",
+          "url": "https://tyomarkkinatori.fi/en",
+          "highlight": null
+        }
+      ]
+    },
+    {
+      "week": "Week 4",
+      "steps": [
+        "Review progress; check other permit options with Migri or your union"
+      ],
+      "sources": [
+        {
+          "title": "Migri – Changes to work-based residence permits",
+          "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+          "highlight": null
+        }
+      ]
+    },
+    {
+      "week": "Week 8",
+      "steps": [
+        "If you have an offer, prepare your new permit application"
+      ],
+      "sources": [
+        {
+          "title": "Migri – Changes to work-based residence permits",
+          "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+          "highlight": null
+        }
+      ]
+    },
+    {
+      "week": "Final weeks",
+      "steps": [
+        "Apply for a new permit before 1 February 2027 if you have a new job"
+      ],
+      "sources": [
+        {
+          "title": "Migri – Changes to work-based residence permits",
+          "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+          "highlight": null
+        }
+      ]
+    }
+  ],
+  "plan_b": [
+    {
+      "option": "Another residence permit",
+      "why": "Another permit type may fit your situation; check with Migri or your union.",
+      "latest_start_date": null,
+      "sources": [
+        {
+          "title": "Migri – Changes to work-based residence permits",
+          "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+          "highlight": null
+        },
+        {
+          "title": "InfoFinland – Unemployment",
+          "url": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+          "highlight": null
+        }
+      ]
+    }
+  ],
+  "disclaimer": "This is general guidance based on official Finnish sources, not legal advice. Rules can change: confirm your situation with Migri, Kela or your union.",
+  "mock": true
+}
+```
+
+---
+
+## GET /rules
+
+The deadline rules from the Finland country config (`backend/countries/finland.py`), each with its
+latest live check, and the trusted domains. Live check: Exa fetches the rule's `source_url`, Gemini
+answers whether the page still states the same months and conditions. Status is `verified`,
+`mismatch` or `error`. Results are cached for 24 hours (errors are not cached).
+
+**Input**: none.
+
+### Example
+
+Response:
+```json
+{
+  "rules": [
+    {
+      "id": "work-based-three-months",
+      "description": "If employment ends early, a work-based permit held for 2 years or less has a 3-month protection period to find a new job.",
+      "months": 3,
+      "applies_to": [
+        "work_based with no more than 2 years on a work-based permit"
+      ],
+      "applies_when": [
+        {
+          "permit_type": "work_based",
+          "years_on_work_permit": {
+            "operator": "lte",
+            "value": 2
+          }
+        }
+      ],
+      "source_url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+      "in_force_since": "2025-06-11",
+      "last_verified": "2026-11-14",
+      "live_check": {
+        "rule_id": "work-based-three-months",
+        "status": "verified",
+        "checked_at": "2026-11-14T09:00:00+00:00",
+        "evidence_snippet": "Example check result: the page states the same months and conditions."
+      }
+    },
+    {
+      "id": "specialist-or-long-term-work-six-months",
+      "description": "If employment ends early, a specialist or EU Blue Card holder, or a work-based permit holder with over 2 years in Finland, has a 6-month protection period to find a new job.",
+      "months": 6,
+      "applies_to": [
+        "specialist_blue_card",
+        "work_based with over 2 years on a work-based permit"
+      ],
+      "applies_when": [
+        {
+          "permit_type": "specialist_blue_card"
+        },
+        {
+          "permit_type": "work_based",
+          "years_on_work_permit": {
+            "operator": "gt",
+            "value": 2
+          }
+        }
+      ],
+      "source_url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+      "in_force_since": "2025-06-11",
+      "last_verified": "2026-11-14",
+      "live_check": {
+        "rule_id": "specialist-or-long-term-work-six-months",
+        "status": "verified",
+        "checked_at": "2026-11-14T09:00:00+00:00",
+        "evidence_snippet": "Example check result: the page states the same months and conditions."
+      }
+    },
+    {
+      "id": "not-tied-to-employment",
+      "description": "The employment-based protection period does not apply to student, family-based, permanent, or EU/EEA citizen permit types.",
+      "months": null,
+      "applies_to": [
+        "student",
+        "family_based",
+        "permanent",
+        "eu_eea_citizen"
+      ],
+      "applies_when": [
+        {
+          "permit_type": "student"
+        },
+        {
+          "permit_type": "family_based"
+        },
+        {
+          "permit_type": "permanent"
+        },
+        {
+          "permit_type": "eu_eea_citizen"
+        }
+      ],
+      "source_url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+      "in_force_since": "2025-06-11",
+      "last_verified": "2026-11-14",
+      "live_check": {
+        "rule_id": "not-tied-to-employment",
+        "status": "verified",
+        "checked_at": "2026-11-14T09:00:00+00:00",
+        "evidence_snippet": "Example check result: the page states the same months and conditions."
+      }
+    }
+  ],
+  "trusted_domains": [
+    "migri.fi",
+    "kela.fi",
+    "infofinland.fi",
+    "tyomarkkinatori.fi"
+  ]
+}
+```
+
+---
+
+## POST /referrals
+
+1. **Companies**: Exa company search, up to 8, hiring in the user's field or labour-shortage sectors, in or near their city.
+2. **People**: Exa people search at the top 3 companies, 2 each: public professional profiles only.
+3. **Communities**: international professional groups, events in the next 30 days, union career services.
+4. **Drafts**: Gemini writes one short, polite message per contact (max 80 words) mentioning one real
+   detail from the sources. Drafts only: nothing is ever sent.
+
+At most 6 Exa searches per request, cached for 24 hours, to control credits. Without Exa, only real
+help services are listed (no invented companies or people).
+
+**Input**: `{"facts": {...}}`. Uses `city`, `field` and the other facts.
+
+**Output**: `companies` (`name`, `why_relevant`, `url`, `source`), `contacts` (`name`, `role`,
+`company`, `why_this_person`, `profile_url`), `communities` (`name`, `type`, `date_if_event`, `url`),
+`drafts` (`to`, `profile_url`, `message`).
+
+### Example
+
+Request:
+```json
+{
+  "facts": {
+    "citizenship_group": "other",
+    "citizenship_country": "India",
+    "permit_type": "work_based",
+    "years_on_work_permit": 1,
+    "job_end_date": "2026-11-01",
+    "city": "Helsinki",
+    "field": "restaurant worker",
+    "studied_in_finland": false,
+    "family_in_finland": false
+  }
+}
+```
+
+Response:
+```json
+{
+  "companies": [
+    {
+      "name": "Example Bistro Oy (sample)",
+      "why_relevant": "A Helsinki restaurant group hiring kitchen staff who speak English.",
+      "url": "https://example.com/bistro",
+      "source": {
+        "title": "Example Bistro Oy (sample)",
+        "url": "https://example.com/bistro",
+        "highlight": "Sample data: we are hiring line cooks in Helsinki."
+      }
+    },
+    {
+      "name": "Example Hotels Finland (sample)",
+      "why_relevant": "Hotels are a labour-shortage sector and hire restaurant workers.",
+      "url": "https://example.com/hotels",
+      "source": {
+        "title": "Example Hotels Finland (sample)",
+        "url": "https://example.com/hotels",
+        "highlight": "Sample data: open roles in hotel restaurants."
+      }
+    }
+  ],
+  "contacts": [
+    {
+      "name": "Sample Contact",
+      "role": "Head Chef",
+      "company": "Example Bistro Oy (sample)",
+      "why_this_person": "Leads the kitchen team that is hiring.",
+      "profile_url": "https://example.com/profile/sample-contact"
+    }
+  ],
+  "communities": [
+    {
+      "name": "International House Helsinki",
+      "type": "professional_group",
+      "date_if_event": null,
+      "url": "https://www.ihhelsinki.fi/"
+    },
+    {
+      "name": "Work in Finland",
+      "type": "professional_group",
+      "date_if_event": null,
+      "url": "https://www.workinfinland.com/"
+    }
+  ],
+  "drafts": [
+    {
+      "to": "Sample Contact",
+      "profile_url": "https://example.com/profile/sample-contact",
+      "message": "Hi, I saw that Example Bistro is hiring line cooks in Helsinki. I've worked in a Helsinki restaurant kitchen for a year and I'm looking for my next role. Would you have a few minutes for a short chat, or could you point me to the right person? Thank you! [Your name]"
+    }
+  ],
+  "mock": true
+}
+```

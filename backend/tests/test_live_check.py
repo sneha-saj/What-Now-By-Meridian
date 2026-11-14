@@ -26,3 +26,18 @@ def test_live_check_mismatch_and_errors_are_reported(monkeypatch, tmp_path):
     assert live_check.check_rule(DEADLINE_RULES[0])["status"] == "mismatch"
     monkeypatch.setattr(live_check, "_fetch_page", lambda _url: (_ for _ in ()).throw(RuntimeError("offline")))
     assert live_check.check_rule(DEADLINE_RULES[1], force=True)["status"] == "error"
+
+
+def test_live_check_includes_rule_id_and_does_not_cache_errors(monkeypatch, tmp_path):
+    monkeypatch.setattr(live_check, "CACHE_PATH", tmp_path / "cache.json")
+    monkeypatch.setattr(live_check.config, "exa_key", lambda: None)
+    first = live_check.check_rule(DEADLINE_RULES[0])
+    assert first["rule_id"] == DEADLINE_RULES[0]["id"] and first["status"] == "error"
+
+    # Once keys are added, the next request checks again instead of serving a cached error.
+    monkeypatch.setattr(live_check.config, "exa_key", lambda: "exa")
+    monkeypatch.setattr(live_check.config, "gemini_key", lambda: "gemini")
+    monkeypatch.setattr(live_check, "_fetch_page", lambda _url: "page")
+    monkeypatch.setattr(live_check, "_ask_gemini", lambda _rule, _page: (True, "3 months"))
+    second = live_check.check_rule(DEADLINE_RULES[0])
+    assert second["status"] == "verified" and second["rule_id"] == DEADLINE_RULES[0]["id"]

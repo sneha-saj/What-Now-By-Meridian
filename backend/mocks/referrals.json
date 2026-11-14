@@ -1,0 +1,70 @@
+{
+  "request": {
+    "facts": {
+      "citizenship_group": "other",
+      "citizenship_country": "India",
+      "permit_type": "work_based",
+      "years_on_work_permit": 1,
+      "job_end_date": "2026-11-01",
+      "city": "Helsinki",
+      "field": "restaurant worker",
+      "studied_in_finland": false,
+      "family_in_finland": false
+    }
+  },
+  "response": {
+    "companies": [
+      {
+        "name": "Example Bistro Oy (sample)",
+        "why_relevant": "A Helsinki restaurant group hiring kitchen staff who speak English.",
+        "url": "https://example.com/bistro",
+        "source": {
+          "title": "Example Bistro Oy (sample)",
+          "url": "https://example.com/bistro",
+          "highlight": "Sample data: we are hiring line cooks in Helsinki."
+        }
+      },
+      {
+        "name": "Example Hotels Finland (sample)",
+        "why_relevant": "Hotels are a labour-shortage sector and hire restaurant workers.",
+        "url": "https://example.com/hotels",
+        "source": {
+          "title": "Example Hotels Finland (sample)",
+          "url": "https://example.com/hotels",
+          "highlight": "Sample data: open roles in hotel restaurants."
+        }
+      }
+    ],
+    "contacts": [
+      {
+        "name": "Sample Contact",
+        "role": "Head Chef",
+        "company": "Example Bistro Oy (sample)",
+        "why_this_person": "Leads the kitchen team that is hiring.",
+        "profile_url": "https://example.com/profile/sample-contact"
+      }
+    ],
+    "communities": [
+      {
+        "name": "International House Helsinki",
+        "type": "professional_group",
+        "date_if_event": null,
+        "url": "https://www.ihhelsinki.fi/"
+      },
+      {
+        "name": "Work in Finland",
+        "type": "professional_group",
+        "date_if_event": null,
+        "url": "https://www.workinfinland.com/"
+      }
+    ],
+    "drafts": [
+      {
+        "to": "Sample Contact",
+        "profile_url": "https://example.com/profile/sample-contact",
+        "message": "Hi, I saw that Example Bistro is hiring line cooks in Helsinki. I've worked in a Helsinki restaurant kitchen for a year and I'm looking for my next role. Would you have a few minutes for a short chat, or could you point me to the right person? Thank you! [Your name]"
+      }
+    ],
+    "mock": true
+  }
+}

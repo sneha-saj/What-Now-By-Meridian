@@ -76,12 +76,19 @@ frontend/
   lib/api.ts           typed API client
 ```
 
-## Tech challenges used
+## Main challenge
+- [x] **Exa – The Internet Butler / Your Personal Assistant**: Exa finds and reads the facts: official sites (migri.fi, kela.fi, infofinland.fi, tyomarkkinatori.fi), full page contents with highlights, companies hiring, people for referrals, and live checks of the rule sources.
 
-- **Gemini API**: TODO: how we used it
-- **OpenAI Codex**: TODO: how we used it
-- **Oxylabs**: TODO: how we used it (stub: `backend/integrations/oxylabs.py`, flag `ENABLE_OXYLABS`)
-- **ElevenLabs**: TODO: how we used it (stub: `backend/integrations/elevenlabs.py`, flag `ENABLE_ELEVENLABS`)
+## Tech challenges
+- [ ] **Gemini API (Google DeepMind)**: (in progress) understands the user's sentence, writes the plan with sources and drafts referral messages. Also confirms live that Migri's page still matches our stored rules.
+- [x] **OpenAI Codex**: used to build the Finland country config, rules engine + tests, live rule check and the "How we know this" page (see commits marked "codex:" or "[codex]" and the related pull requests).
+- [ ] **Oxylabs Web API**: (planned) read live company career pages for the "companies hiring now" step.
+- [ ] **ElevenLabs**: (planned) read the plan aloud / voice input for accessibility.
+- [ ] **Gemma (Google DeepMind)**: (idea) strip personal details before data leaves the device.
+- [ ] **Modal**: (idea) host the backend.
+- [ ] **MongoDB Atlas (MLH)**: (idea) save the user's plan and progress.
+
+Only ticked items are used in the current version. We tick items when they're actually integrated.
 
 ## License
 

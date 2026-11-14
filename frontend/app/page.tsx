@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { api, type Facts, type PlanResponse, type Question, type ReferralResponse } from "@/lib/api";
-import { DeadlineCard, QuestionChips, ReferralsCard, ThisWeekCard } from "@/components/ui";
+import { DeadlineCard, PlanBCard, QuestionChips, ReferralsCard, ThisWeekCard, TimelineCard } from "@/components/ui";
 
 export default function Home() {
   const [text, setText] = useState("");
@@ -12,6 +12,7 @@ export default function Home() {
   const [refs, setRefs] = useState<ReferralResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outOfScope, setOutOfScope] = useState<{ message: string; link: string } | null>(null);
 
   async function run<T>(fn: () => Promise<T>) {
     setLoading(true);
@@ -38,16 +39,23 @@ export default function Home() {
     if (!text.trim()) return;
     setPlan(null);
     setRefs(null);
+    setOutOfScope(null);
     const res = await run(() => api.intake(text));
     if (!res) return;
+    if (res.out_of_scope || !res.facts) {
+      setFacts(null);
+      setQuestions([]);
+      setOutOfScope({ message: res.message ?? "", link: res.link ?? "" });
+      return;
+    }
     setFacts(res.facts);
-    setQuestions(res.questions);
-    if (res.questions.length === 0) await buildPlan(res.facts);
+    setQuestions(res.missing_questions);
+    if (res.missing_questions.length === 0) await buildPlan(res.facts);
   }
 
-  async function answer(q: Question, value: string | boolean) {
-    const next = { ...facts, [q.field]: value } as Facts;
-    const remaining = questions.filter((x) => x.field !== q.field);
+  async function answer(q: Question, value: string) {
+    const next = { ...facts, [q.id]: value } as Facts;
+    const remaining = questions.filter((x) => x.id !== q.id);
     setFacts(next);
     setQuestions(remaining);
     if (remaining.length === 0) await buildPlan(next);
@@ -91,15 +99,28 @@ export default function Home() {
             {questions.length === 1 ? "One quick question" : `${questions.length} quick questions`} — just tap.
           </p>
           {questions.slice(0, 1).map((q) => (
-            <QuestionChips key={q.field} q={q} onAnswer={(v) => answer(q, v)} />
+            <QuestionChips key={q.id} q={q} onAnswer={(v) => answer(q, v)} />
           ))}
         </section>
       )}
 
       {plan && <DeadlineCard d={plan.deadline} />}
-      {plan && <ThisWeekCard steps={plan.this_week} />}
-      {refs && refs.referrals.length > 0 && <ReferralsCard referrals={refs.referrals} />}
+      {outOfScope && (
+        <p className="rounded-xl bg-calm-50 p-4 text-sm text-calm-700">
+          {outOfScope.message}{" "}
+          {outOfScope.link && (
+            <a className="underline" href={outOfScope.link} target="_blank" rel="noreferrer">
+              Read more
+            </a>
+          )}
+        </p>
+      )}
+      {plan && <ThisWeekCard actions={plan.this_week} />}
+      {plan && plan.timeline.length > 0 && <TimelineCard weeks={plan.timeline} />}
+      {plan && plan.plan_b.length > 0 && <PlanBCard options={plan.plan_b} />}
+      {refs && <ReferralsCard r={refs} />}
 
+      {plan && <p className="text-center text-xs text-calm-500">{plan.disclaimer}</p>}
       {isMock && (
         <p className="text-center text-xs text-calm-500">Demo mode: some results are sample data (no API keys set).</p>
       )}

@@ -6,6 +6,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from pydantic import BaseModel
+
 import config
 from countries.finland import DEADLINE_RULES
 
@@ -33,20 +35,25 @@ def _fetch_page(url: str) -> str:
     page = results[0]
     return (getattr(page, "text", None) or getattr(page, "content", None) or "")[:12000]
 
+class _Verdict(BaseModel):
+    verified: bool
+    evidence_snippet: str
+
+
 def _ask_gemini(rule: dict, page: str) -> tuple[bool, str]:
-    from google import genai
-    client = genai.Client(api_key=config.gemini_key())
+    from services import gemini
+
     prompt = (
-        "Check whether the official page still supports this rule. Treat it as verified only if both "
-        "the number of months and all listed conditions match. Reply JSON with keys verified (boolean) "
-        "and evidence_snippet (short exact excerpt or concise reason).\n"
-        f"Rule: {json.dumps({k: rule[k] for k in ('description','months','applies_to')})}\n"
+        "Check whether this official page still supports the rule below. Answer verified=true only if the page "
+        "states the same number of months AND the same conditions. evidence_snippet: a short exact quote from "
+        "the page, or a one-line reason if it doesn't match.\n"
+        f"Rule: {json.dumps({k: rule[k] for k in ('description', 'months', 'applies_to')})}\n"
         f"Page text:\n{page}"
     )
-    response = client.models.generate_content(model=config.GEMINI_MODEL, contents=prompt)
-    raw = (getattr(response, "text", "") or "").strip().removeprefix("```json").removesuffix("```").strip()
-    result = json.loads(raw)
-    return bool(result.get("verified")), str(result.get("evidence_snippet", ""))[:500]
+    result = gemini.structured_call(prompt, _Verdict)
+    if result is None:
+        raise RuntimeError("Gemini gave no answer")
+    return bool(result["verified"]), str(result["evidence_snippet"])[:500]
 
 def check_rule(rule: dict, *, force: bool = False) -> dict:
     now = datetime.now(timezone.utc)
@@ -58,7 +65,7 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
             if checked.tzinfo is None:
                 checked = checked.replace(tzinfo=timezone.utc)
             if now - checked < CACHE_TTL:
-                return entry
+                return {"rule_id": rule["id"], **entry}
         except (KeyError, ValueError, TypeError):
             pass
     checked_at = now.isoformat()
@@ -69,10 +76,11 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
         if not page:
             raise RuntimeError("Exa returned no page text")
         verified, evidence = _ask_gemini(rule, page)
-        entry = {"status": "verified" if verified else "mismatch", "checked_at": checked_at, "evidence_snippet": evidence}
+        entry = {"rule_id": rule["id"], "status": "verified" if verified else "mismatch", "checked_at": checked_at, "evidence_snippet": evidence}
     except Exception as exc:  # graceful degradation for unavailable upstreams
         log.warning("Live check failed for %s: %s", rule["id"], exc)
-        entry = {"status": "error", "checked_at": checked_at, "evidence_snippet": str(exc)[:500]}
+        # Errors are not cached, so adding API keys or a network blip recovers on the next request.
+        return {"rule_id": rule["id"], "status": "error", "checked_at": checked_at, "evidence_snippet": str(exc)[:500]}
     cache[rule["id"]] = entry
     _write_cache(cache)
     return entry

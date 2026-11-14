@@ -1,0 +1,22 @@
+{
+  "request": {
+    "text": "I'm from India and worked in a restaurant in Helsinki for a year on a work permit. My job ended on 1 November.",
+    "answers": {}
+  },
+  "response": {
+    "facts": {
+      "citizenship_group": "other",
+      "citizenship_country": "India",
+      "permit_type": "work_based",
+      "years_on_work_permit": 1,
+      "job_end_date": "2026-11-01",
+      "city": "Helsinki",
+      "field": "restaurant worker",
+      "studied_in_finland": false,
+      "family_in_finland": false
+    },
+    "missing_questions": [],
+    "out_of_scope": false,
+    "mock": true
+  }
+}

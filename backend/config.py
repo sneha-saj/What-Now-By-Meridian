@@ -13,8 +13,11 @@ def _flag(name: str) -> bool:
     return os.getenv(name, "false").strip().lower() in ("1", "true", "yes", "on")
 
 
+USE_MOCK = _flag("USE_MOCK")
+
+
 def _key(name: str) -> str | None:
-    if _flag("FORCE_MOCKS"):
+    if _flag("FORCE_MOCKS") or USE_MOCK:
         return None
     return os.getenv(name) or None
 

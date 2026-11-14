@@ -1,0 +1,196 @@
+{
+  "request": {
+    "facts": {
+      "citizenship_group": "other",
+      "citizenship_country": "India",
+      "permit_type": "work_based",
+      "years_on_work_permit": 1,
+      "job_end_date": "2026-11-01",
+      "city": "Helsinki",
+      "field": "restaurant worker",
+      "studied_in_finland": false,
+      "family_in_finland": false
+    }
+  },
+  "response": {
+    "deadline": {
+      "status": "ok",
+      "explanation": "If employment ends early, a work-based permit held for 2 years or less has a 3-month protection period to find a new job. Based on your last day of work, the date is 2027-02-01.",
+      "applies": true,
+      "months": 3,
+      "deadline_date": "2027-02-01",
+      "days_left": 79,
+      "possible_dates": [],
+      "missing": [],
+      "rule_id": "work-based-three-months",
+      "source": {
+        "title": "Migri – Changes to work-based residence permits",
+        "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+        "highlight": null
+      },
+      "verified": true,
+      "live_checks": [
+        {
+          "rule_id": "work-based-three-months",
+          "status": "verified",
+          "checked_at": "2026-11-14T09:00:00+00:00",
+          "evidence_snippet": "Example check result: the page states a 3-month period for permits held 2 years or less."
+        }
+      ],
+      "warning": null,
+      "warning_link": null
+    },
+    "this_week": [
+      {
+        "title": "Register as an unemployed jobseeker",
+        "why": "Registering early keeps your benefit options open.",
+        "how": [
+          "Open Job Market Finland (Työmarkkinatori)",
+          "Log in with your online banking codes",
+          "Register as an unemployed jobseeker"
+        ],
+        "sources": [
+          {
+            "title": "Job Market Finland (Työmarkkinatori)",
+            "url": "https://tyomarkkinatori.fi/en",
+            "highlight": null
+          },
+          {
+            "title": "InfoFinland – Unemployment",
+            "url": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+            "highlight": null
+          }
+        ]
+      },
+      {
+        "title": "Check what support you can get",
+        "why": "Knowing your income for the next months makes planning calmer.",
+        "how": [
+          "Read Kela's unemployment page",
+          "If you belong to an unemployment fund, ask about earnings-related allowance"
+        ],
+        "sources": [
+          {
+            "title": "Kela – Unemployment",
+            "url": "https://www.kela.fi/unemployment",
+            "highlight": null
+          },
+          {
+            "title": "InfoFinland – Unemployment",
+            "url": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+            "highlight": null
+          }
+        ]
+      },
+      {
+        "title": "Note your deadline: 1 February 2027",
+        "why": "You have 3 months to find a new job under your current permit.",
+        "how": [
+          "Write the date down",
+          "If anything about your permit is unclear, check with Migri or your union"
+        ],
+        "sources": [
+          {
+            "title": "Migri – Changes to work-based residence permits",
+            "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+            "highlight": null
+          }
+        ]
+      }
+    ],
+    "timeline": [
+      {
+        "week": "Week 1",
+        "steps": [
+          "Register as a jobseeker",
+          "Check Kela support"
+        ],
+        "sources": [
+          {
+            "title": "Job Market Finland (Työmarkkinatori)",
+            "url": "https://tyomarkkinatori.fi/en",
+            "highlight": null
+          },
+          {
+            "title": "Kela – Unemployment",
+            "url": "https://www.kela.fi/unemployment",
+            "highlight": null
+          }
+        ]
+      },
+      {
+        "week": "Week 2",
+        "steps": [
+          "Update your CV and apply for restaurant and kitchen roles"
+        ],
+        "sources": [
+          {
+            "title": "Job Market Finland (Työmarkkinatori)",
+            "url": "https://tyomarkkinatori.fi/en",
+            "highlight": null
+          }
+        ]
+      },
+      {
+        "week": "Week 4",
+        "steps": [
+          "Review progress; check other permit options with Migri or your union"
+        ],
+        "sources": [
+          {
+            "title": "Migri – Changes to work-based residence permits",
+            "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+            "highlight": null
+          }
+        ]
+      },
+      {
+        "week": "Week 8",
+        "steps": [
+          "If you have an offer, prepare your new permit application"
+        ],
+        "sources": [
+          {
+            "title": "Migri – Changes to work-based residence permits",
+            "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+            "highlight": null
+          }
+        ]
+      },
+      {
+        "week": "Final weeks",
+        "steps": [
+          "Apply for a new permit before 1 February 2027 if you have a new job"
+        ],
+        "sources": [
+          {
+            "title": "Migri – Changes to work-based residence permits",
+            "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+            "highlight": null
+          }
+        ]
+      }
+    ],
+    "plan_b": [
+      {
+        "option": "Another residence permit",
+        "why": "Another permit type may fit your situation; check with Migri or your union.",
+        "latest_start_date": null,
+        "sources": [
+          {
+            "title": "Migri – Changes to work-based residence permits",
+            "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+            "highlight": null
+          },
+          {
+            "title": "InfoFinland – Unemployment",
+            "url": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+            "highlight": null
+          }
+        ]
+      }
+    ],
+    "disclaimer": "This is general guidance based on official Finnish sources, not legal advice. Rules can change: confirm your situation with Migri, Kela or your union.",
+    "mock": true
+  }
+}

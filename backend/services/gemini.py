@@ -18,6 +18,7 @@ import limits
 log = logging.getLogger(__name__)
 CACHE_PATH = Path(__file__).resolve().parent.parent / ".gemini_cache.json"
 CACHE_TTL = timedelta(hours=24)
+TIMEOUT_MS = 45_000
 
 _client = None
 
@@ -29,8 +30,11 @@ def _get_client():
         return None
     if _client is None:
         from google import genai
+        from google.genai import types
 
-        _client = genai.Client(api_key=key)
+        # 45 s timeout and a single attempt: a slow or failing call falls back instead of hanging or retrying.
+        _client = genai.Client(api_key=key, http_options=types.HttpOptions(
+            timeout=TIMEOUT_MS, retry_options=types.HttpRetryOptions(attempts=1)))
     return _client
 
 
@@ -58,7 +62,10 @@ def _call(prompt: str, schema: Any = None, purpose: str = "") -> Any | None:
     try:
         from google.genai import types
 
+        # Low thinking: these are short extraction/writing tasks, so it's faster and cheaper on the free tier.
         cfg = {"response_mime_type": "application/json", "temperature": 0.2}
+        if "lite" not in config.GEMINI_MODEL:
+            cfg["thinking_config"] = types.ThinkingConfig(thinking_level="LOW")
         if schema is not None:
             cfg["response_schema"] = schema
         resp = client.models.generate_content(

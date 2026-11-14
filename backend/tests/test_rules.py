@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from rules import DeadlineInput, add_months, compute_deadline, missing_fields
+from countries.finland import DEADLINE_RULES, TRUSTED_DOMAINS
 
 TODAY = date(2026, 11, 14)
 END = date(2026, 11, 1)
@@ -21,12 +22,14 @@ def test_work_permit_three_months():
     assert r.months == 3
     assert r.deadline == date(2027, 2, 1)
     assert r.days_left == (date(2027, 2, 1) - TODAY).days
+    assert r.rule_id == "work-based-three-months"
 
 
 def test_work_permit_over_two_years_six_months():
     r = compute_deadline(work(over_two_years_on_work_permit=True), today=TODAY)
     assert r.months == 6
     assert r.deadline == date(2027, 5, 1)
+    assert r.rule_id == "specialist-or-long-term-work-six-months"
 
 
 @pytest.mark.parametrize("permit", ["specialist", "eu_blue_card"])
@@ -42,6 +45,7 @@ def test_permits_not_tied_to_job(permit):
     r = compute_deadline(work(permit_type=permit), today=TODAY)
     assert r.status == "not_applicable"
     assert r.deadline is None
+    assert r.rule_id == "not-tied-to-employment"
 
 
 @pytest.mark.parametrize("citizenship", ["eu", "finnish"])
@@ -82,3 +86,12 @@ def test_past_deadline_has_negative_days_left():
 ])
 def test_add_months_clamps(start, months, expected):
     assert add_months(start, months) == expected
+
+
+def test_finland_country_config_contains_sources_and_all_rule_metadata():
+    assert TRUSTED_DOMAINS == ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"]
+    assert {rule["months"] for rule in DEADLINE_RULES} == {None, 3, 6}
+    for rule in DEADLINE_RULES:
+        assert {"id", "description", "months", "applies_to", "source_url", "in_force_since", "last_verified"} <= rule.keys()
+        assert rule["source_url"].startswith("https://migri.fi/")
+        assert rule["in_force_since"] == "2025-06-11"

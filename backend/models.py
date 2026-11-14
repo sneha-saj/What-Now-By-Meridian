@@ -63,6 +63,8 @@ class Deadline(BaseModel):
     days_left: Optional[int] = None
     missing: list[str] = Field(default_factory=list)
     source: Source
+    live_check: Optional[dict] = None
+    warning: Optional[str] = None
 
 
 class Step(BaseModel):

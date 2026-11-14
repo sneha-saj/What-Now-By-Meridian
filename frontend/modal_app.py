@@ -13,8 +13,10 @@ BACKEND_DIR = ROOT_DIR / "backend"
 app = modal.App("what-now-by-meridian-site")
 image = (
     modal.Image.from_registry("node:22-bookworm-slim", add_python="3.11")
+    .apt_install("ca-certificates")
     .pip_install_from_requirements(str(BACKEND_DIR / "requirements.txt"))
-    .env({"API_URL": "http://127.0.0.1:8000", "NEXT_TELEMETRY_DISABLED": "1"})
+    .env({"API_URL": "http://127.0.0.1:8000", "NEXT_TELEMETRY_DISABLED": "1",
+          "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"})
     .add_local_dir(
         str(BACKEND_DIR), "/backend", copy=True,
         ignore=[".venv", ".venv/**", "__pycache__", "**/__pycache__", "tests/**", "*.pyc", ".*.json"],

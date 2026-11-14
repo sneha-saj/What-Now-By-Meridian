@@ -80,7 +80,27 @@ export default function StartPage() {
   useEffect(() => { setSaved(listSaved<Saved>()); }, []);
   const stripRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setS(load()); setLoaded(true); }, []);
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+    const state = load();
+    setS(fromUrl && TABS.some((t) => t.id === fromUrl) ? { ...state, tab: fromUrl } : state);
+    setLoaded(true);
+    // Back/forward buttons move between tabs like pages.
+    const onPop = () => {
+      const t = (new URLSearchParams(window.location.search).get("tab") ?? "roadmap") as Tab;
+      setS((prev) => ({ ...prev, tab: TABS.some((x) => x.id === t) ? t : "roadmap" }));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  /** Each tab has its own address (/start, /start?tab=opportunities, /start?tab=how): refresh, back and links work. */
+  const tabHref = (t: Tab) => (t === "roadmap" ? "/start" : `/start?tab=${t}`);
+  function goTab(t: Tab) {
+    setS((prev) => ({ ...prev, tab: t }));
+    if (window.location.pathname + window.location.search !== tabHref(t)) window.history.pushState(null, "", tabHref(t));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   useEffect(() => {
     if (!loaded) return;
     try { window.sessionStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage blocked: still works */ }
@@ -149,6 +169,7 @@ export default function StartPage() {
 
   function clearAll() {
     try { window.sessionStorage.removeItem(KEY); } catch {}
+    window.history.replaceState(null, "", "/start");
     setS(empty());
     setSearching({});
     setLog([]);
@@ -182,7 +203,7 @@ export default function StartPage() {
       onEntry={(e) => {
         update({ asks: [...s.asks, e] });
         if (e.res.facts_update && Object.keys(e.res.facts_update).length) {
-          update({ tab: "roadmap" });
+          goTab("roadmap");
           send({ edited_facts: e.res.facts_update });
         }
       }}
@@ -190,8 +211,8 @@ export default function StartPage() {
         const e = s.asks[i];
         const suggested = e.res.suggested_roadmap_step!;
         const step: NodeId = suggested === "deadline" || suggested === "final" ? "deadline" : "week1";
+        goTab("roadmap");
         update({
-          tab: "roadmap",
           asks: s.asks.map((x, k) => (k === i ? { ...x, added: true } : x)),
           added: { ...s.added, [step]: [...(s.added[step] ?? []), { question: e.question, answer: e.res.answer, sources: e.res.sources }] },
         });
@@ -230,7 +251,7 @@ export default function StartPage() {
     </div>
   );
   const opportunitiesHint = s.built && s.tab === "roadmap" && (
-    <button onClick={() => update({ tab: "opportunities" })}
+    <button onClick={() => goTab("opportunities")}
       className="flex w-full items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4 text-left font-bold text-accent-ink hover:border-accent">
       Next: companies hiring, people who could refer you, perks and events <span aria-hidden>→</span>
     </button>
@@ -243,17 +264,29 @@ export default function StartPage() {
       {/* Row 1: setup progress, or tabs once the roadmap exists; "New situation" is always here */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         {s.built ? (
-          <div role="tablist" aria-label="Your roadmap" className="flex min-w-0 flex-1 flex-wrap gap-2 border-b border-rule">
-            {TABS.map((t) => (
-              <button key={t.id} role="tab" id={`tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`panel-${t.id}`}
-                onClick={() => update({ tab: t.id })}
-                className={cx("-mb-px min-h-12 rounded-t-xl border-b-2 px-4 font-bold",
-                  tab === t.id ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink")}>
-                {t.label}
-                {t.id === "opportunities" && !!s.opp?.counts?.total && <span className="ml-1.5 rounded-full bg-accent-soft px-2 text-sm text-accent-ink">{s.opp.counts.total}</span>}
-              </button>
-            ))}
-          </div>
+          <nav aria-label="Your roadmap sections" className="min-w-0 flex-1 border-b border-rule">
+            <ul className="-mb-px flex flex-wrap gap-1 sm:gap-2">
+              {TABS.map((t) => {
+                const current = tab === t.id;
+                const count = t.id === "opportunities" ? s.opp?.counts?.total : undefined;
+                return (
+                  <li key={t.id}>
+                    <a href={tabHref(t.id)} aria-current={current ? "page" : undefined}
+                      onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); goTab(t.id); }}
+                      className={cx("inline-flex min-h-12 items-center gap-2 rounded-t-xl border-b-[3px] px-4 font-bold transition-colors",
+                        current ? "border-ink bg-card text-ink" : "border-transparent text-ink-soft hover:bg-paper-deep hover:text-ink")}>
+                      {t.label}
+                      {!!count && (
+                        <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-accent-soft px-2 py-0.5 text-sm text-accent-ink">
+                          {count}<span className="sr-only"> items</span>
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
         ) : (
           <FlowProgress phase={phase} />
         )}
@@ -304,7 +337,7 @@ export default function StartPage() {
           )
         ) : (
           <div className="space-y-6">
-            <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+            <div id={`panel-${tab}`}>
               {tab === "roadmap" && (
                 <div className="space-y-6">
                   <div>

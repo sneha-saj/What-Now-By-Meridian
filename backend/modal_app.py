@@ -32,7 +32,7 @@ runtime_secret = modal.Secret.from_dict(runtime_keys)
 
 @app.function(image=image, secrets=[runtime_secret], timeout=300, scaledown_window=300)
 @modal.concurrent(max_inputs=20)
-@modal.asgi_app()
+@modal.asgi_app(label="api")
 def web():
     sys.path.insert(0, "/root/backend")
     from main import app as api

@@ -38,7 +38,7 @@ runtime_secret = modal.Secret.from_dict(runtime_keys)
 
 
 @app.function(image=image, secrets=[runtime_secret], scaledown_window=300, timeout=300)
-@modal.web_server(3000, startup_timeout=60)
+@modal.web_server(3000, startup_timeout=60, label="site")
 def web():
     subprocess.Popen(["python", "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"],
                      cwd="/backend")

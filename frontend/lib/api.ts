@@ -57,6 +57,7 @@ export type AskResponse = {
   suggested_roadmap_step?: RoadStep;
   off_topic: boolean;
   official_only: boolean;
+  facts_update?: Partial<Facts>;
   mock: boolean;
 };
 export type PrimaryAction = { kind: "open_link" | "reach_out" | "copy_draft" | "check_conditions"; label: string; url?: string | null };

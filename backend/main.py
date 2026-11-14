@@ -499,7 +499,8 @@ def ask_question(req: AskRequest):
     """Exa's Answer endpoint answers with citations. Questions about rules (permits, benefits, registering)
     are limited to the trusted official domains. Off-topic questions get a polite no. Answers are cached 24h."""
     q = req.question.strip()
-    if not q or not ask_rules.on_topic(q):
+    update = _facts_in_question(q, req.facts)
+    if not q or (not ask_rules.on_topic(q) and not update):
         return AskResponse(answer=ask_rules.OFF_TOPIC_REPLY, off_topic=True)
     official = ask_rules.about_rules(q)
     f = req.facts
@@ -507,11 +508,14 @@ def ask_question(req: AskRequest):
         f.permit_type and f"{f.permit_type.replace('_', ' ')} permit", f.city and f"lives in {f.city}",
         f.field and f"works as {f.field}"] if x)
     step = ask_rules.suggested_step(q)
+    if update and not ask_rules.on_topic(q):
+        # Only a correction ("I've been here 3 years"): update the situation, nothing to look up.
+        return AskResponse(answer="Thanks, I've updated your situation. Your roadmap is being rebuilt.", facts_update=update)
     out = None if config.USE_MOCK else exa_search.ask(q, official, context)
     if out is None:
         return AskResponse(answer=("I can't look that up live right now. For permits, check migri.fi; for benefits, "
                                    "kela.fi; for registering as a jobseeker, tyomarkkinatori.fi."),
-                           suggested_roadmap_step=step, official_only=official, mock=True)
+                           suggested_roadmap_step=step, official_only=official, facts_update=update, mock=True)
     sources = [AskSource(title=c["title"], url=c["url"], domain=exa_search._domain(c["url"]), date=c.get("published"))
                for c in out["citations"]]
     answer = out["answer"]
@@ -519,7 +523,29 @@ def ask_question(req: AskRequest):
         answer = ("I couldn't find this on the official sites (Migri, Kela, InfoFinland, Työmarkkinatori). "
                   "Please check with Migri or your union.")
     return AskResponse(answer=answer, sources=sources, suggested_roadmap_step=step if sources else None,
-                       official_only=official)
+                       official_only=official, facts_update=update)
+
+
+ASK_IGNORED = {"lost_job", "job_was_in_finland", "job_end_date_approximate"}
+
+
+def _facts_in_question(q: str, current: Facts) -> dict:
+    """Facts in the question that differ from the current situation (Gemini, or the keyword fallback)."""
+    if not q or config.USE_MOCK:
+        return {}
+    today = date.today().isoformat()
+    found = gemini.extract_facts(q, today) if gemini.available() else None
+    if found is None:
+        found = mocks.extract_facts(q, date.today())
+    now = current.model_dump(mode="json")
+    update = {}
+    for k, v in found.items():
+        if k in Facts.model_fields and k not in ASK_IGNORED and v not in (None, "") and now.get(k) != v:
+            update[k] = v
+    if update:
+        activity.emit({"type": "app", "who": "gemini",
+                       "text": f"Found new details in your question: {', '.join(FIELD_NAMES.get(k, k) for k in update)}"})
+    return update
 
 
 # ---------- /opportunities ----------

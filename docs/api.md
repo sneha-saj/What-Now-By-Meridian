@@ -789,7 +789,10 @@ polite no without calling Exa. Answers are cached for 24 hours.
 **Input**: `{"question": "...", "facts": {...}}` (facts add context: permit, city, field).
 
 **Output**: `answer`, `sources` (`title`, `url`, `domain`, `date`), `suggested_roadmap_step` (`week1`, `wayin`,
-`week2`, `week4`, `week8`, `final` or `deadline`, when the answer fits a step), `off_topic`, `official_only`, `mock`.
+`week2`, `week4`, `week8`, `final` or `deadline`, when the answer fits a step), `off_topic`, `official_only`,
+`facts_update` (new facts found in the question that differ from the current situation, e.g. `{"years_on_work_permit": 3}`;
+the app sends them to `/chat` as `edited_facts` so the roadmap rebuilds), `mock`. A question that is only a
+correction ("I've actually been here 3 years") updates the situation without calling Exa.
 
 ### Example
 

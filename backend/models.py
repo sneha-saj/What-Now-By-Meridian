@@ -285,6 +285,7 @@ class AskResponse(BaseModel):
     suggested_roadmap_step: Optional[Literal["week1", "wayin", "week2", "week4", "week8", "final", "deadline"]] = None
     off_topic: bool = False
     official_only: bool = False
+    facts_update: dict = Field(default_factory=dict)  # new facts found in the question; the roadmap rebuilds
     mock: bool = False
 
 

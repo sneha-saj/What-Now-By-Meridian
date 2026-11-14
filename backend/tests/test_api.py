@@ -552,3 +552,22 @@ def test_job_loss_in_the_message_skips_the_check(monkeypatch):
     monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: None)  # keyword fallback
     body = client.post("/chat", json={"messages": _msg("I was laid off last week, I'm on a work permit")}).json()
     assert body["facts"]["lost_job"] is True and body["question"]["id"] != "lost_job"
+
+
+
+def test_ask_picks_up_new_facts_so_the_roadmap_can_rebuild(monkeypatch):
+    monkeypatch.setattr(main.gemini, "available", lambda: True)
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"years_on_work_permit": 3, "lost_job": True, "city": "Espoo"})
+    monkeypatch.setattr(main.exa_search, "ask", lambda *a: pytest.fail("nothing to look up in a correction"))
+    body = client.post("/ask", json={"question": "Actually I have been here 3 years", "facts": WORK_FACTS}).json()
+    assert body["facts_update"] == {"years_on_work_permit": 3.0} or body["facts_update"] == {"years_on_work_permit": 3}
+    assert "updated your situation" in body["answer"]
+
+
+def test_ask_question_with_no_new_facts_has_empty_update(monkeypatch):
+    monkeypatch.setattr(main.gemini, "available", lambda: True)
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"city": "Espoo"})
+    monkeypatch.setattr(main.exa_search, "ask", lambda *a: {"answer": "Yes.", "citations": [
+        {"title": "Kela", "url": "https://www.kela.fi/x", "published": None}]})
+    body = client.post("/ask", json={"question": "Can I get Kela benefit?", "facts": WORK_FACTS}).json()
+    assert body["facts_update"] == {} and body["sources"]

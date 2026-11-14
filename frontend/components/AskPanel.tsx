@@ -39,13 +39,13 @@ export function AskPanel({
   return (
     <section aria-labelledby="ask-title" className="space-y-4 rounded-3xl border border-rule bg-card p-5 shadow-[0_6px_24px_rgba(28,42,69,0.06)] sm:p-7">
       <div>
-        <h2 id="ask-title" className="font-serif text-2xl font-semibold">Ask about your situation</h2>
-        <p className="mt-1 text-ink-soft">Exa looks it up live. Questions about permits and benefits only use Migri, Kela, InfoFinland and Työmarkkinatori.</p>
+        <h2 id="ask-title" className="font-serif text-2xl font-semibold">Ask, or tell us something new</h2>
+        <p className="mt-1 text-ink-soft">Exa looks answers up live (permits and benefits only from Migri, Kela, InfoFinland and Työmarkkinatori). If you mention something new, like “I&apos;ve been here 3 years”, your roadmap updates.</p>
       </div>
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex flex-wrap gap-3">
         <label htmlFor="ask-input" className="sr-only">Your question</label>
         <input id="ask-input" value={q} onChange={(e) => setQ(e.target.value)} disabled={busy}
-          placeholder="For example: Can I work part-time while I look for a new job?"
+          placeholder="For example: Can I work part-time while I look? Or: I've actually been here 3 years."
           className="min-h-12 min-w-0 flex-1 rounded-xl border border-ink/25 bg-card px-4 text-lg" />
         <Button type="submit" disabled={busy || !q.trim()}>{busy ? "Looking it up…" : "Ask"}</Button>
       </form>
@@ -58,6 +58,12 @@ export function AskPanel({
             <li key={i} className="animate-fade-up rounded-2xl border border-rule bg-paper p-4">
               <p className="text-sm text-ink-soft">{e.question}</p>
               <p className="mt-2 text-lg">{e.res.answer}</p>
+              {e.res.facts_update && Object.keys(e.res.facts_update).length > 0 && (
+                <p className="mt-2 rounded-lg bg-accent-soft px-3 py-2 text-accent-ink">
+                  Updated your situation: {Object.keys(e.res.facts_update).map((k) => k.replaceAll("_", " ")).join(", ")}.
+                  Your roadmap was rebuilt.
+                </p>
+              )}
               {e.res.sources.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {e.res.sources.map((s) => <SourceChip key={s.url} live source={{ title: s.title, url: s.url, published: s.date }} />)}

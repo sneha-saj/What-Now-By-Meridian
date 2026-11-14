@@ -17,6 +17,8 @@ import { Opportunities } from "@/components/Opportunities";
 import { QuestionCard, Welcome } from "@/components/QuestionCard";
 import { Legend, Roadmap, type AddedItem } from "@/components/Roadmap";
 import { SituationStrip } from "@/components/SituationStrip";
+import { deleteSaved, listSaved, saveRoadmap, type SavedRoadmap } from "@/lib/saved";
+import { FIELDS, display } from "@/lib/facts";
 import { Button, GentleWarning, cx } from "@/components/primitives";
 
 type Tab = "roadmap" | "opportunities" | "how";
@@ -73,6 +75,8 @@ export default function StartPage() {
   const [editing, setEditing] = useState<Field | null>(null);
   const [qVersion, setQVersion] = useState(0);
   const [focus, setFocus] = useState<{ id: NodeId; at: number } | null>(null);
+  const [saved, setSaved] = useState<SavedRoadmap<Saved>[]>([]);
+  useEffect(() => { setSaved(listSaved<Saved>()); }, []);
   const stripRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setS(load()); setLoaded(true); }, []);
@@ -161,7 +165,10 @@ export default function StartPage() {
   if (!s.started)
     return (
       <main id="main" className="mx-auto max-w-7xl px-5 sm:px-8">
-        <Welcome busy={busy} onSubmit={(text) => { update({ started: true }); send({ messages: [{ role: "user", text }] }); }} />
+        <Welcome busy={busy} onSubmit={(text) => { update({ started: true }); send({ messages: [{ role: "user", text }] }); }}
+          saved={saved}
+          onOpen={(id) => { const r = saved.find((x) => x.id === id); if (r) setS({ ...empty(), ...r.state }); }}
+          onDelete={(id) => { deleteSaved(id); setSaved(listSaved<Saved>()); }} />
       </main>
     );
 
@@ -171,7 +178,13 @@ export default function StartPage() {
   // Ask lives inside the Roadmap and Opportunities tabs, so answers appear where you are.
   const ask = (
     <AskPanel facts={s.facts} entries={s.asks}
-      onEntry={(e) => update({ asks: [...s.asks, e] })}
+      onEntry={(e) => {
+        update({ asks: [...s.asks, e] });
+        if (e.res.facts_update && Object.keys(e.res.facts_update).length) {
+          update({ tab: "roadmap" });
+          send({ edited_facts: e.res.facts_update });
+        }
+      }}
       onAdd={(i) => {
         const e = s.asks[i];
         const suggested = e.res.suggested_roadmap_step!;
@@ -185,12 +198,24 @@ export default function StartPage() {
       }} />
   );
 
+  const roadmapTitle = () => {
+    const permit = display(FIELDS.find((f) => f.id === "permit_type")!, s.facts.permit_type) ?? "My situation";
+    const when = s.deadline?.deadline_date
+      ? new Date(s.deadline.deadline_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+      : null;
+    return [permit, s.facts.city, when && `deadline ${when}`].filter(Boolean).join(" · ");
+  };
   const newSituation = (
     <div className="flex shrink-0 flex-wrap items-center gap-2">
       {confirmClear ? (
         <>
-          <span className="text-sm">Clear everything and start again?</span>
-          <Button variant="chip" onClick={clearAll}>Yes, start again</Button>
+          <span className="text-sm">Start a new situation. Keep this one?</span>
+          {s.built && (
+            <Button variant="chip" onClick={() => { saveRoadmap(roadmapTitle(), s); setSaved(listSaved<Saved>()); clearAll(); }}>
+              Save this roadmap
+            </Button>
+          )}
+          <Button variant="chip" onClick={clearAll}>Discard</Button>
           <Button variant="quiet" onClick={() => setConfirmClear(false)}>Cancel</Button>
         </>
       ) : (
@@ -285,6 +310,7 @@ export default function StartPage() {
                         : "Live data isn't available right now, so these steps use our checked saved guide."}
                     </p>
                   </div>
+                  {ask}
                   {busy && <ActivityLog lines={log} busy={busy} last={3} />}
                   <Roadmap
                     nodes={nodes}
@@ -296,7 +322,6 @@ export default function StartPage() {
                     focus={focus}
                   />
                   {opportunitiesHint}
-                  {ask}
                   <Legend />
                 </div>
               )}

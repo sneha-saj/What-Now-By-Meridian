@@ -24,7 +24,8 @@ if modal.is_local():
     from dotenv import dotenv_values
 
     values = dotenv_values(ROOT_DIR / ".env")
-    runtime_keys = {name: value for name in ("EXA_API_KEY", "GEMINI_API_KEY", "CONTEXT_DEV_API_KEY")
+    runtime_keys = {name: value for name in ("EXA_API_KEY", "GEMINI_API_KEY", "CONTEXT_DEV_API_KEY",
+                                                "ELEVENLABS_API_KEY", "ACCESS_CODES")
                     if (value := os.getenv(name) or values.get(name))}
 else:
     runtime_keys = {}

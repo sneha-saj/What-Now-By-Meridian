@@ -21,6 +21,9 @@ jobs:
       EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       CONTEXT_DEV_API_KEY: ${{ secrets.CONTEXT_DEV_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      # Judges' codes: without them the public site would use the paid APIs for everyone, so deploying stops.
+      ACCESS_CODES: ${{ secrets.ACCESS_CODES }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,6 +37,7 @@ jobs:
           test -n "$MODAL_TOKEN_SECRET"
           test -n "$EXA_API_KEY"
           test -n "$GEMINI_API_KEY"
+          test -n "$ACCESS_CODES" || { echo "Set the ACCESS_CODES secret first (judge-only live mode)"; exit 1; }
       - name: Deploy website and bundled API
         run: modal deploy frontend/modal_app.py
       - name: Deploy separate API

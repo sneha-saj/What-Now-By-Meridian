@@ -23,9 +23,10 @@ Every response has `mock: true` when a fallback was used (no API key, or a call 
 | `POST /intake` | Turn the user's sentence into facts; ask up to 3 questions the deadline still needs |
 | `POST /plan` | Deadline, 3 actions for this week, a timeline and plan B, all with official sources |
 | `GET /rules` | The deadline rules, their latest live check against Migri, and trusted domains |
-| `POST /chat` | Guided chat: the same steps, one message at a time, with a live "Your situation" card |
+| `POST /chat` | Guided chat: the same steps, one message at a time, with a live "What we know so far" card |
 | `POST /chat/stream` | Same as `/chat`, streamed with live progress, Exa activity and partial results |
 | `POST /opportunities` (+ `/stream`) | Perks and support: job search certificate, city discounts, employer incentives, all from live Exa sources |
+| `POST /steps/update` (+ `/stream`) | Add info to one step; that step and the ones after it are rewritten live |
 | `POST /ask` | Ask a question; Exa's Answer endpoint replies with sources |
 | `GET /health` | Which integrations have keys configured |
 
@@ -48,15 +49,27 @@ where it makes sense. It never asks for permit numbers or passport details.
 **Output**: `facts`, `missing_questions` (`id`, `question`, `kind`: `choice` or `date`, `options`: `value` + `label`), `mock`.
 If the job was outside Finland: `out_of_scope: true`, `message`, `link` instead of facts.
 
-Questions are deterministic: the Finland config (`backend/countries/finland.py`) lists `REQUIRED_FIELDS`
-(citizenship group, permit type, years on a work permit, job end date), with a fixed `QUESTION_BANK`. Only these
-deadline facts are asked; city and work are taken from the opening message or added later on the "Your situation"
-card (the Opportunities tab asks for the city). Gemini only extracts facts; code picks the next missing field. Approximate date answers arrive as `about:YYYY-MM-DD` and set
+Questions come from a fixed `QUESTION_BANK` in the Finland config (`backend/countries/finland.py`); code picks the
+next missing field, so the wording and answers are always checked. The order is:
+
+1. `lost_job`, only if the message doesn't say.
+2. `REQUIRED_FIELDS`, what the deadline needs: citizenship group, permit type, years on a work permit, job end date.
+3. Up to 3 **personal questions** (`PERSONAL_QUESTIONS`) that make the steps specific: `city`, `field`,
+   `unemployment_fund`, `registered_jobseeker`, `studied_in_finland`, `family_in_finland`. In the same call that
+   reads the message, Gemini picks which of these matter for this person (`useful_questions`); code keeps only ids
+   from the list, max 3, and stores them as `facts.to_ask` so later taps need no Gemini call. Anything the message
+   already answered is skipped. Without Gemini, `DEFAULT_PERSONAL` is asked (city, field, unemployment fund).
+   City and work have "Skip" (stored as `""`, not asked again).
+
+The steps then use these answers: the Exa searches follow the city, field, fund and registration, and Gemini is
+told not to say "register" to someone already registered and to point fund members to their fund, others to Kela.
+`/intake` only returns the deadline questions. Approximate date answers arrive as `about:YYYY-MM-DD` and set
 `job_end_date_approximate`; the deadline then has `deadline_is_approximate: true`.
 
 Facts: `citizenship_group` (`eu_eea` / `other` / `unknown`), `citizenship_country`, `permit_type`,
 `years_on_work_permit` (number, or `under_2` / `over_2` / `not_sure`), `job_end_date`, `city`, `field`,
-`studied_in_finland`, `family_in_finland`.
+`studied_in_finland`, `family_in_finland`, `unemployment_fund` (`yes` / `no` / `not_sure`),
+`registered_jobseeker` (`yes` / `no`), `to_ask` (the personal questions picked for this person).
 
 ### Example: everything known
 
@@ -567,7 +580,7 @@ asks one question at a time until the deadline has what it needs. After that, se
 | Field | Notes |
 | --- | --- |
 | `messages` | `[{role: "user" or "assistant", text}]` |
-| `facts` | The current "Your situation" card |
+| `facts` | The current "What we know so far" card |
 | `answers` | Tapped answers, keyed by question `id` |
 | `edited_facts` | Fields the user corrected on the card |
 | `step` | The step the browser is on |
@@ -579,7 +592,7 @@ asks one question at a time until the deadline has what it needs. After that, se
 | --- | --- |
 | `reply` | Short, calm, plain-language message |
 | `step` | Current step |
-| `facts` | Updated "Your situation" card |
+| `facts` | Updated "What we know so far" card |
 | `confirmed_fields` | Fields the user tapped or edited in this request (the rest are guesses from their message) |
 | `question` | The next question (`about_you` only), same shape as in `/intake` |
 | `quick_replies` | e.g. `{"value": "next", "label": "Show me this week"}` |
@@ -675,6 +688,29 @@ Each event is a line `data: {json}`:
 | `{"type": "partial", "key": "deadline" / "plan", "data": ...}` | A piece of the result is ready |
 | `{"type": "result", "data": <ChatResponse>}` | The final `/chat` response |
 | `{"type": "error"}` | Something failed; the browser falls back to `/chat` |
+
+---
+
+## POST /steps/update (and /steps/update/stream)
+
+The app shows the plan as one numbered list, just "Step 1, Step 2, …" with no week labels: the plan's 3 first
+actions (`this_week`), then its later steps (`timeline`, skipping "Week 1", which repeats them), then the Plan B
+options. The date from the rules engine is shown once above the list, as "You can stay in Finland to look for work
+until …" (the word "deadline" is not shown to users). Each step has "Add info about this step".
+
+**Input**: `{"facts": {...}, "plan": <PlanResponse>, "step": 2, "note": "I already registered last week"}`
+(`step` is 1-based in the order above; `note` max 500 characters).
+
+1. Plain keyword rules (no AI) pick up new facts from the note, only low-risk ones: `unemployment_fund`,
+   `registered_jobseeker`, `studied_in_finland`, `family_in_finland`, `city`. Facts behind the date (permit,
+   years, last day) are only changed in "What we know so far", so a phrase like "last week" can't move the date.
+2. The usual Exa searches run (cached 24h; they follow the updated facts) plus one extra search on the note.
+3. One Gemini call rewrites the plan with the note. Code keeps steps before `step` exactly as they were and takes
+   `step` onward from the new plan.
+
+**Output**: `plan` (merged), `facts`, `facts_update`, `updated_from`, `mock`, `message`. Without Gemini or Exa (or
+with `USE_MOCK=true`) the steps stay as they were, the new facts are still saved, and `message` says so. The stream
+sends the usual Exa/Gemini activity events, then `{"type": "result", "data": ...}`.
 
 ---
 

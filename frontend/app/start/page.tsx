@@ -28,7 +28,6 @@ const HEADLINE_PHRASES = [
   "Lost your job?",
   "Fixed-term contract over?",
   "Probation ended?",
-  "Company closed down?",
   "Made redundant?",
 ];
 

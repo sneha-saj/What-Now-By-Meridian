@@ -305,7 +305,6 @@ export default function StartPage() {
             <ul className="-mb-px flex flex-wrap gap-1 sm:gap-2">
               {TABS.map((t) => {
                 const current = tab === t.id;
-                const count = t.id === "opportunities" ? s.opp?.counts?.total : undefined;
                 return (
                   <li key={t.id}>
                     <a href={tabHref(t.id)} aria-current={current ? "page" : undefined}
@@ -313,11 +312,6 @@ export default function StartPage() {
                       className={cx("inline-flex min-h-12 items-center gap-2 rounded-t-xl border-b-[3px] px-4 font-bold transition-colors",
                         current ? "border-ink bg-card text-ink" : "border-transparent text-ink-soft hover:bg-paper-deep hover:text-ink")}>
                       {t.label}
-                      {!!count && (
-                        <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-accent-soft px-2 py-0.5 text-sm text-accent-ink">
-                          {count}<span className="sr-only"> items</span>
-                        </span>
-                      )}
                     </a>
                   </li>
                 );
@@ -455,7 +449,8 @@ export default function StartPage() {
                 </div>
                 {/* What we know so far: on the right of the steps (below them on small screens) */}
                 <div ref={sideRef} className="scroll-mt-24 md:sticky md:top-6">
-                  <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact} />
+                  <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact}
+                    also={editing === "city" ? ["city"] : []} />
                 </div>
                 </div>
               )}
@@ -466,7 +461,11 @@ export default function StartPage() {
                       <h2 className="font-serif text-3xl font-semibold">Perks and support where you live</h2>
                       <p className="mt-2 text-ink-soft">Discounts and support depend on your city. Add it here when you want to explore this tab.</p>
                       <div className="mt-4">
-                        <Button variant="chip" onClick={() => { setEditing("city"); stripRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>Add city</Button>
+                        <Button variant="chip" onClick={() => {
+                          // What we know so far lives on the Steps tab only: go there with the city row open.
+                          goTab("roadmap"); setEditing("city");
+                          setTimeout(() => sideRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+                        }}>Add city</Button>
                       </div>
                     </section>
                   ) : (
@@ -491,11 +490,11 @@ export default function StartPage() {
         )}
       </div>
 
-      {/* Row 3: what we know so far, editable (beside the question instead while questions are being asked) */}
+      {/* Row 3: what we know so far, editable, before the steps are built. After that it sits beside the steps
+          on the Steps tab only (not on Perks and support or How we know this). */}
       <div ref={stripRef} className="space-y-3">
-        {!askingQuestion && !(s.built && tab === "roadmap") && (
-          <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact} wide
-            also={s.built && tab === "opportunities" ? ["city"] : []} />
+        {!askingQuestion && !s.built && (
+          <Checklist facts={s.facts} open={editing} onOpen={setEditing} onEdit={editFact} wide />
         )}
         {error && <GentleWarning>{error}</GentleWarning>}
       </div>

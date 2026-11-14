@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { OpportunitiesResponse } from "@/lib/api";
 import { isSample } from "@/lib/format";
 import { GlobeIcon } from "./icons";
-import { Button, Card, SourceChip, cx } from "./primitives";
+import { Button, SourceChip, cx } from "./primitives";
 import { ListenButton } from "./Voice";
 
 const SHOW = 3;
@@ -23,12 +23,12 @@ function ReadBy({ by }: { by?: "context.dev" | null }) {
   if (by !== "context.dev") return null;
   const why = "Context.dev opened this official page and pulled out these exact details, so they're the page's own words, not a search snippet.";
   return (
-    <span className="group relative inline-flex">
-      <span tabIndex={0} title={why}
+    <span className="group/readby relative inline-flex">
+      <span tabIndex={0}
         className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-ink/20 bg-card px-3 py-1 text-sm font-bold text-ink">
         <span aria-hidden>▤</span> Read from the page by Context.dev<span className="sr-only">. {why}</span>
       </span>
-      <span role="tooltip" aria-hidden className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-[min(20rem,80vw)] rounded-xl border border-rule bg-card p-3 text-sm font-normal shadow-lg group-hover:block group-focus-within:block">
+      <span role="tooltip" aria-hidden className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-[min(20rem,80vw)] rounded-xl border border-rule bg-card p-3 text-sm font-normal shadow-lg group-hover/readby:block group-focus-within/readby:block">
         {why}
       </span>
     </span>
@@ -39,19 +39,42 @@ function Src({ url, title, date }: { url: string; title: string; date?: string |
   return <SourceChip live={!isSample(url)} source={{ title, url, published: date }} />;
 }
 
-function Section({ title, intro, empty, searching, children }: {
-  title: string; intro: string; empty: boolean; searching: boolean; children: React.ReactNode;
+/** One topic as a quiet, collapsible row: title and a short hint, details inside. */
+function Topic({ title, hint, open, empty, searching, reason, children }: {
+  title: string; hint: string; open: boolean; empty: boolean; searching: boolean; reason?: string; children: React.ReactNode;
 }) {
   return (
-    <Card title={title}>
-      <p className="-mt-2 mb-4 text-ink-soft">{intro}</p>
-      {empty ? (
-        <p className="flex items-center gap-2 text-ink-soft">
-          {searching ? <><GlobeIcon className="h-4 w-4 text-verified motion-safe:animate-pulse" /> Searching live…</>
-            : "Nothing we could confirm with a source right now."}
-        </p>
-      ) : children}
-    </Card>
+    <details open={open} className="group border-b border-rule last:border-b-0">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-4 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block font-serif text-xl font-semibold">{title}</span>
+          <span className="block truncate text-ink-soft group-open:hidden">
+            {empty && searching ? <><GlobeIcon className="mr-1 inline h-4 w-4 text-verified motion-safe:animate-pulse" />Searching live…</> : hint}
+          </span>
+        </span>
+        <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-ink-soft transition-transform group-open:rotate-180">
+          <path d="M5 7.5l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </summary>
+      <div className="space-y-4 pb-5">
+        {empty ? <p className="text-ink-soft">{searching ? "Searching live…" : "Nothing we could confirm with a source right now."}</p> : children}
+        {reason && <p className="text-sm text-ink-soft">Why you see this: {reason}</p>}
+      </div>
+    </details>
+  );
+}
+
+/** One item: name, a line or two, then its sources. No boxes, just spacing. */
+function Item({ name, listen, children, src }: { name: string; listen: string; children: React.ReactNode; src: React.ReactNode }) {
+  return (
+    <li className="space-y-1">
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-bold">{name}</p>
+        <ListenButton iconOnly what={name} text={listen} />
+      </div>
+      {children}
+      <div className="flex flex-wrap gap-2 pt-1">{src}</div>
+    </li>
   );
 }
 
@@ -65,104 +88,91 @@ export function Opportunities({
   const discounts = useMore(perks?.discounts ?? []);
   const topics = perks?.topics ?? [];
 
-  /** Items for one topic, in the same card style. Nothing is shown unless a page confirms it. */
+  /** Items for one topic. Nothing is shown unless a page confirms it. */
   function items(id: string) {
+    const c = perks?.certificate;
     if (id === "certificate")
-      return perks?.certificate ? (
-        <div className="rounded-2xl border border-verified/30 bg-verified-soft/50 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <p className="font-bold">Start here: {perks.certificate.name}</p>
-            <ListenButton iconOnly what="the job search certificate" text={`${perks.certificate.name}. ${perks.certificate.how_to_get}`} />
-          </div>
-          <p className="mt-1">{perks.certificate.how_to_get}</p>
-          <div className="mt-2 flex flex-wrap gap-2"><Src url={perks.certificate.source_url} title="How to get it" date={perks.certificate.source_date} /><ReadBy by={perks.certificate.read_by} /></div>
-        </div>
+      return c ? (
+        <ul><Item name={c.name} listen={`${c.name}. ${c.how_to_get}`}
+          src={<><Src url={c.source_url} title="How to get it" date={c.source_date} /><ReadBy by={c.read_by} /></>}>
+          <p>{c.how_to_get}</p>
+        </Item></ul>
       ) : null;
     if (id === "discounts")
       return discounts.shown.length ? (
-        <ul className="space-y-3">
+        <ul className="space-y-4">
           {discounts.shown.map((d, i) => (
-            <li key={i}>
-              <div className="flex items-start justify-between gap-3">
-                <p><strong>{d.name}</strong> · {d.discount}</p>
-                <ListenButton iconOnly what={d.name} text={`${d.name}: ${d.discount}. Proof needed: ${d.proof_needed}.`} />
-              </div>
+            <Item key={i} name={d.name} listen={`${d.name}: ${d.discount}. Proof needed: ${d.proof_needed}.`}
+              src={<><Src url={d.source_url} title={d.city} date={d.source_date} /><ReadBy by={d.read_by} /></>}>
+              <p>{d.discount}</p>
               <p className="text-sm text-ink-soft">Proof needed: {d.proof_needed}</p>
-              <div className="mt-1 flex flex-wrap gap-2"><Src url={d.source_url} title={d.city} date={d.source_date} /><ReadBy by={d.read_by} /></div>
-            </li>
+            </Item>
           ))}
           <More {...discounts} />
         </ul>
       ) : null;
     if (id === "incentives")
       return perks?.incentives.length ? (
-        <div className="space-y-3">
+        <ul className="space-y-4">
           {perks.incentives.map((inc, i) => (
-            <div key={i} className="rounded-2xl border border-rule bg-paper p-4">
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-bold">{inc.name}</p>
-                <ListenButton iconOnly what={inc.name} text={`${inc.name}. ${inc.what_it_is} Conditions: ${inc.conditions_plain}. ${inc.caveat}`} />
-              </div>
-              <p className="mt-1">{inc.what_it_is}</p>
-              <p className="mt-1"><span className="text-ink-soft">Conditions: </span>{inc.conditions_plain}</p>
-              <p className={cx("mt-2 rounded-lg px-3 py-2", inc.may_apply ? "bg-verified-soft text-verified" : "bg-warn-soft text-warn")}>
+            <Item key={i} name={inc.name} listen={`${inc.name}. ${inc.what_it_is} Conditions: ${inc.conditions_plain}. ${inc.caveat}`}
+              src={<><Src url={inc.source_url} title="Conditions" date={inc.source_date} /><ReadBy by={inc.read_by} /></>}>
+              <p>{inc.what_it_is}</p>
+              <p className="text-sm text-ink-soft">Conditions: {inc.conditions_plain}</p>
+              <p className={cx("text-sm font-bold", inc.may_apply ? "text-verified" : "text-warn")}>
                 {/^may apply/i.test(inc.caveat) ? "" : inc.may_apply ? "May apply to you. " : "Probably doesn't apply right now. "}{inc.caveat}
               </p>
-              <p className="mt-2 text-sm text-ink-soft">You can mention this to an employer when you apply.</p>
-              <div className="mt-2 flex flex-wrap gap-2"><Src url={inc.source_url} title="Conditions" date={inc.source_date} /><ReadBy by={inc.read_by} /></div>
-            </div>
+            </Item>
           ))}
-        </div>
+        </ul>
       ) : null;
     const list = (perks?.support ?? []).filter((x) => x.topic === id);
     return list.length ? (
-      <ul className="space-y-3">
+      <ul className="space-y-4">
         {list.map((x, i) => (
-          <li key={i} className="rounded-2xl border border-rule bg-paper p-4">
-            <div className="flex items-start justify-between gap-3">
-              <p className="font-bold">{x.name}</p>
-              <ListenButton iconOnly what={x.name} text={[x.name + ".", x.what_it_is, x.who_can_get_it && `Who can get it: ${x.who_can_get_it}.`, x.how_to_get && `How: ${x.how_to_get}`].filter(Boolean).join(" ")} />
-            </div>
-            <p className="mt-1">{x.what_it_is}</p>
-            {x.who_can_get_it && <p className="mt-1"><span className="text-ink-soft">Who can get it: </span>{x.who_can_get_it}</p>}
-            {x.how_to_get && <p className="mt-1"><span className="text-ink-soft">How: </span>{x.how_to_get}</p>}
-            <div className="mt-2 flex flex-wrap gap-2"><Src url={x.source_url} title="Official page" date={x.source_date} /><ReadBy by={x.read_by} /></div>
-          </li>
+          <Item key={i} name={x.name}
+            listen={[x.name + ".", x.what_it_is, x.who_can_get_it && `Who can get it: ${x.who_can_get_it}.`, x.how_to_get && `How: ${x.how_to_get}`].filter(Boolean).join(" ")}
+            src={<><Src url={x.source_url} title="Official page" date={x.source_date} /><ReadBy by={x.read_by} /></>}>
+            <p>{x.what_it_is}</p>
+            {x.who_can_get_it && <p className="text-sm text-ink-soft">Who can get it: {x.who_can_get_it}</p>}
+            {x.how_to_get && <p className="text-sm text-ink-soft">How: {x.how_to_get}</p>}
+          </Item>
         ))}
       </ul>
     ) : null;
   }
 
+  /** The short line under a closed topic: the first thing in it. */
+  function hint(id: string, label: string) {
+    if (id === "certificate") return perks?.certificate?.name ?? label;
+    if (id === "discounts") return perks?.discounts[0] ? `${perks.discounts[0].name} · ${perks.discounts[0].discount}` : label;
+    if (id === "incentives") return perks?.incentives[0]?.name ?? label;
+    return (perks?.support ?? []).find((x) => x.topic === id)?.name ?? label;
+  }
+
+  const shown = topics.filter((t, i) => items(t.id) || loading || i < 3); // extra topics only when a page confirms something
+
   return (
-    <section aria-labelledby="opp-title" className="space-y-6">
+    <section aria-labelledby="opp-title" className="space-y-4">
       <div>
         <h2 id="opp-title" className="font-serif text-3xl font-semibold sm:text-4xl">Perks and support</h2>
-        <p className="mt-2 text-lg text-ink-soft">
-          Picked for your situation, found live on official and city sites. Every item links to where it came from, with the page date.
-        </p>
+        <p className="mt-2 text-ink-soft">Found live on official and city sites. Open a topic for details and sources.</p>
       </div>
 
-      {topics.length === 0 && (
-        <Section title="Perks and support" intro="Proof you're a jobseeker, discounts, and help employers can get for hiring you."
-          empty searching={loading}><span /></Section>
-      )}
-      {topics.map((t, i) => {
-        const body = items(t.id);
-        if (!body && !loading && i >= 3) return null; // extra topics show only when a page confirms something
-        return (
-          <Section key={t.id} title={t.title} intro={t.label} empty={!body} searching={loading}>
-            {body}
-          </Section>
-        );
-      })}
-      {topics.length > 0 && (
-        <details className="text-sm text-ink-soft">
-          <summary className="min-h-9 cursor-pointer font-bold text-ink">Why you see these</summary>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            {topics.map((t) => <li key={t.id}><strong className="text-ink">{t.title}:</strong> {t.reason}</li>)}
-          </ul>
-        </details>
-      )}
+      <div className="rounded-2xl border border-rule bg-card px-5 sm:px-7">
+        {shown.length === 0 ? (
+          <Topic title="Perks and support" hint="Proof you're a jobseeker, discounts, and help for employers who hire you."
+            open empty searching={loading}><span /></Topic>
+        ) : shown.map((t, i) => {
+          const body = items(t.id);
+          return (
+            <Topic key={t.id} title={t.title} hint={hint(t.id, t.label)} open={i === 0} empty={!body}
+              searching={loading} reason={t.reason}>
+              {body}
+            </Topic>
+          );
+        })}
+      </div>
 
       {data.mock && !loading && (
         <p className="text-sm text-ink-soft">Some of this couldn&apos;t be checked live right now, so this may be empty.</p>

@@ -162,3 +162,41 @@ def plan(deadline_date: str | None) -> dict:
              "latest_start_date": None, "sources": [m, i]},
         ],
     }
+
+
+def saved_perks(city: str | None, city_domains: list[str], topic_ids: list[str]) -> list[dict]:
+    """Perks and support when there's no live search (demo mode, or Exa down): careful general pointers, one per
+    topic, each linking to an official page. No specific prices, amounts or conditions: those need a live search.
+    Cheaper travel is left out because it can't be said in general."""
+    where = city or "your city"
+    city_url = f"https://www.{city_domains[0]}/" if city_domains else SOURCES["infofinland"]["url"]
+    guide = {
+        "certificate": ("Proof that you're a registered jobseeker",
+                        "Once you've registered as an unemployed jobseeker, you can usually get proof of it. Many discounts ask for it.",
+                        "Register on Job Market Finland, then ask the employment services for proof of your jobseeker status.",
+                        SOURCES["tyomarkkinatori"]["url"]),
+        "discounts": (f"Discounts in {where}",
+                      "Many Finnish cities offer lower prices for unemployed jobseekers, for example at swimming halls, "
+                      "sports centres or museums. What's offered differs by city.",
+                      f"Check {where}'s official website, and bring proof that you're a jobseeker.", city_url),
+        "incentives": ("Pay subsidy for employers",
+                       "An employer who hires an unemployed jobseeker may be able to get a pay subsidy. The employment "
+                       "services decide case by case.",
+                       "Mention it to employers, and ask the employment services whether it may apply to you.",
+                       SOURCES["tyomarkkinatori"]["url"]),
+        "fund_support": ("Earnings-related allowance",
+                         "If you're a member of an unemployment fund, the fund may pay an earnings-related allowance while "
+                         "you're unemployed.",
+                         "Register as a jobseeker first, then apply to your fund.", SOURCES["infofinland"]["url"]),
+        "kela_extra": ("Support from Kela",
+                       "If you're not in an unemployment fund, Kela may pay basic unemployment support, and you may also "
+                       "be able to get other support, such as help with housing costs.",
+                       "Register as a jobseeker, then check the conditions and apply on Kela's website.",
+                       SOURCES["kela"]["url"]),
+        "language_courses": ("Finnish or Swedish courses",
+                             "Language courses may be available for unemployed jobseekers who moved to Finland.",
+                             "Ask the employment services when you register.", SOURCES["infofinland"]["url"]),
+    }
+    return [{"topic": t, "name": g[0], "what_it_is": g[1], "how_to_get": g[2], "source_url": g[3]}
+            for t in topic_ids if (g := guide.get(t))]
+

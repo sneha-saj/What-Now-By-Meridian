@@ -25,7 +25,7 @@ from models import (Certificate, Discount, Facts, Incentive, OpportunitiesRespon
                     SupportItem)
 from questions import canonical_permit
 from integrations import context_dev
-from services import exa_search, gemini
+from services import exa_search, gemini, mocks
 
 MAX_ITEMS = 6  # the UI shows 3 and "Show more"
 MAY_APPLY = "May apply, check the conditions."
@@ -151,7 +151,9 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
     raw = exa_search.search_opportunities(field, city, today.isoformat(), CITY_DOMAINS.get(city.lower(), []),
                                           {t.id: PERK_TOPICS[t.id]["query"] for t in topics})
     if not raw:
-        return OpportunitiesResponse(perks_and_support=PerksAndSupport(topics=topics), mock=True)  # never invent
+        # No live search (demo mode, or Exa down): careful general pointers to the official pages, never specifics.
+        saved = [SupportItem(**x) for x in mocks.saved_perks(f.city, CITY_DOMAINS.get(city.lower(), []), [t.id for t in topics])]
+        return OpportunitiesResponse(perks_and_support=PerksAndSupport(topics=topics, support=saved), mock=True)
 
     read = _read_with_context(raw, city)
     read_urls = {v["row"]["url"] for v in read.values()}

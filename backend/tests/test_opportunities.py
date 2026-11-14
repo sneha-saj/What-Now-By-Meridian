@@ -54,7 +54,13 @@ def test_no_exa_means_no_invented_opportunities(monkeypatch):
     monkeypatch.setattr(opps.exa_search, "search_opportunities", lambda *a: None)
     monkeypatch.setattr(opps.gemini, "write_opportunities", lambda *a: pytest.fail("Gemini called without data"))
     out = opps.build(FACTS, 3, TODAY)
-    assert out.mock is True and out.perks_and_support.certificate is None and out.counts.total == 0
+    p = out.perks_and_support
+    assert out.mock is True and p.certificate is None and not p.discounts and not p.incentives
+    # Only the saved guide: general pointers, each to an official or city page, with no prices or amounts.
+    assert {s.topic for s in p.support} >= {"certificate", "discounts", "incentives"}
+    official = ("tyomarkkinatori.fi", "kela.fi", "infofinland.fi", "hel.fi")
+    assert all(any(d in s.source_url for d in official) for s in p.support)
+    assert not any(ch.isdigit() or "€" in s.what_it_is for s in p.support for ch in s.what_it_is)
 
 
 def test_opportunity_searches_are_limited_and_scoped(monkeypatch, tmp_path):

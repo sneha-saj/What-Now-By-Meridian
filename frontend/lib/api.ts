@@ -4,6 +4,7 @@ export type Facts = {
   permit_type?: string | null;
   years_on_work_permit?: number | "under_2" | "over_2" | "not_sure" | null;
   job_end_date?: string | null;
+  job_end_date_approximate?: boolean | null;
   city?: string | null;
   field?: string | null;
   studied_in_finland?: boolean | null;
@@ -35,6 +36,7 @@ export type Deadline = {
   missing: string[];
   rule_id?: string | null;
   rule_in_force_since?: string | null;
+  deadline_is_approximate?: boolean;
   source: Source;
   verified: boolean;
   check_status: "verified" | "mismatch" | "error" | "none";
@@ -44,7 +46,18 @@ export type Deadline = {
 };
 export type LiveCheck = { status: "verified" | "mismatch" | "error"; checked_at: string; evidence_snippet: string };
 export type Rule = { id: string; description: string; months: number | null; applies_to: string[]; source_url: string; in_force_since: string; last_verified: string; live_check: LiveCheck };
-export type RulesResponse = { rules: Rule[]; trusted_domains: string[] };
+export type UsedSource = { url: string; title: string; domain: string; date?: string | null; step: string; used_at: string };
+export type RulesResponse = { rules: Rule[]; trusted_domains: string[]; sources_used?: UsedSource[] };
+export type RoadStep = "week1" | "wayin" | "week2" | "week4" | "week8" | "final" | "deadline";
+export type AskSource = { title: string; url: string; domain: string; date?: string | null };
+export type AskResponse = {
+  answer: string;
+  sources: AskSource[];
+  suggested_roadmap_step?: RoadStep;
+  off_topic: boolean;
+  official_only: boolean;
+  mock: boolean;
+};
 export type Action = { title: string; why: string; how: string[]; sources: Source[] };
 export type TimelineStep = { week: string; steps: string[]; sources: Source[] };
 export type PlanBOption = {
@@ -71,10 +84,17 @@ export type Company = {
   url: string;
   hiring_now: boolean;
   hiring_evidence?: string | null;
+  hiring_evidence_date?: string | null;
   source: Source;
 };
 export type Contact = { name: string; role: string; company: string; why_this_person: string; profile_url: string };
-export type Community = { name: string; type: "professional_group" | "event" | "union"; date_if_event?: string | null; url: string };
+export type Community = {
+  name: string;
+  type: "professional_group" | "event" | "union";
+  date_if_event?: string | null;
+  url: string;
+  published?: string | null;
+};
 export type Draft = { to: string; profile_url: string; message: string };
 export type ReferralResponse = {
   companies: Company[];
@@ -184,6 +204,7 @@ export const api = {
   plan: (facts: Facts) => post<PlanResponse>("/plan", { facts }),
   referrals: (facts: Facts) => post<ReferralResponse>("/referrals", { facts }),
   chat: (req: ChatRequest) => post<ChatResponse>("/chat", req),
+  ask: (question: string, facts: Facts) => post<AskResponse>("/ask", { question, facts }),
   rules: async () => {
     const res = await fetch("/api/rules");
     if (!res.ok) throw new Error(`/rules failed (${res.status})`);

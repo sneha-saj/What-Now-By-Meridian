@@ -1,0 +1,80 @@
+"use client";
+
+import { useState } from "react";
+import { api, type AskResponse, type Facts, type RoadStep } from "@/lib/api";
+import { GlobeIcon } from "./icons";
+import { Button, GentleWarning, SourceChip } from "./primitives";
+
+export type AskEntry = { question: string; res: AskResponse; added?: boolean };
+
+const STEP_NAME: Record<RoadStep, string> = {
+  week1: "This week", wayin: "Find your way in", week2: "Week 2", week4: "Week 4", week8: "Week 8",
+  final: "Plan B", deadline: "Your deadline",
+};
+
+/** Ask tab: one input. Exa answers from live sources; answers can be pinned to a roadmap step. */
+export function AskPanel({
+  facts, entries, onEntry, onAdd,
+}: { facts: Facts; entries: AskEntry[]; onEntry: (e: AskEntry) => void; onAdd: (i: number) => void }) {
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+
+  async function ask() {
+    const question = q.trim();
+    if (!question || busy) return;
+    setBusy(true);
+    setError(false);
+    try {
+      onEntry({ question, res: await api.ask(question, facts) });
+      setQ("");
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="ask-title" className="space-y-6">
+      <div>
+        <h2 id="ask-title" className="font-serif text-3xl font-semibold">Ask anything about your situation</h2>
+        <p className="mt-1 text-ink-soft">Exa looks it up live. Questions about permits and benefits only use Migri, Kela, InfoFinland and Työmarkkinatori.</p>
+      </div>
+      <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex flex-wrap gap-3">
+        <label htmlFor="ask-input" className="sr-only">Your question</label>
+        <input id="ask-input" value={q} onChange={(e) => setQ(e.target.value)} disabled={busy}
+          placeholder="For example: Can I work part-time while I look for a new job?"
+          className="min-h-12 min-w-0 flex-1 rounded-xl border border-ink/25 bg-card px-4 text-lg" />
+        <Button type="submit" disabled={busy || !q.trim()}>{busy ? "Looking it up…" : "Ask"}</Button>
+      </form>
+      {busy && <p role="status" className="flex items-center gap-2 text-sm text-ink-soft"><GlobeIcon className="h-4 w-4 text-verified" /> Exa is looking this up…</p>}
+      {error && <GentleWarning>Couldn&apos;t get an answer right now. Please try again in a moment.</GentleWarning>}
+      <ol className="space-y-5">
+        {[...entries].reverse().map((e, k) => {
+          const i = entries.length - 1 - k;
+          return (
+            <li key={i} className="animate-fade-up rounded-2xl border border-rule bg-card p-5">
+              <p className="text-sm text-ink-soft">{e.question}</p>
+              <p className="mt-2 text-lg">{e.res.answer}</p>
+              {e.res.sources.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {e.res.sources.map((s) => <SourceChip key={s.url} live source={{ title: s.title, url: s.url, published: s.date }} />)}
+                </div>
+              )}
+              {e.res.suggested_roadmap_step && !e.res.off_topic && (
+                <div className="mt-3">
+                  {e.added ? (
+                    <p className="text-sm font-bold text-verified">✓ Added to {STEP_NAME[e.res.suggested_roadmap_step]}</p>
+                  ) : (
+                    <Button variant="chip" onClick={() => onAdd(i)}>Add to my roadmap · {STEP_NAME[e.res.suggested_roadmap_step]}</Button>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}

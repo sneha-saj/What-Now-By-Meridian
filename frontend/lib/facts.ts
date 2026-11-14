@@ -30,8 +30,9 @@ export function formatShortDate(iso: string) {
 }
 
 /** Human text for a fact value, or null if unknown. */
-export function display(f: FieldDef, value: unknown): string | null {
+export function display(f: FieldDef, value: unknown, facts?: Facts): string | null {
   if (value === null || value === undefined || value === "") return null;
+  if (f.id === "job_end_date" && facts?.job_end_date_approximate) return `Last day around ${formatShortDate(String(value))}`;
   if (f.id === "years_on_work_permit" && typeof value === "number") return `${value} ${value === 1 ? "year" : "years"} on a work permit`;
   if (f.kind === "date") return `Last day ${formatShortDate(String(value))}`;
   if (f.choices === YES_NO) return value === true || value === "true" ? f.label : `Not ${f.label.toLowerCase()}`;

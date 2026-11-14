@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Question } from "@/lib/api";
-import { Button } from "./primitives";
+import { Button, cx } from "./primitives";
 
 /** One question at a time: serif question, tap buttons (incl. "Not sure"), or answer in your own words. */
 export function QuestionCard({
@@ -15,28 +15,39 @@ export function QuestionCard({
 }) {
   const [date, setDate] = useState("");
   const [text, setText] = useState("");
+  const [picked, setPicked] = useState<string | null>(null);
+  const choose = (value: string) => {
+    setPicked(value);
+    onAnswer(value);
+  };
   return (
     <section aria-labelledby="q-title" className="animate-fade-up rounded-3xl border border-rule bg-card p-6 shadow-[0_6px_24px_rgba(28,42,69,0.06)] sm:p-8">
       <p className="text-sm text-ink-soft">One quick question</p>
       <h2 id="q-title" className="mt-1 font-serif text-3xl font-semibold leading-snug sm:text-4xl">{question.question}</h2>
-      <fieldset disabled={busy} className="mt-6 space-y-5">
+      <fieldset disabled={busy || picked !== null} className="mt-6 space-y-5">
         <legend className="sr-only">Choose an answer</legend>
         <div className="flex flex-wrap gap-3">
           {question.options.map((o) => (
-            <Button key={o.value} variant="chip" className="text-lg" onClick={() => onAnswer(o.value)}>
+            <Button key={o.value} variant="chip" aria-pressed={picked === o.value}
+              className={cx("text-lg", picked === o.value && "!border-ink !bg-ink !text-paper !opacity-100")}
+              onClick={() => choose(o.value)}>
+              {picked === o.value && <span aria-hidden>✓</span>}
               {o.label}
             </Button>
           ))}
         </div>
+        {picked !== null && (
+          <p role="status" className="animate-fade-up text-ink-soft">Got it. Updating your situation…</p>
+        )}
         {question.kind === "date" && (
-          <form className="flex flex-wrap items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (date) onAnswer(date); }}>
+          <form className="flex flex-wrap items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (date) choose(date); }}>
             <label htmlFor="q-date" className="text-ink-soft">Or pick the exact date</label>
             <input id="q-date" type="date" value={date} onChange={(e) => setDate(e.target.value)}
               className="min-h-11 rounded-xl border border-ink/30 bg-card px-3" />
             <Button type="submit" variant="chip" disabled={!date}>Use this date</Button>
           </form>
         )}
-        <form className="flex flex-wrap items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim()) { onText(text.trim()); setText(""); } }}>
+        <form className="flex flex-wrap items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (text.trim()) { setPicked(text.trim()); onText(text.trim()); setText(""); } }}>
           <label htmlFor="q-text" className="sr-only">Or answer in your own words</label>
           <input id="q-text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Or answer in your own words"
             className="min-h-11 min-w-0 flex-1 rounded-xl border border-ink/25 bg-paper px-4" />

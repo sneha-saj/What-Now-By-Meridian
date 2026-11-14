@@ -31,24 +31,35 @@ function Editor({ f, value, onSave, onClose }: { f: FieldDef; value: unknown; on
   );
 }
 
-/** "Your situation": a chip per fact. Person icon = from you; dashed = still missing. Click to edit. */
-export function SituationStrip({ facts, onEdit }: { facts: Facts; onEdit: (field: Field, value: Facts[Field]) => void }) {
-  const [open, setOpen] = useState<Field | null>(null);
+/** "Your situation": one line of chips. Person icon = from you; dashed = still missing. Tap to edit.
+ *  `open`/`onOpen` let the page open an editor (e.g. "Pick the exact date"). */
+export function SituationStrip({
+  facts, onEdit, open: openProp, onOpen,
+}: {
+  facts: Facts;
+  onEdit: (field: Field, value: Facts[Field]) => void;
+  open?: Field | null;
+  onOpen?: (f: Field | null) => void;
+}) {
+  const [openLocal, setOpenLocal] = useState<Field | null>(null);
+  const open = openProp !== undefined ? openProp : openLocal;
+  const setOpen = onOpen ?? setOpenLocal;
   const chips = FIELDS.filter((f) => f.required || display(f, facts[f.id]) !== null);
   const editing = FIELDS.find((f) => f.id === open);
   return (
-    <section aria-labelledby="situation-title">
-      <h2 id="situation-title" className="font-serif text-xl font-semibold">Your situation</h2>
-      <ul className="mt-3 flex flex-wrap gap-2">
+    <section aria-labelledby="situation-title" className="rounded-2xl border border-rule bg-card px-4 py-3">
+      <div className="flex items-center gap-3">
+      <h2 id="situation-title" className="shrink-0 font-serif text-lg font-semibold">Your situation</h2>
+      <ul className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 [scrollbar-width:thin]">
         {chips.map((f) => {
-          const text = display(f, facts[f.id]);
+          const text = display(f, facts[f.id], facts);
           return (
             <li key={f.id}>
               <button
                 onClick={() => setOpen(open === f.id ? null : f.id)}
                 aria-expanded={open === f.id}
                 className={cx(
-                  "group inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 transition-colors",
+                  "group inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 transition-colors",
                   text ? "border border-ink/20 bg-card hover:border-ink" : "border-2 border-dashed border-ink/30 text-ink-soft hover:border-ink-soft",
                 )}
               >
@@ -61,6 +72,7 @@ export function SituationStrip({ facts, onEdit }: { facts: Facts; onEdit: (field
           );
         })}
       </ul>
+      </div>
       {editing && <Editor key={editing.id} f={editing} value={facts[editing.id]} onSave={(v) => onEdit(editing.id, v)} onClose={() => setOpen(null)} />}
     </section>
   );

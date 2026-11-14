@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Contact, Draft, ReferralResponse } from "@/lib/api";
+import { isSample } from "@/lib/format";
 import { Button, Card, SourceChip, cx, formatDate, hostOf } from "./primitives";
 
 const SHOW = 5;
@@ -26,7 +27,7 @@ function ContactCard({
       <p className="font-serif text-xl font-semibold">{c.name}</p>
       <p className="text-ink-soft">{c.role}{c.role && " · "}{c.company}</p>
       <p className="mt-2"><span className="text-ink-soft">Why this person: </span>{c.why_this_person}</p>
-      <div className="mt-2"><SourceChip source={{ title: "Public profile", url: c.profile_url }} /></div>
+      <div className="mt-2"><SourceChip live={!isSample(c.profile_url)} source={{ title: "Public profile", url: c.profile_url }} /></div>
       {draft && (
         <div className="mt-4">
           <label htmlFor={id} className="font-bold">Your draft message</label>
@@ -81,10 +82,10 @@ export function FindYourWayIn({
                 </div>
                 <p className="mt-1">{c.why_relevant}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <SourceChip source={{ title: c.name, url: c.url }} />
-                  {c.hiring_evidence && c.hiring_evidence !== c.url && (
-                    <SourceChip source={{ title: "Job post", url: c.hiring_evidence }} />
+                  {c.hiring_evidence && (
+                    <SourceChip live={!isSample(c.hiring_evidence)} source={{ title: c.hiring_evidence === c.url ? "Careers page" : "Job post", url: c.hiring_evidence, published: c.hiring_evidence_date }} />
                   )}
+                  {c.hiring_evidence !== c.url && <SourceChip live={!isSample(c.url)} source={c.source} />}
                 </div>
               </li>
             ))}
@@ -95,7 +96,7 @@ export function FindYourWayIn({
 
       {r.contacts.length > 0 && (
         <div className="space-y-4">
-          <h3 className="font-serif text-2xl font-semibold">People you could message</h3>
+          <h3 className="font-serif text-2xl font-semibold">People who could refer you</h3>
           <ul className="space-y-4">
             {contacts.shown.map((c) => {
               const draft = r.drafts.find((d) => d.profile_url === c.profile_url);
@@ -120,7 +121,9 @@ export function FindYourWayIn({
                 <a href={g.url} target="_blank" rel="noreferrer" className="font-bold underline decoration-rule underline-offset-4 hover:decoration-ink">
                   {g.name}<span className="sr-only"> (opens in a new tab)</span>
                 </a>
-                <span className="text-sm text-ink-soft">{g.date_if_event ? formatDate(g.date_if_event) : hostOf(g.url)}</span>
+                <span className={cx("text-sm", g.date_if_event ? "font-bold text-ink" : "text-ink-soft")}>
+                  {g.date_if_event ? formatDate(g.date_if_event) : hostOf(g.url)}
+                </span>
               </li>
             ))}
           </ul>

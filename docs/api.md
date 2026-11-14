@@ -20,6 +20,7 @@ Every response has `mock: true` when a fallback was used (no API key, or a call 
 | `POST /referrals` | Companies hiring, people to contact, communities, and draft messages |
 | `POST /chat` | Guided chat: the same steps, one message at a time, with a live "Your situation" card |
 | `POST /chat/stream` | Same as `/chat`, streamed with live progress, Exa activity and partial results |
+| `POST /ask` | Ask a question; Exa's Answer endpoint replies with sources |
 | `GET /health` | Which integrations have keys configured |
 
 ---
@@ -40,6 +41,12 @@ where it makes sense. It never asks for permit numbers or passport details.
 
 **Output**: `facts`, `missing_questions` (`id`, `question`, `kind`: `choice` or `date`, `options`: `value` + `label`), `mock`.
 If the job was outside Finland: `out_of_scope: true`, `message`, `link` instead of facts.
+
+Questions are deterministic: the Finland config (`backend/countries/finland.py`) lists `REQUIRED_FIELDS`
+(citizenship group, permit type, years on a work permit, job end date), then `OPTIONAL_FIELDS` (city, field), with a
+fixed `QUESTION_BANK`. Gemini only extracts facts; code picks the next missing field. Optional questions have
+"Skip" (stored as `""`, not asked again). Approximate date answers arrive as `about:YYYY-MM-DD` and set
+`job_end_date_approximate`; the deadline then has `deadline_is_approximate: true`.
 
 Facts: `citizenship_group` (`eu_eea` / `other` / `unknown`), `citizenship_country`, `permit_type`,
 `years_on_work_permit` (number, or `under_2` / `over_2` / `not_sure`), `job_end_date`, `city`, `field`,
@@ -427,6 +434,9 @@ answers whether the page still states the same months and conditions. Status is 
 
 ### Example
 
+Also returns `sources_used`: every page Exa used recently (`url`, `title`, `domain`, `date`, `step`, `used_at`).
+Only public page info is stored, never the user's facts or queries.
+
 Response:
 ```json
 {
@@ -759,3 +769,36 @@ Each event is a line `data: {json}`:
 | `{"type": "partial", "key": "deadline" / "plan" / "referrals", "data": ...}` | A piece of the result is ready |
 | `{"type": "result", "data": <ChatResponse>}` | The final `/chat` response |
 | `{"type": "error"}` | Something failed; the browser falls back to `/chat` |
+
+---
+
+## POST /ask
+
+Ask anything about your situation. Exa's Answer endpoint answers with citations. Questions about rules
+(permits, benefits, registering) are limited to the trusted official domains, by system prompt and by keeping
+only citations from those domains; if none remain, it says so instead of guessing. Off-topic questions get a
+polite no without calling Exa. Answers are cached for 24 hours.
+
+**Input**: `{"question": "...", "facts": {...}}` (facts add context: permit, city, field).
+
+**Output**: `answer`, `sources` (`title`, `url`, `domain`, `date`), `suggested_roadmap_step` (`week1`, `wayin`,
+`week2`, `week4`, `week8`, `final` or `deadline`, when the answer fits a step), `off_topic`, `official_only`, `mock`.
+
+### Example
+
+Request:
+```json
+{"question": "Can I get unemployment benefit from Kela?", "facts": {"permit_type": "work_based", "city": "Helsinki"}}
+```
+
+Response (illustrative):
+```json
+{
+  "answer": "If you live in Finland and are registered as an unemployed jobseeker, you may get labour market subsidy from Kela...",
+  "sources": [{"title": "Kela – Unemployment", "url": "https://www.kela.fi/unemployment", "domain": "kela.fi", "date": null}],
+  "suggested_roadmap_step": "week1",
+  "off_topic": false,
+  "official_only": true,
+  "mock": false
+}
+```

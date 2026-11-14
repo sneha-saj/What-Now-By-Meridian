@@ -18,15 +18,15 @@ function Mark({ who }: { who: Who }) {
 }
 
 /** Small grey log of what's happening behind the scenes: who asked, who searched, what was found. */
-export function ActivityLog({ lines, busy }: { lines: LogLine[]; busy: boolean }) {
+export function ActivityLog({ lines, busy, last = 3 }: { lines: LogLine[]; busy: boolean; last?: number }) {
   const [all, setAll] = useState(false);
   if (!lines.length) return null;
-  const shown = all ? lines : lines.slice(-8);
+  const shown = all ? lines : lines.slice(-last);
   return (
     <section aria-labelledby="activity-title" className="text-sm text-ink-soft">
       <div className="flex items-baseline justify-between gap-3">
         <h2 id="activity-title" className="font-bold">What&apos;s happening{busy && <span className="motion-safe:animate-pulse"> …</span>}</h2>
-        {lines.length > 8 && (
+        {lines.length > last && (
           <button onClick={() => setAll(!all)} className="min-h-9 underline">{all ? "Show less" : `Show all ${lines.length}`}</button>
         )}
       </div>

@@ -1,4 +1,6 @@
 import type { Source } from "@/lib/api";
+import { ago } from "@/lib/format";
+import { GlobeIcon } from "./icons";
 
 export function cx(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");
@@ -55,8 +57,9 @@ export function Button({ variant = "primary", className, ...props }: ButtonProps
   );
 }
 
-/** Title + domain; opens the official page in a new tab. */
-export function SourceChip({ source }: { source: Source }) {
+/** Title + domain + freshness ("kela.fi · updated 3 days ago"); opens the page in a new tab. */
+export function SourceChip({ source, live = false }: { source: Source; live?: boolean }) {
+  const fresh = ago(source.published);
   return (
     <a
       href={source.url}
@@ -65,8 +68,9 @@ export function SourceChip({ source }: { source: Source }) {
       title={source.highlight ?? source.title}
       className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg border border-rule bg-paper px-2.5 py-1 text-sm hover:border-ink-soft"
     >
+      {live && <GlobeIcon className="h-3.5 w-3.5 text-verified" />}
       <span className="truncate">{source.title}</span>
-      <span className="shrink-0 text-ink-soft">· {hostOf(source.url)}</span>
+      <span className="shrink-0 text-ink-soft">· {hostOf(source.url)}{fresh ? ` · updated ${fresh}` : ""}</span>
       <span aria-hidden className="shrink-0 text-ink-soft">↗</span>
       <span className="sr-only">(opens in a new tab)</span>
     </a>

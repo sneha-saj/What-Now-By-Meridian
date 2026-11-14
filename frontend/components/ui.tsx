@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Deadline, Option, Question, Referral, Source, Step } from "@/lib/api";
+import type { Action, Deadline, Option, PlanBOption, Question, Referral, Source, TimelineStep } from "@/lib/api";
 
 export function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -74,30 +74,45 @@ function formatDate(iso: string) {
 export function DeadlineCard({ d }: { d: Deadline }) {
   return (
     <Card title="Your deadline">
-      {d.status === "ok" && d.deadline ? (
+      {d.status === "ok" && d.deadline_date ? (
         <>
-          <p className="text-3xl font-semibold">{formatDate(d.deadline)}</p>
+          <p className="text-3xl font-semibold">{formatDate(d.deadline_date)}</p>
           <p className="mt-1 text-calm-700">
             {d.days_left! >= 0
               ? `${d.days_left} days from today. That's enough time to do this calmly.`
               : "This date has passed. Contact Migri today — there may still be options."}
           </p>
         </>
+      ) : d.status === "unclear" && d.possible_dates.length > 0 ? (
+        <ul className="space-y-1">
+          {d.possible_dates.map((p) => (
+            <li key={p.rule_id} className="text-xl font-medium">
+              {p.months} months{p.deadline_date ? ` → ${formatDate(p.deadline_date)}` : ""}
+            </li>
+          ))}
+        </ul>
       ) : (
         <p className="text-xl font-medium">
-          {d.status === "not_applicable" ? "No permit deadline for you." : "We need a bit more to work this out."}
+          {d.status === "not_applicable"
+            ? "No permit deadline for you."
+            : d.warning
+              ? `${d.months ?? "A few"} months from your last day of work.`
+              : "We need a bit more to work this out."}
         </p>
       )}
-      <p className="mt-3 text-sm text-calm-700">{d.reason}</p>
+      <p className="mt-3 text-sm text-calm-700">{d.explanation}</p>
       <div className="mt-3 flex items-center gap-2">
         <SourceChip source={d.source} />
         <span className="text-xs text-calm-500">Not legal advice — confirm with Migri.</span>
       </div>
       {d.warning ? (
         <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-          {d.warning} <a className="underline" href={d.source.url} target="_blank" rel="noreferrer">Check Migri</a>
+          {d.warning}{" "}
+          <a className="underline" href={d.warning_link ?? d.source.url} target="_blank" rel="noreferrer">
+            Check Migri
+          </a>
         </p>
-      ) : d.live_check?.status === "verified" ? (
+      ) : d.verified ? (
         <a href="/how-we-know" className="mt-3 inline-flex rounded-full bg-calm-50 px-3 py-1 text-sm text-calm-700 underline">
           ✓ Checked against Migri today · How we know this
         </a>
@@ -106,27 +121,77 @@ export function DeadlineCard({ d }: { d: Deadline }) {
   );
 }
 
-export function ThisWeekCard({ steps }: { steps: Step[] }) {
+function Sources({ sources }: { sources: Source[] }) {
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
+      {sources.map((src) => (
+        <SourceChip key={src.url} source={src} />
+      ))}
+    </div>
+  );
+}
+
+export function ThisWeekCard({ actions }: { actions: Action[] }) {
   return (
     <Card title="This week: 3 things">
       <ol className="space-y-4">
-        {steps.map((s, i) => (
+        {actions.map((a, i) => (
           <li key={i} className="flex gap-3">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-calm-500 text-sm font-semibold text-white">
               {i + 1}
             </span>
             <div>
-              <p className="font-medium">{s.title}</p>
-              <p className="text-sm text-calm-700">{s.detail}</p>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {s.sources.map((src) => (
-                  <SourceChip key={src.url} source={src} />
+              <p className="font-medium">{a.title}</p>
+              <p className="text-sm text-calm-700">{a.why}</p>
+              <ul className="mt-1 list-disc pl-5 text-sm text-calm-700">
+                {a.how.map((h, j) => (
+                  <li key={j}>{h}</li>
                 ))}
-              </div>
+              </ul>
+              <Sources sources={a.sources} />
             </div>
           </li>
         ))}
       </ol>
+    </Card>
+  );
+}
+
+export function TimelineCard({ weeks }: { weeks: TimelineStep[] }) {
+  return (
+    <Card title="Your timeline">
+      <ol className="space-y-3">
+        {weeks.map((w, i) => (
+          <li key={i}>
+            <p className="font-medium">{w.week}</p>
+            <ul className="list-disc pl-5 text-sm text-calm-700">
+              {w.steps.map((s, j) => (
+                <li key={j}>{s}</li>
+              ))}
+            </ul>
+            <Sources sources={w.sources} />
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
+
+export function PlanBCard({ options }: { options: PlanBOption[] }) {
+  return (
+    <Card title="Plan B">
+      <ul className="space-y-3">
+        {options.map((o, i) => (
+          <li key={i}>
+            <p className="font-medium">{o.option}</p>
+            <p className="text-sm text-calm-700">{o.why}</p>
+            {o.latest_start_date && (
+              <p className="text-sm text-calm-700">Start by {formatDate(o.latest_start_date)}</p>
+            )}
+            <Sources sources={o.sources} />
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

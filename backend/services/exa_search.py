@@ -170,3 +170,61 @@ def search_referrals(occupation: str, city: str, n: int = 3) -> list[dict] | Non
     if results:
         _cache_write(key, results)
     return results
+
+
+PLAN_OBJECTIVE = (
+    "Official guidance for a foreign worker in Finland who has lost their job. Rank pages from "
+    "Migri, Kela, InfoFinland and Tyomarkkinatori first, preferring pages updated after June 2025 "
+    "(the rules changed on 11 June 2025). Exclude news and forums. Pull concrete facts: steps, "
+    "time limits, eligibility conditions and where to apply."
+)
+
+
+def plan_topics(field: str | None, studied_in_finland: bool | None, family_in_finland: bool | None) -> list[tuple[str, str]]:
+    """(topic, query) pairs for the /plan search."""
+    alt = ["residence permit options after losing a job in Finland"]
+    if studied_in_finland:
+        alt.append("residence permit for looking for work after graduating in Finland")
+    if family_in_finland:
+        alt.append("family-based residence permit Finland")
+    shortage = "labour shortage occupations in Finland occupational barometer"
+    if field:
+        shortage += f" {field}"
+    return [
+        ("register_jobseeker", "register as an unemployed jobseeker in Finland as a foreigner"),
+        ("unemployment_benefits", "unemployment benefits Finland Kela or unemployment fund for immigrants"),
+        ("alternative_permits", "; ".join(alt)),
+        ("labour_shortage", shortage),
+    ]
+
+
+def search_plan_sources(topics: list[tuple[str, str]], per_topic: int = 3) -> list[dict] | None:
+    """Search the trusted domains for each topic. Returns [{topic, title, url, highlight}] or None."""
+    key = _cache_key("plan", {"topics": topics, "per_topic": per_topic})
+    cached = _cache_read(key)
+    if cached is not None:
+        return cached
+    exa = _get_client()
+    if exa is None:
+        return None
+    seen: dict[str, dict] = {}
+    try:
+        for topic, query in topics:
+            res = exa.search(
+                query,
+                num_results=per_topic,
+                include_domains=config.OFFICIAL_DOMAINS,
+                contents={"highlights": True},
+                objective=PLAN_OBJECTIVE,
+            )
+            for r in res.results:
+                highlight = " ... ".join(getattr(r, "highlights", None) or [])[:1200]
+                if r.url not in seen and highlight:
+                    seen[r.url] = {"topic": topic, "title": r.title or r.url, "url": r.url, "highlight": highlight}
+    except Exception as e:  # noqa: BLE001
+        log.warning("Exa plan search failed, using mock: %s", e)
+        return None
+    results = list(seen.values()) or None
+    if results:
+        _cache_write(key, results)
+    return results

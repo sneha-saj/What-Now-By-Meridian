@@ -9,6 +9,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .exa_search_cache.json
+.live_check_cache.json
 
 # node
 node_modules/

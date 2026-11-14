@@ -16,6 +16,7 @@ const STEP_NAME: Record<RoadStep, string> = {
 export function AskPanel({
   facts, entries, onEntry, onAdd,
 }: { facts: Facts; entries: AskEntry[]; onEntry: (e: AskEntry) => void; onAdd: (i: number) => void }) {
+  const [showAll, setShowAll] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -36,9 +37,9 @@ export function AskPanel({
   }
 
   return (
-    <section aria-labelledby="ask-title" className="space-y-6">
+    <section aria-labelledby="ask-title" className="space-y-4 rounded-3xl border border-rule bg-card p-5 shadow-[0_6px_24px_rgba(28,42,69,0.06)] sm:p-7">
       <div>
-        <h2 id="ask-title" className="font-serif text-3xl font-semibold">Ask anything about your situation</h2>
+        <h2 id="ask-title" className="font-serif text-2xl font-semibold">Ask about your situation</h2>
         <p className="mt-1 text-ink-soft">Exa looks it up live. Questions about permits and benefits only use Migri, Kela, InfoFinland and Työmarkkinatori.</p>
       </div>
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex flex-wrap gap-3">
@@ -51,10 +52,10 @@ export function AskPanel({
       {busy && <p role="status" className="flex items-center gap-2 text-sm text-ink-soft"><GlobeIcon className="h-4 w-4 text-verified" /> Exa is looking this up…</p>}
       {error && <GentleWarning>Couldn&apos;t get an answer right now. Please try again in a moment.</GentleWarning>}
       <ol className="space-y-5">
-        {[...entries].reverse().map((e, k) => {
+        {[...entries].reverse().slice(0, showAll ? undefined : 2).map((e, k) => {
           const i = entries.length - 1 - k;
           return (
-            <li key={i} className="animate-fade-up rounded-2xl border border-rule bg-card p-5">
+            <li key={i} className="animate-fade-up rounded-2xl border border-rule bg-paper p-4">
               <p className="text-sm text-ink-soft">{e.question}</p>
               <p className="mt-2 text-lg">{e.res.answer}</p>
               {e.res.sources.length > 0 && (
@@ -75,6 +76,9 @@ export function AskPanel({
           );
         })}
       </ol>
+      {entries.length > 2 && (
+        <Button variant="quiet" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer answers" : `Show all ${entries.length} answers`}</Button>
+      )}
     </section>
   );
 }

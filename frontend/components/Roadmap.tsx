@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AskSource, Deadline, Facts, PlanResponse, ReferralResponse, Source } from "@/lib/api";
 import { FIELDS, display, formatShortDate } from "@/lib/facts";
 import { ago } from "@/lib/format";
@@ -159,7 +159,7 @@ export type RoadmapData = {
 };
 
 export function Roadmap({
-  nodes, data, onToggleAction, onToggleNode, onDraft, onPickExactDate,
+  nodes, data, onToggleAction, onToggleNode, onDraft, onPickExactDate, focus,
 }: {
   nodes: RoadNode[];
   data: RoadmapData;
@@ -167,8 +167,18 @@ export function Roadmap({
   onToggleNode: (id: NodeId) => void;
   onDraft: (url: string, text: string) => void;
   onPickExactDate: () => void;
+  focus?: { id: NodeId; at: number } | null; // open, scroll to and briefly highlight this step
 }) {
   const [open, setOpen] = useState<Partial<Record<NodeId, boolean>>>({ week1: true });
+  const [flash, setFlash] = useState<NodeId | null>(null);
+  useEffect(() => {
+    if (!focus) return;
+    setOpen((o) => ({ ...o, [focus.id]: true }));
+    setFlash(focus.id);
+    const t1 = setTimeout(() => document.getElementById(`step-${focus.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    const t2 = setTimeout(() => setFlash(null), 2500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [focus]);
   const { plan, referrals, deadline, facts } = data;
   const planLive = !!plan && !plan.mock;
 
@@ -298,7 +308,8 @@ export function Roadmap({
           const panelId = `node-${n.id}`;
           const title = isEnd ? deadlineTitle(deadline) ?? n.title : n.title;
           return (
-            <li key={n.id} className="animate-fade-up relative grid grid-cols-[28px_1fr] gap-x-4 pb-8 last:pb-0">
+            <li key={n.id} id={`step-${n.id}`} className={cx("animate-fade-up relative grid scroll-mt-24 grid-cols-[28px_1fr] gap-x-4 rounded-2xl pb-8 transition-colors duration-700 last:pb-0",
+              flash === n.id && "bg-accent-soft/70")}>
               <div className="flex justify-center pt-1.5"><Dot state={n.state} isEnd={isEnd} /></div>
               <div className="min-w-0">
                 <button

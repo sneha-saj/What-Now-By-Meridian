@@ -19,7 +19,7 @@ import { Legend, Roadmap, type AddedItem } from "@/components/Roadmap";
 import { SituationStrip } from "@/components/SituationStrip";
 import { Button, GentleWarning, cx } from "@/components/primitives";
 
-type Tab = "roadmap" | "opportunities" | "ask" | "how";
+type Tab = "roadmap" | "opportunities" | "how";
 
 /** Everything about this person lives in this browser tab only (sessionStorage). No accounts. */
 type Saved = {
@@ -58,7 +58,6 @@ function load(): Saved {
 const TABS: { id: Tab; label: string }[] = [
   { id: "roadmap", label: "Roadmap" },
   { id: "opportunities", label: "Opportunities" },
-  { id: "ask", label: "Ask" },
   { id: "how", label: "How we know this" },
 ];
 
@@ -73,6 +72,7 @@ export default function StartPage() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [editing, setEditing] = useState<Field | null>(null);
   const [qVersion, setQVersion] = useState(0);
+  const [focus, setFocus] = useState<{ id: NodeId; at: number } | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setS(load()); setLoaded(true); }, []);
@@ -165,7 +165,39 @@ export default function StartPage() {
       </main>
     );
 
-  const phase = s.built ? (s.tab === "ask" ? "ask" : "roadmap") : finding ? "finding" : "tell";
+  const phase = s.built ? "roadmap" : finding ? "finding" : "tell";
+  const tab: Tab = (TABS.some((t) => t.id === s.tab) ? s.tab : "roadmap") as Tab;
+
+  // Ask lives inside the Roadmap and Opportunities tabs, so answers appear where you are.
+  const ask = (
+    <AskPanel facts={s.facts} entries={s.asks}
+      onEntry={(e) => update({ asks: [...s.asks, e] })}
+      onAdd={(i) => {
+        const e = s.asks[i];
+        const suggested = e.res.suggested_roadmap_step!;
+        const step: NodeId = suggested === "deadline" || suggested === "final" ? "deadline" : "week1";
+        update({
+          tab: "roadmap",
+          asks: s.asks.map((x, k) => (k === i ? { ...x, added: true } : x)),
+          added: { ...s.added, [step]: [...(s.added[step] ?? []), { question: e.question, answer: e.res.answer, sources: e.res.sources }] },
+        });
+        setFocus({ id: step, at: Date.now() });
+      }} />
+  );
+
+  const newSituation = (
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
+      {confirmClear ? (
+        <>
+          <span className="text-sm">Clear everything and start again?</span>
+          <Button variant="chip" onClick={clearAll}>Yes, start again</Button>
+          <Button variant="quiet" onClick={() => setConfirmClear(false)}>Cancel</Button>
+        </>
+      ) : (
+        <Button variant="chip" onClick={() => setConfirmClear(true)}>+ New situation</Button>
+      )}
+    </div>
+  );
   const opportunitiesHint = s.built && s.tab === "roadmap" && (
     <button onClick={() => update({ tab: "opportunities" })}
       className="flex w-full items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4 text-left font-bold text-accent-ink hover:border-accent">
@@ -177,8 +209,25 @@ export default function StartPage() {
 
   return (
     <main id="main" className="mx-auto max-w-6xl space-y-8 px-5 pb-16 pt-8 sm:px-8 sm:pt-10">
-      {/* Row 1: where you are */}
-      <FlowProgress phase={phase} built={s.built} onGo={(p) => update({ tab: p })} />
+      {/* Row 1: setup progress, or tabs once the roadmap exists; "New situation" is always here */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        {s.built ? (
+          <div role="tablist" aria-label="Your roadmap" className="flex min-w-0 flex-1 flex-wrap gap-2 border-b border-rule">
+            {TABS.map((t) => (
+              <button key={t.id} role="tab" id={`tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`panel-${t.id}`}
+                onClick={() => update({ tab: t.id })}
+                className={cx("-mb-px min-h-12 rounded-t-xl border-b-2 px-4 font-bold",
+                  tab === t.id ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink")}>
+                {t.label}
+                {t.id === "opportunities" && !!s.opp?.counts?.total && <span className="ml-1.5 rounded-full bg-accent-soft px-2 text-sm text-accent-ink">{s.opp.counts.total}</span>}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <FlowProgress phase={phase} />
+        )}
+        {newSituation}
+      </div>
 
       {/* Row 2: only the current step */}
       <div>
@@ -224,18 +273,8 @@ export default function StartPage() {
           )
         ) : (
           <div className="space-y-6">
-            <div role="tablist" aria-label="Your roadmap" className="flex flex-wrap gap-2 border-b border-rule">
-              {TABS.map((t) => (
-                <button key={t.id} role="tab" id={`tab-${t.id}`} aria-selected={s.tab === t.id} aria-controls={`panel-${t.id}`}
-                  onClick={() => update({ tab: t.id })}
-                  className={cx("-mb-px min-h-12 rounded-t-xl border-b-2 px-4 font-bold",
-                    s.tab === t.id ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink")}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div role="tabpanel" id={`panel-${s.tab}`} aria-labelledby={`tab-${s.tab}`}>
-              {s.tab === "roadmap" && (
+            <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+              {tab === "roadmap" && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="font-serif text-3xl font-semibold sm:text-4xl">Your roadmap</h2>
@@ -254,31 +293,22 @@ export default function StartPage() {
                     onToggleNode={(id) => update({ doneNodes: { ...s.doneNodes, [id]: !s.doneNodes[id] } })}
                     onDraft={(url, text) => update({ drafts: { ...s.drafts, [url]: text } })}
                     onPickExactDate={pickExactDate}
+                    focus={focus}
                   />
                   {opportunitiesHint}
+                  {ask}
                   <Legend />
                 </div>
               )}
-              {s.tab === "opportunities" && (
+              {tab === "opportunities" && (
                 <div className="space-y-6">
                   {oppLoading && <ActivityLog lines={log} busy last={3} />}
                   <Opportunities data={s.opp ?? {}} loading={oppLoading} drafts={s.drafts}
                     onDraft={(url, text) => update({ drafts: { ...s.drafts, [url]: text } })} />
+                  {ask}
                 </div>
               )}
-              {s.tab === "ask" && (
-                <AskPanel facts={s.facts} entries={s.asks}
-                  onEntry={(e) => update({ asks: [...s.asks, e] })}
-                  onAdd={(i) => {
-                    const e = s.asks[i];
-                    const step = e.res.suggested_roadmap_step!;
-                    update({
-                      asks: s.asks.map((x, k) => (k === i ? { ...x, added: true } : x)),
-                      added: { ...s.added, [step]: [...(s.added[step] ?? []), { question: e.question, answer: e.res.answer, sources: e.res.sources }] },
-                    });
-                  }} />
-              )}
-              {s.tab === "how" && <HowWeKnow embedded />}
+              {tab === "how" && <HowWeKnow embedded />}
             </div>
           </div>
         )}
@@ -289,17 +319,6 @@ export default function StartPage() {
         <SituationStrip facts={s.facts} open={editing} onOpen={setEditing}
           onEdit={(field: Field, value) => send({ edited_facts: { [field]: value } as Partial<Facts> })} />
         {error && <GentleWarning>{error}</GentleWarning>}
-        <div className="flex flex-wrap items-center gap-3">
-          {confirmClear ? (
-            <>
-              <span>Clear everything you entered?</span>
-              <Button variant="chip" onClick={clearAll}>Yes, clear my data</Button>
-              <Button variant="quiet" onClick={() => setConfirmClear(false)}>Keep it</Button>
-            </>
-          ) : (
-            <Button variant="quiet" onClick={() => setConfirmClear(true)}>Start over / clear my data</Button>
-          )}
-        </div>
       </div>
     </main>
   );

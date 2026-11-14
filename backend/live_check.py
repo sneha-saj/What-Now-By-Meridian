@@ -12,6 +12,12 @@ import config
 from countries.finland import DEADLINE_RULES
 
 log = logging.getLogger(__name__)
+if not log.handlers:  # show live-check debugging (page snippet, Gemini's reasoning) in the backend terminal
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(levelname)s live_check: %(message)s"))
+    log.addHandler(_h)
+    log.setLevel(logging.INFO)
+    log.propagate = False
 CACHE_PATH = Path(__file__).with_name(".live_check_cache.json")
 CACHE_TTL = timedelta(hours=24)
 
@@ -33,9 +39,10 @@ def _fetch_page(url: str) -> str:
     result = client.get_contents([url], text=True)
     results = getattr(result, "results", result)
     page = results[0]
-    return (getattr(page, "text", None) or getattr(page, "content", None) or "")[:12000]
+    return (getattr(page, "text", None) or getattr(page, "content", None) or "")[:20000]
 
 class _Verdict(BaseModel):
+    reasoning: str
     verified: bool
     evidence_snippet: str
 
@@ -44,15 +51,21 @@ def _ask_gemini(rule: dict, page: str) -> tuple[bool, str]:
     from services import gemini
 
     prompt = (
-        "Check whether this official page still supports the rule below. Answer verified=true only if the page "
-        "states the same number of months AND the same conditions. evidence_snippet: a short exact quote from "
-        "the page, or a one-line reason if it doesn't match.\n"
+        "You check whether an official Migri page still supports a rule we show to users.\n"
+        "Judge the MEANING, not the exact wording. verified=true if the page says the same thing in any words:\n"
+        "the same length of time (for example '3 months', 'three months', 'up to three months') for the same\n"
+        "group of people (for example 'work-based residence permit', 'specialist', 'EU Blue Card', 'held for\n"
+        "less than two years'). For a rule that says the period does NOT apply to some groups, verified=true if\n"
+        "the page only describes the period for work-based permits and does not extend it to those groups.\n"
+        "verified=false only if the page clearly states a different length of time or different conditions.\n"
+        "reasoning: one or two sentences on what the page says about this. evidence_snippet: a short exact quote.\n"
         f"Rule: {json.dumps({k: rule[k] for k in ('description', 'months', 'applies_to')})}\n"
         f"Page text:\n{page}"
     )
     result = gemini.structured_call(prompt, _Verdict)
     if result is None:
         raise RuntimeError("Gemini gave no answer")
+    log.info("Live check %s: verified=%s reasoning=%r", rule["id"], result["verified"], result["reasoning"])
     return bool(result["verified"]), str(result["evidence_snippet"])[:500]
 
 def check_rule(rule: dict, *, force: bool = False) -> dict:
@@ -75,6 +88,7 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
         page = _fetch_page(rule["source_url"])
         if not page:
             raise RuntimeError("Exa returned no page text")
+        log.info("Live check %s: fetched %d chars, starts %r", rule["id"], len(page), page[:300])
         verified, evidence = _ask_gemini(rule, page)
         entry = {"rule_id": rule["id"], "status": "verified" if verified else "mismatch", "checked_at": checked_at, "evidence_snippet": evidence}
     except Exception as exc:  # graceful degradation for unavailable upstreams

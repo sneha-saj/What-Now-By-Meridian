@@ -50,11 +50,10 @@ def test_plan_search_uses_trusted_domains_and_highlights(monkeypatch, tmp_path):
     monkeypatch.setattr(exa_search, "CACHE_PATH", tmp_path / "exa-cache.json")
     client = RecordingExa()
     monkeypatch.setattr(exa_search, "_get_client", lambda: client)
-    topics = exa_search.plan_topics("nurse", studied_in_finland=True, family_in_finland=None)
+    topics = exa_search.plan_topics("nurse", [{"id": "job_seeker_graduate", "query": "permit after graduation"}])
     results = exa_search.search_plan_sources(topics)
 
-    assert [t for t, _ in topics] == ["register_jobseeker", "unemployment_benefits", "alternative_permits", "labour_shortage"]
-    assert "after graduating" in dict(topics)["alternative_permits"]
+    assert [t for t, _ in topics] == ["register_jobseeker", "unemployment_benefits", "labour_shortage", "plan_b:job_seeker_graduate"]
     assert "nurse" in dict(topics)["labour_shortage"]
     assert len(client.kwargs) == 4
     for kw in client.kwargs:
@@ -97,7 +96,8 @@ def test_referral_searches_limit_results_and_use_categories(monkeypatch, tmp_pat
 
     companies = exa_search.search_companies("cook", "Helsinki")
     assert len(companies) == 8
-    assert client.calls[0][1]["category"] == "company" and client.calls[0][1]["num_results"] == 8
+    company_calls = [c for c in client.calls if c[1].get("category") == "company"]
+    assert len(company_calls) == 1 and company_calls[0][1]["num_results"] == 8
 
     people = exa_search.search_people(companies, "cook", "Helsinki")
     people_calls = [c for c in client.calls if c[1].get("category") == "people"]
@@ -108,4 +108,24 @@ def test_referral_searches_limit_results_and_use_categories(monkeypatch, tmp_pat
 
     communities = exa_search.search_communities("cook", "Helsinki", "2026-11-14")
     assert {g["kind"] for g in communities} == {"professional_group", "union"}
-    assert len(client.calls) == 1 + 3 + 2  # max 6 searches per /referrals request
+    assert len(client.calls) == 2 + 3 + 2  # max 7 searches per /referrals request
+
+
+def test_companies_with_hiring_evidence_rank_first(monkeypatch, tmp_path):
+    monkeypatch.setattr(exa_search, "CACHE_PATH", tmp_path / "exa-cache.json")
+
+    class HiringExa:
+        def search(self, query, **kw):
+            if kw.get("category") == "company":
+                return SimpleNamespace(results=[
+                    SimpleNamespace(title="Quiet Oy", url="https://quiet.fi/", highlights=[]),
+                    SimpleNamespace(title="Posts Oy", url="https://www.posts.fi/", highlights=[]),
+                    SimpleNamespace(title="Careers Oy", url="https://careers-oy.fi/careers", highlights=[])])
+            return SimpleNamespace(results=[SimpleNamespace(title="Cook", url="https://posts.fi/jobs/cook-123", highlights=[])])
+
+    monkeypatch.setattr(exa_search, "_get_client", lambda: HiringExa())
+    out = exa_search.search_companies("cook", "Helsinki")
+    assert [c["name"] for c in out] == ["Posts Oy", "Careers Oy", "Quiet Oy"]
+    assert out[0]["hiring_evidence"] == "https://posts.fi/jobs/cook-123"
+    assert out[1]["hiring_evidence"] == "https://careers-oy.fi/careers"
+    assert out[2]["hiring_evidence"] is None

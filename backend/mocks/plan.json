@@ -38,7 +38,8 @@
         }
       ],
       "warning": null,
-      "warning_link": null
+      "warning_link": null,
+      "check_status": "verified"
     },
     "this_week": [
       {
@@ -173,18 +174,29 @@
     ],
     "plan_b": [
       {
-        "option": "Another residence permit",
-        "why": "Another permit type may fit your situation; check with Migri or your union.",
-        "latest_start_date": null,
+        "id": "new_employer",
+        "option": "A new work-based residence permit",
+        "who_it_fits": "Anyone who gets a job offer from a new employer before the deadline.",
+        "why": "If a new employer hires you, you can apply for a new work-based permit. Check the conditions on Migri's site.",
+        "latest_start_date": "2027-02-01",
         "sources": [
           {
-            "title": "Migri – Changes to work-based residence permits",
-            "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US",
+            "title": "Migri – Finnish Immigration Service",
+            "url": "https://migri.fi/en/home",
             "highlight": null
-          },
+          }
+        ]
+      },
+      {
+        "id": "entrepreneur",
+        "option": "Residence permit for an entrepreneur",
+        "who_it_fits": "People who want to start or run their own business in Finland.",
+        "why": "If you want to start your own business, for example in food, Migri has a separate permit. Check the conditions first.",
+        "latest_start_date": "2027-02-01",
+        "sources": [
           {
-            "title": "InfoFinland – Unemployment",
-            "url": "https://www.infofinland.fi/en/work-and-enterprise/unemployment",
+            "title": "Migri – Finnish Immigration Service",
+            "url": "https://migri.fi/en/home",
             "highlight": null
           }
         ]

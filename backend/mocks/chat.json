@@ -48,6 +48,7 @@
         "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US"
       },
       "verified": true,
+      "check_status": "verified",
       "live_checks": [
         {
           "rule_id": "work-based-three-months",

@@ -20,9 +20,10 @@
         "url": "https://example.com/bistro",
         "source": {
           "title": "Example Bistro Oy (sample)",
-          "url": "https://example.com/bistro",
-          "highlight": "Sample data: we are hiring line cooks in Helsinki."
-        }
+          "url": "https://example.com/bistro"
+        },
+        "hiring_now": true,
+        "hiring_evidence": "https://example.com/bistro/careers"
       },
       {
         "name": "Example Hotels Finland (sample)",
@@ -30,9 +31,10 @@
         "url": "https://example.com/hotels",
         "source": {
           "title": "Example Hotels Finland (sample)",
-          "url": "https://example.com/hotels",
-          "highlight": "Sample data: open roles in hotel restaurants."
-        }
+          "url": "https://example.com/hotels"
+        },
+        "hiring_now": false,
+        "hiring_evidence": null
       }
     ],
     "contacts": [

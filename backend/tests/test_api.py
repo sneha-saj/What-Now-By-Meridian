@@ -34,8 +34,9 @@ GEMINI_PLAN = {
     ],
     "timeline": [{"week": "Week 1", "steps": ["Register"], "source_ids": ["S1"]},
                  {"week": "Week 2", "steps": ["Unsourced step"], "source_ids": []}],
-    "plan_b": [{"option": "Job-seeker permit", "why": "If you graduated here.", "latest_start_date": "2027-01-15",
-                "source_ids": ["S3"]}],
+    "plan_b": [{"candidate_id": "new_employer", "why": "Apply with a job offer.", "source_ids": ["S3"]},
+               {"candidate_id": "made_up_option", "why": "Not in our list.", "source_ids": ["S3"]},
+               {"candidate_id": "entrepreneur", "why": "No source given.", "source_ids": []}],
 }
 
 
@@ -120,18 +121,37 @@ def test_plan_with_exa_and_gemini(verified, live_services):
     # Unknown source ids are dropped, and so are timeline steps without any source.
     assert [s["url"] for s in body["this_week"][2]["sources"]] == ["https://migri.fi/en/permits"]
     assert [w["week"] for w in body["timeline"]] == ["Week 1"]
-    assert body["plan_b"][0]["latest_start_date"] == "2027-01-15"
+    # Plan B: only listed candidates with a real source; the date comes from the rules engine, not Gemini.
+    assert [p["id"] for p in body["plan_b"]] == ["new_employer"]
+    assert body["plan_b"][0]["who_it_fits"] and body["plan_b"][0]["latest_start_date"] == "2027-02-01"
     assert "not legal advice" in body["disclaimer"]
 
 
-def test_plan_hides_date_and_warns_when_rule_not_verified(monkeypatch, live_services):
-    monkeypatch.setattr(main, "get_live_check", lambda rule_id: {"rule_id": rule_id, **ERROR})
+def test_plan_keeps_date_and_warns_when_rule_text_differs(monkeypatch, live_services):
+    monkeypatch.setattr(main, "get_live_check", lambda rule_id: {"rule_id": rule_id, **ERROR, "status": "mismatch"})
     d = client.post("/plan", json={"facts": WORK_FACTS}).json()["deadline"]
-    assert d["deadline_date"] is None and d["days_left"] is None
-    assert d["verified"] is False
+    assert d["deadline_date"] == "2027-02-01"
+    assert d["verified"] is False and d["check_status"] == "mismatch"
     assert d["warning"] == "This rule may have changed. Please check Migri."
     assert d["warning_link"].startswith("https://migri.fi/")
-    assert "2027" not in d["explanation"]
+
+
+def test_plan_check_error_is_neutral_not_alarming(monkeypatch, live_services):
+    monkeypatch.setattr(main, "get_live_check", lambda rule_id: {"rule_id": rule_id, **ERROR})
+    d = client.post("/plan", json={"facts": WORK_FACTS}).json()["deadline"]
+    assert d["deadline_date"] == "2027-02-01" and d["check_status"] == "error"
+    assert d["warning"].startswith("Couldn't check") and "may have changed" not in d["warning"]
+
+
+def test_plan_b_when_no_permit_risk(verified):
+    body = client.post("/plan", json={"facts": {"citizenship_group": "eu_eea"}}).json()
+    assert body["plan_b"] == [] and "doesn't depend on this job" in body["plan_b_note"]
+
+
+def test_mock_plan_b_is_specific_to_facts(verified):
+    facts = {**WORK_FACTS, "studied_in_finland": True, "family_in_finland": True}
+    ids = [p["id"] for p in client.post("/plan", json={"facts": facts}).json()["plan_b"]]
+    assert ids == ["new_employer", "job_seeker_graduate", "family", "entrepreneur"]
 
 
 def test_plan_not_sure_years_shows_both_possible_dates(verified, live_services):
@@ -180,7 +200,8 @@ def test_rules_endpoint_includes_country_config(monkeypatch):
     assert "migri.fi" in body["trusted_domains"]
 
 
-COMPANIES = [{"name": f"Restaurant {i} Oy", "url": f"https://r{i}.fi", "highlight": f"Hiring cooks {i}"} for i in range(1, 5)]
+COMPANIES = [{"name": f"Restaurant {i} Oy", "url": f"https://r{i}.fi", "highlight": f"Hiring cooks {i}",
+              "hiring_evidence": "https://r1.fi/careers" if i == 1 else None} for i in range(1, 5)]
 PEOPLE = [{"name": "Aino Virtanen", "role": "Head Chef", "company": "Restaurant 1 Oy",
            "profile_url": "https://linkedin.com/in/aino", "highlight": "Leads a team of 12 cooks"}]
 GROUPS = [{"name": "Helsinki Chefs Meetup", "url": "https://meetup.com/x", "kind": "professional_group", "highlight": "Next meetup 2026-11-20"},
@@ -207,7 +228,9 @@ def test_referrals_with_exa_and_gemini(monkeypatch, referral_exa):
     assert referral_exa["companies"] == ("restaurant worker", "Helsinki")
     assert body["mock"] is False
     assert body["companies"][0]["why_relevant"] == "Hires cooks in Helsinki."
-    assert body["companies"][1]["why_relevant"].startswith("From their page:")  # no Gemini note -> real highlight
+    assert body["companies"][0]["hiring_now"] is True and body["companies"][0]["hiring_evidence"] == "https://r1.fi/careers"
+    assert body["companies"][1]["hiring_now"] is False
+    assert body["companies"][1]["why_relevant"] == "Came up in a search for restaurant worker employers near Helsinki."  # never raw page text
     assert body["contacts"][0] == {"name": "Aino Virtanen", "role": "Head Chef", "company": "Restaurant 1 Oy",
                                    "why_this_person": "Leads the kitchen.", "profile_url": "https://linkedin.com/in/aino"}
     assert "12 cooks" in body["drafts"][0]["message"]
@@ -357,3 +380,19 @@ def test_chat_out_of_scope(monkeypatch):
     monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"job_was_in_finland": False})
     body = client.post("/chat", json={"messages": _msg("I lost my job in Norway")}).json()
     assert body["out_of_scope"] is True and body["link"]
+
+
+def test_company_sentences_are_cleaned_to_one_short_line():
+    long = "**Great** fit: " + " ".join(["word"] * 30) + ". Second sentence."
+    out = main._clean_sentence(long)
+    assert "*" not in out and len(out.split()) <= 20 and "Second" not in out
+    assert main._clean_name("Rafla Oy | Careers") == "Rafla Oy"
+
+
+def test_chat_stream_sends_progress_then_result(verified, live_services):
+    import json
+    with client.stream("POST", "/chat/stream", json={"facts": WORK_FACTS, "step": "deadline", "action": "next"}) as r:
+        events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
+    stages = [e["stage"] for e in events if e["type"] == "progress"]
+    assert stages == ["checking_rules", "finding_steps"]
+    assert events[-1]["type"] == "result" and events[-1]["data"]["step"] == "this_week"

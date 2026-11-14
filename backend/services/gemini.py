@@ -117,9 +117,8 @@ class _Week(BaseModel):
 
 
 class _PlanB(BaseModel):
-    option: str
+    candidate_id: str
     why: str
-    latest_start_date: Optional[str] = None
     source_ids: list[str]
 
 
@@ -140,8 +139,12 @@ Write:
    how (2-4 short steps) and source_ids (at least one).
 2. timeline: steps working back from the deadline, with week labels "Week 1", "Week 2", "Week 4",
    "Week 8" and "Final weeks". Skip weeks that fall after the deadline. Each has steps and source_ids.
-3. plan_b: alternatives if no new job is found in time (for example another permit type), each with
-   why, latest_start_date (YYYY-MM-DD, or null if the sources don't support a date) and source_ids.
+3. plan_b: for each PLAN B CANDIDATE that the sources support, candidate_id, why (one or two calm sentences
+   on what it is and the main condition, from the sources) and source_ids. Leave a candidate out if no
+   source covers it. Do not add options that are not in the list.
+
+PLAN B CANDIDATES:
+{candidates}
 
 Person: {facts}
 Deadline: {deadline}
@@ -151,12 +154,14 @@ SOURCES:
 {sources}"""
 
 
-def write_plan(facts: dict, deadline: dict, sources: list[dict], today: str) -> dict | None:
+def write_plan(facts: dict, deadline: dict, sources: list[dict], today: str, candidates: list[dict] | None = None) -> dict | None:
     src = "\n\n".join(
         f"[{s['id']}] {s['title']} ({s['url']})\n{(s.get('highlight') or '')[:1000]}" for s in sources
     )
     return structured_call(
-        PLAN_PROMPT.format(facts=facts, deadline=deadline, today=today, sources=src), GeneratedPlan
+        PLAN_PROMPT.format(facts=facts, deadline=deadline, today=today, sources=src,
+                           candidates="\n".join(f"[{c['id']}] {c['option']}: {c['who_it_fits']}" for c in candidates or []) or "(none)"),
+        GeneratedPlan
     )
 
 
@@ -188,7 +193,8 @@ class ReferralNotes(BaseModel):
 REFERRALS_PROMPT = """You help a job seeker in Finland reach out to companies and people. Use ONLY the details below.
 Today is {today}.
 
-1. companies: for each company id, why_relevant: one sentence on why it fits this person, based on its highlight.
+1. companies: for each company id, why_relevant: ONE plain sentence, at most 20 words, no markdown, no quotes,
+   on why it could fit this person, based on its highlight.
 2. communities: for each community id, type: "professional_group" | "event" | "union", and date_if_event
    (YYYY-MM-DD) only if the highlight states a date within the next 30 days, else null.
 3. drafts: for each contact id, why_this_person (one sentence) and message: a short, polite, personal message

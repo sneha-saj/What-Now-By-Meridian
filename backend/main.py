@@ -3,14 +3,21 @@
 from datetime import date
 
 import json
+import logging
+import queue
+import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import Body, FastAPI
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
 from models import (STEPS, Action, ChatRequest, ChatResponse, Community, Company, Contact, Deadline, Draft, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
                     PlanResponse, PossibleDate, ReferralRequest, ReferralResponse, Source,
                     TimelineStep)
+import plan_b
 from questions import canonical_permit, needed_fields, questions_for
 from rules import calculate_deadline
 from countries.finland import DEADLINE_RULES, SOURCE_TITLE, SOURCE_URL, TRUSTED_DOMAINS
@@ -49,6 +56,7 @@ OUT_OF_SCOPE_LINK = "https://www.infofinland.fi/en/work-and-enterprise/unemploym
 DISCLAIMER = ("This is general guidance based on official Finnish sources, not legal advice. "
               "Rules can change: confirm your situation with Migri, Kela or your union.")
 WARNING = "This rule may have changed. Please check Migri."
+CHECK_ERROR = "Couldn't check Migri's page right now. The date is based on the rule we last confirmed."
 
 
 @app.post("/intake", response_model=IntakeResponse, response_model_exclude_none=True,
@@ -100,24 +108,29 @@ def build_deadline(f: Facts, today: date) -> Deadline:
 
     rule_ids = [r["rule_id"]] if r["rule_id"] else [p.rule_id for p in possible]
     checks = [c for c in (get_live_check(i) for i in rule_ids) if c]
-    verified = bool(checks) and all(c["status"] == "verified" for c in checks)
+    statuses = {c["status"] for c in checks}
+    if not checks:
+        check_status = "none"
+    elif "mismatch" in statuses:
+        check_status = "mismatch"
+    elif "error" in statuses:
+        check_status = "error"
+    else:
+        check_status = "verified"
 
     d = Deadline(
         status=status, explanation=r["explanation"], applies=r["applies"], months=r["months"],
         deadline_date=r["deadline_date"], possible_dates=possible, missing=missing, rule_id=r["rule_id"],
-        source=Source(title=SOURCE_TITLE, url=r["source_url"]), verified=verified, live_checks=checks,
+        source=Source(title=SOURCE_TITLE, url=r["source_url"]), verified=check_status == "verified",
+        check_status=check_status, live_checks=checks,
     )
     if d.deadline_date:
         d.days_left = (d.deadline_date - today).days
-    if not verified and rule_ids:
-        # Don't show a date we couldn't confirm against Migri today.
-        d.deadline_date = d.days_left = None
-        for p in d.possible_dates:
-            p.deadline_date = None
-        rule = next((x for x in DEADLINE_RULES if x["id"] == r["rule_id"]), None)
-        if rule:  # the engine's explanation includes the date, so fall back to the plain rule text
-            d.explanation = rule["description"]
+    # The date always comes from our rules engine. The live check only adds a note next to it.
+    if check_status == "mismatch":
         d.warning, d.warning_link = WARNING, r["source_url"]
+    elif check_status == "error":
+        d.warning, d.warning_link = CHECK_ERROR, r["source_url"]
     return d
 
 
@@ -130,13 +143,14 @@ def build_plan(f: Facts, d: Deadline, today: date) -> dict | None:
     """Exa finds official pages, Gemini writes the plan from them. None if either is unavailable."""
     if not gemini.available():  # no point spending Exa credits if Gemini can't write the plan
         return None
-    topics = exa_search.plan_topics(f.field, f.studied_in_finland, f.family_in_finland)
+    cands = plan_b.candidates(f, canonical_permit(f))
+    topics = exa_search.plan_topics(f.field, cands)
     sources = exa_search.search_plan_sources(topics)
     if not sources:
         return None
     sources = [{**s, "id": f"S{i + 1}"} for i, s in enumerate(sources)]
     by_id = {s["id"]: s for s in sources}
-    out = gemini.write_plan(f.model_dump(mode="json"), d.model_dump(mode="json"), sources, today.isoformat())
+    out = gemini.write_plan(f.model_dump(mode="json"), d.model_dump(mode="json"), sources, today.isoformat(), cands)
     if not out:
         return None
 
@@ -147,12 +161,28 @@ def build_plan(f: Facts, d: Deadline, today: date) -> dict | None:
         return None
     timeline = [TimelineStep(week=w["week"], steps=w["steps"], sources=_cite(w["source_ids"], by_id))
                 for w in out.get("timeline", [])]
-    plan_b = [PlanBOption(option=p["option"], why=p["why"], latest_start_date=p.get("latest_start_date"),
-                          sources=_cite(p["source_ids"], by_id))
-              for p in out.get("plan_b", [])]
-    return {"this_week": this_week,
-            "timeline": [w for w in timeline if w.sources],
-            "plan_b": [p for p in plan_b if p.sources]}
+    by_cand = {c["id"]: c for c in cands}
+    plan_b_out = []
+    for p in out.get("plan_b", []):
+        c = by_cand.get(p.get("candidate_id"))
+        cited = _cite(p.get("source_ids", []), by_id)
+        if c and cited:
+            plan_b_out.append(_plan_b_option(c, p["why"], cited, d))
+    return {"this_week": this_week, "timeline": [w for w in timeline if w.sources],
+            **_with_plan_b_note(plan_b_out, cands)}
+
+
+def _plan_b_option(c: dict, why: str, sources: list[Source], d: Deadline) -> PlanBOption:
+    # Apply while your current permit's protection period still runs: that's the deadline from the rules engine.
+    latest = d.deadline_date.isoformat() if d.deadline_date else None
+    return PlanBOption(id=c["id"], option=c["option"], who_it_fits=c["who_it_fits"], why=why,
+                       latest_start_date=latest, sources=sources)
+
+
+def _with_plan_b_note(options: list[PlanBOption], cands: list[dict]) -> dict:
+    if options:
+        return {"plan_b": options}
+    return {"plan_b": [], "plan_b_note": plan_b.NO_PERMIT_RISK if not cands else plan_b.NONE_FIT}
 
 
 @app.post("/plan", response_model=PlanResponse, summary="Deadline, this week's 3 actions, timeline and plan B")
@@ -171,10 +201,31 @@ def build_full_plan(f: Facts, d: Deadline | None = None) -> PlanResponse:
     mock = built is None
     if built is None:
         built = mocks.plan(d.deadline_date.isoformat() if d.deadline_date else None)
+        cands = plan_b.candidates(f, canonical_permit(f))
+        migri = Source(**mocks.SOURCES["migri"])
+        built.update(_with_plan_b_note(
+            [_plan_b_option(c, "Check the conditions and how to apply on Migri's site.", [migri], d) for c in cands], cands))
     return PlanResponse(deadline=d, disclaimer=DISCLAIMER, mock=mock, **built)
 
 
 MAX_DRAFT_WORDS = 80
+MAX_WHY_WORDS = 20
+
+
+def _clean_sentence(text: str | None) -> str | None:
+    """One plain sentence, max 20 words, no markdown. None if there's nothing usable."""
+    if not text:
+        return None
+    text = re.sub(r"[*_`#>\[\]]+", "", text).replace("\n", " ").strip()
+    text = re.split(r"(?<=[.!?])\s", text)[0]
+    words = text.split()
+    if len(words) > MAX_WHY_WORDS:
+        text = " ".join(words[:MAX_WHY_WORDS]).rstrip(",;:") + "."
+    return text or None
+
+
+def _clean_name(name: str) -> str:
+    return re.split(r"\s[|–—-]\s", name)[0].strip() or name
 
 
 def _template_draft(c: dict, field: str) -> str:
@@ -213,8 +264,10 @@ def build_referrals(f: Facts) -> ReferralResponse:
     kinds = {n["id"]: n for n in notes.get("communities", [])}
     drafts = {n["id"]: n for n in notes.get("drafts", [])}
 
-    out_companies = [Company(name=c["name"], url=c["url"], source=Source(title=c["name"], url=c["url"], highlight=c["highlight"]),
-                             why_relevant=why.get(c["id"]) or f"From their page: {c['highlight'][:160]}")
+    out_companies = [Company(name=_clean_name(c["name"]), url=c["url"],
+                             hiring_now=bool(c.get("hiring_evidence")), hiring_evidence=c.get("hiring_evidence"),
+                             source=Source(title=_clean_name(c["name"]), url=c["url"]),
+                             why_relevant=_clean_sentence(why.get(c["id"])) or f"Came up in a search for {field} employers near {city}.")
                      for c in companies]
     out_contacts, out_drafts = [], []
     for c in contacts:
@@ -263,11 +316,46 @@ def _merge_chat_facts(req: ChatRequest, extracted: dict) -> tuple[Facts, list[st
           summary="Guided chat that keeps a live 'Your situation' card")
 def chat(req: ChatRequest = Body(openapi_examples=_examples("chat"))):
     """The browser keeps the session and sends it each time (no accounts, nothing stored here).
-    Steps: about_you -> deadline -> this_week -> find_your_way_in. Send `action: "next"` to move on."""
+    Steps: about_you -> deadline -> this_week -> find_your_way_in. Send `action: "next"` to move on.
+    `/chat/stream` returns the same result with progress events first."""
+    return run_chat(req)
+
+
+PROGRESS = ("reading_situation", "checking_rules", "finding_steps", "finding_people")
+
+
+@app.post("/chat/stream", summary="Same as /chat, streamed as server-sent events with progress")
+def chat_stream(req: ChatRequest):
+    """Events: `{"type": "progress", "stage": ...}` for each of reading_situation, checking_rules,
+    finding_steps, finding_people (only the ones this step needs), then `{"type": "result", "data": <ChatResponse>}`
+    or `{"type": "error"}`."""
+    events: queue.Queue = queue.Queue()
+
+    def work():
+        try:
+            resp = run_chat(req, emit=lambda stage: events.put({"type": "progress", "stage": stage}))
+            events.put({"type": "result", "data": resp.model_dump(mode="json", exclude_none=True)})
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).exception("chat stream failed: %s", e)
+            events.put({"type": "error"})
+        events.put(None)
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def gen():
+        while (event := events.get()) is not None:
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def run_chat(req: ChatRequest, emit=lambda stage: None) -> ChatResponse:
     today = date.today()
     latest = req.messages[-1] if req.messages else None
     extracted, mock = {}, config.USE_MOCK
     if latest and latest.role == "user" and latest.text.strip():
+        emit("reading_situation")
         if config.USE_MOCK:
             extracted = mocks.example_facts()
         else:
@@ -281,8 +369,7 @@ def chat(req: ChatRequest = Body(openapi_examples=_examples("chat"))):
 
     facts, confirmed = _merge_chat_facts(req, extracted)
     first = sum(m.role == "user" for m in req.messages) <= 1 and not req.answers and not req.edited_facts
-    needed = needed_fields(facts)
-    if needed:
+    if needed_fields(facts):
         q = questions_for(facts, today)[0]
         reply = (FIRST_REPLY if first else "") + q.question
         return ChatResponse(reply=reply, step="about_you", facts=facts, confirmed_fields=confirmed,
@@ -290,15 +377,24 @@ def chat(req: ChatRequest = Body(openapi_examples=_examples("chat"))):
 
     current = STEPS.index(req.step) if req.step in STEPS else 0
     step = STEPS[max(1, min(current + (req.action == "next"), len(STEPS) - 1))]
+    emit("checking_rules")
     deadline = build_deadline(facts, today) if not config.USE_MOCK else PlanResponse(**mocks.example("plan")).deadline
     resp = ChatResponse(reply=STEP_REPLY[step], step=step, facts=facts, confirmed_fields=confirmed,
                         deadline=deadline, mock=mock)
-    if step in ("this_week", "find_your_way_in"):
-        resp.plan = build_full_plan(facts, deadline)
-        resp.mock = resp.mock or resp.plan.mock
-    if step == "find_your_way_in":
-        resp.referrals = build_referrals(facts)
-        resp.mock = resp.mock or resp.referrals.mock
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        plan_job = refs_job = None
+        if step in ("this_week", "find_your_way_in"):
+            emit("finding_steps")
+            plan_job = pool.submit(build_full_plan, facts, deadline)
+        if step == "find_your_way_in":
+            emit("finding_people")
+            refs_job = pool.submit(build_referrals, facts)
+        if plan_job:
+            resp.plan = plan_job.result()
+            resp.mock = resp.mock or resp.plan.mock
+        if refs_job:
+            resp.referrals = refs_job.result()
+            resp.mock = resp.mock or resp.referrals.mock
     if step in NEXT_LABEL:
         resp.quick_replies = [QuickReply(value="next", label=NEXT_LABEL[step])]
     return resp

@@ -49,6 +49,46 @@ OTHER_COUNTRIES = ("india", "china", "nepal", "vietnam", "nigeria", "brazil", "u
                    "pakistan", "philippines", "bangladesh", "iran", "turkey", "egypt", "kenya")
 
 
+MONTHS = {m: i + 1 for i, m in enumerate(
+    ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+     "november", "december"))}
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+NUMBERS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+
+
+def job_end_date(t: str, today: date) -> date | None:
+    """Resolve the last day of work from text, relative to today. None if unsure (then we ask)."""
+    t = t.lower()
+    if m := re.search(r"\d{4}-\d{2}-\d{2}", t):
+        return date.fromisoformat(m.group(0))
+    if "yesterday" in t:
+        return today - timedelta(days=1)
+    if "today" in t:
+        return today
+    if m := re.search(r"\b(\d+|a|an|one|two|three|four|five|six) (day|week|month)s? ago\b", t):
+        n = int(m.group(1)) if m.group(1).isdigit() else NUMBERS[m.group(1)]
+        return today - timedelta(days=n * {"day": 1, "week": 7, "month": 30}[m.group(2)])
+    if "last week" in t:
+        return today - timedelta(days=7)
+    if "last month" in t:
+        return today - timedelta(days=30)
+    if m := re.search(r"\blast (" + "|".join(WEEKDAYS) + r")\b", t):
+        back = (today.weekday() - WEEKDAYS.index(m.group(1))) % 7 or 7
+        return today - timedelta(days=back)
+    month_names = "|".join(MONTHS)
+    m = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)? (" + month_names + r")\b", t) or \
+        re.search(r"\b(" + month_names + r") (\d{1,2})(?:st|nd|rd|th)?\b", t)
+    if m:
+        a, b = m.groups()
+        day, month = (int(a), MONTHS[b]) if a.isdigit() else (int(b), MONTHS[a])
+        try:
+            d = date(today.year, month, day)
+        except ValueError:
+            return None
+        return d if d <= today + timedelta(days=60) else date(today.year - 1, month, day)  # notice periods allowed
+    return None
+
+
 def extract_facts(text: str, today: date) -> dict:
     """Keyword heuristics standing in for Gemini."""
     t = text.lower()
@@ -68,14 +108,8 @@ def extract_facts(text: str, today: date) -> dict:
             facts["permit_type"] = val
             break
 
-    if m := re.search(r"\d{4}-\d{2}-\d{2}", t):
-        facts["job_end_date"] = m.group(0)
-    elif "yesterday" in t:
-        facts["job_end_date"] = (today - timedelta(days=1)).isoformat()
-    elif "today" in t:
-        facts["job_end_date"] = today.isoformat()
-    elif "last week" in t:
-        facts["job_end_date"] = (today - timedelta(days=7)).isoformat()
+    if (end := job_end_date(t, today)) is not None:
+        facts["job_end_date"] = end.isoformat()
 
     if m := re.search(r"(\d+(?:\.\d+)?)\s+years?", t):
         facts["years_on_work_permit"] = float(m.group(1))

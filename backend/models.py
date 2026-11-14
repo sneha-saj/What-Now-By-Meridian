@@ -81,6 +81,7 @@ class Deadline(BaseModel):
     rule_id: Optional[str] = None
     source: Source
     verified: bool = False
+    check_status: Literal["verified", "mismatch", "error", "none"] = "none"
     live_checks: list[dict] = Field(default_factory=list)
     warning: Optional[str] = None
     warning_link: Optional[str] = None
@@ -100,7 +101,9 @@ class TimelineStep(BaseModel):
 
 
 class PlanBOption(BaseModel):
+    id: str = ""
     option: str
+    who_it_fits: str = ""
     why: str
     latest_start_date: Optional[str] = None
     sources: list[Source]
@@ -111,6 +114,7 @@ class PlanResponse(BaseModel):
     this_week: list[Action]
     timeline: list[TimelineStep]
     plan_b: list[PlanBOption]
+    plan_b_note: Optional[str] = None
     disclaimer: str
     mock: bool
 
@@ -123,6 +127,8 @@ class Company(BaseModel):
     name: str
     why_relevant: str
     url: str
+    hiring_now: bool = False
+    hiring_evidence: Optional[str] = None
     source: Source
 
 

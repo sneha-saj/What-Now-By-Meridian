@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import contextvars
 from concurrent.futures import ThreadPoolExecutor
 import re
 from urllib.parse import urlparse
@@ -11,6 +12,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import activity
 import config
 
 log = logging.getLogger(__name__)
@@ -23,7 +25,21 @@ def _parallel(fn, items):
     if len(items) <= 1:
         return [fn(i) for i in items]
     with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL, len(items))) as pool:
-        return list(pool.map(fn, items))
+        # copy_context so each thread can still report activity for this request
+        futures = [pool.submit(contextvars.copy_context().run, fn, i) for i in items]
+        return [f.result() for f in futures]
+
+
+def _search(exa, query: str, purpose: str, **kwargs):
+    """exa.search plus a live activity event describing what was searched and what came back."""
+    activity.emit({"type": "exa", "status": "searching", "purpose": purpose, "query": query,
+                   "domains": kwargs.get("include_domains") or [], "category": kwargs.get("category")})
+    res = exa.search(query, **kwargs)
+    activity.emit({"type": "exa", "status": "found", "purpose": purpose, "query": query,
+                   "results": [{"title": r.title or r.url, "url": r.url,
+                                "published": getattr(r, "published_date", None)} for r in res.results[:5]],
+                   "count": len(res.results)})
+    return res
 
 _client = None
 CACHE_PATH = Path(__file__).resolve().parent.parent / ".exa_search_cache.json"
@@ -137,6 +153,7 @@ def _cached_search(kind: str, params: dict, run):
     key = _cache_key(kind, params)
     cached = _cache_read(key)
     if cached is not None:
+        activity.emit({"type": "exa", "status": "cached", "purpose": kind, "count": len(cached)})
         return cached
     exa = _get_client()
     if exa is None:
@@ -180,7 +197,8 @@ def search_companies(field: str, city: str, n: int = 8) -> list[dict] | None:
                  objective=(f"Current job posts or careers pages for {field} roles in or near {city}, Finland. "
                             "Prefer the employer's own careers page or a live job listing.")),
         ]
-        companies, posts = _parallel(lambda kw: exa.search(kw.pop("query"), **kw).results, calls)
+        purposes = ["companies", "job posts"]
+        companies, posts = _parallel(lambda i: _search(exa, calls[i].pop("query"), purposes[i], **calls[i]).results, [0, 1])
         evidence = {}
         for p in posts:
             evidence.setdefault(_domain(p.url), p.url)
@@ -205,8 +223,8 @@ def search_people(companies: list[dict], field: str, city: str, top: int = 3, pe
 
     def run(exa):
         def one(company):
-            res = exa.search(
-                f"{field} hiring manager, team lead or recruiter at {company} in {city}, Finland",
+            res = _search(
+                exa, f"{field} hiring manager, team lead or recruiter at {company} in {city}, Finland", "people",
                 category="people", num_results=per_company, contents={"highlights": True},
                 objective=(f"Public professional profiles of people at {company} who hire for {field} roles "
                            "or have a similar background, so a job seeker can reach out politely."),
@@ -234,8 +252,8 @@ def search_communities(field: str, city: str, today: str, n: int = 3) -> list[di
     def run(exa):
         def one(item):
             kind, q = item
-            res = exa.search(
-                q, num_results=n, contents={"highlights": True},
+            res = _search(
+                exa, q, "events" if kind == "professional_group" else "unions", num_results=n, contents={"highlights": True},
                 objective=("Help an international job seeker in Finland find professional groups, upcoming events "
                            "(next 30 days) and union career services. Pull event dates when stated."),
             )
@@ -250,6 +268,10 @@ PLAN_OBJECTIVE = (
     "(the rules changed on 11 June 2025). Exclude news and forums. Pull concrete facts: steps, "
     "time limits, eligibility conditions and where to apply."
 )
+
+
+TOPIC_PURPOSE = {"register_jobseeker": "registering as a jobseeker", "unemployment_benefits": "unemployment benefits",
+                 "labour_shortage": "labour-shortage sectors", "plan_b": "other permits"}
 
 
 def plan_topics(field: str | None, candidates: list[dict]) -> list[tuple[str, str]]:
@@ -270,6 +292,7 @@ def search_plan_sources(topics: list[tuple[str, str]], per_topic: int = 3) -> li
     key = _cache_key("plan", {"topics": topics, "per_topic": per_topic})
     cached = _cache_read(key)
     if cached is not None:
+        activity.emit({"type": "exa", "status": "cached", "purpose": "official guidance", "count": len(cached)})
         return cached
     exa = _get_client()
     if exa is None:
@@ -278,8 +301,9 @@ def search_plan_sources(topics: list[tuple[str, str]], per_topic: int = 3) -> li
 
     def one(item):
         topic, query = item
-        return topic, exa.search(query, num_results=per_topic, include_domains=config.OFFICIAL_DOMAINS,
-                                 contents={"highlights": True}, objective=PLAN_OBJECTIVE)
+        return topic, _search(exa, query, TOPIC_PURPOSE.get(topic.split(":")[0], topic), num_results=per_topic,
+                              include_domains=config.OFFICIAL_DOMAINS, contents={"highlights": True},
+                              objective=PLAN_OBJECTIVE)
     try:
         for topic, res in _parallel(one, topics):
             for r in res.results:

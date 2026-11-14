@@ -8,7 +8,7 @@ from fastapi import Body, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
-from models import (Action, Community, Company, Contact, Deadline, Draft, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
+from models import (STEPS, Action, ChatRequest, ChatResponse, Community, Company, Contact, Deadline, Draft, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
                     PlanResponse, PossibleDate, ReferralRequest, ReferralResponse, Source,
                     TimelineStep)
 from questions import canonical_permit, needed_fields, questions_for
@@ -159,11 +159,14 @@ def build_plan(f: Facts, d: Deadline, today: date) -> dict | None:
 def plan(req: PlanRequest = Body(openapi_examples=_examples("plan"))):
     """The rules engine computes the deadline (hidden if today's live check can't verify the rule).
     Exa finds official pages on the trusted domains; Gemini writes the plan from them only, citing sources."""
+    return build_full_plan(req.facts)
+
+
+def build_full_plan(f: Facts, d: Deadline | None = None) -> PlanResponse:
     if config.USE_MOCK:
         return PlanResponse(**mocks.example("plan"))
     today = date.today()
-    f = req.facts
-    d = build_deadline(f, today)
+    d = d or build_deadline(f, today)
     built = build_plan(f, d, today)
     mock = built is None
     if built is None:
@@ -184,7 +187,10 @@ def _template_draft(c: dict, field: str) -> str:
 def referrals(req: ReferralRequest = Body(openapi_examples=_examples("referrals"))):
     """Exa finds companies hiring, public professional profiles at the top companies and communities.
     Gemini drafts one short message per contact. Drafts only: nothing is ever sent."""
-    f = req.facts
+    return build_referrals(req.facts)
+
+
+def build_referrals(f: Facts) -> ReferralResponse:
     field = f.field or "professional"
     city = f.city or "Helsinki"
     today = date.today().isoformat()
@@ -228,3 +234,71 @@ def referrals(req: ReferralRequest = Body(openapi_examples=_examples("referrals"
                                          date_if_event=n.get("date_if_event") if kind == "event" else None))
     return ReferralResponse(companies=out_companies, contacts=out_contacts, communities=out_communities,
                             drafts=out_drafts, mock=not notes)
+
+
+# ---------- guided chat ----------
+
+NEXT_LABEL = {"deadline": "Show me this week", "this_week": "Help me find my way in"}
+STEP_REPLY = {
+    "deadline": "Thank you. Here is your deadline and the rule behind it. Take your time with it.",
+    "this_week": "Here are the three most useful things to do this week, each with its official source.",
+    "find_your_way_in": ("Here are companies, people and communities that could help. The messages are drafts: "
+                         "read them, change anything, and send them yourself if you want to."),
+}
+FIRST_REPLY = "Thank you for telling me. One quick question: "
+
+
+def _merge_chat_facts(req: ChatRequest, extracted: dict) -> tuple[Facts, list[str]]:
+    """edited_facts always win, then tapped answers, then what Gemini read from the latest message."""
+    known = Facts.model_fields
+    merged = {k: v for k, v in req.facts.items() if k in known and v is not None}
+    merged.update({k: v for k, v in extracted.items() if k in known and v is not None})
+    merged.update({k: v for k, v in req.answers.items() if k in known})
+    merged.update({k: v for k, v in req.edited_facts.items() if k in known})
+    confirmed = [k for k in {**req.answers, **req.edited_facts} if k in known]
+    return Facts.model_validate(merged), confirmed
+
+
+@app.post("/chat", response_model=ChatResponse, response_model_exclude_none=True,
+          summary="Guided chat that keeps a live 'Your situation' card")
+def chat(req: ChatRequest = Body(openapi_examples=_examples("chat"))):
+    """The browser keeps the session and sends it each time (no accounts, nothing stored here).
+    Steps: about_you -> deadline -> this_week -> find_your_way_in. Send `action: "next"` to move on."""
+    today = date.today()
+    latest = req.messages[-1] if req.messages else None
+    extracted, mock = {}, config.USE_MOCK
+    if latest and latest.role == "user" and latest.text.strip():
+        if config.USE_MOCK:
+            extracted = mocks.example_facts()
+        else:
+            extracted = gemini.extract_facts(latest.text, today.isoformat())
+            if extracted is None:
+                extracted, mock = mocks.extract_facts(latest.text, today), True
+        if extracted.get("job_was_in_finland") is False:
+            return ChatResponse(reply=("What Now? only covers jobs in Finland. If your job was in another country, "
+                                       "that country's official services are the right place to start."),
+                                step="about_you", facts=Facts(), out_of_scope=True, link=OUT_OF_SCOPE_LINK, mock=mock)
+
+    facts, confirmed = _merge_chat_facts(req, extracted)
+    first = sum(m.role == "user" for m in req.messages) <= 1 and not req.answers and not req.edited_facts
+    needed = needed_fields(facts)
+    if needed:
+        q = questions_for(facts, today)[0]
+        reply = (FIRST_REPLY if first else "") + q.question
+        return ChatResponse(reply=reply, step="about_you", facts=facts, confirmed_fields=confirmed,
+                            question=q, mock=mock)
+
+    current = STEPS.index(req.step) if req.step in STEPS else 0
+    step = STEPS[max(1, min(current + (req.action == "next"), len(STEPS) - 1))]
+    deadline = build_deadline(facts, today) if not config.USE_MOCK else PlanResponse(**mocks.example("plan")).deadline
+    resp = ChatResponse(reply=STEP_REPLY[step], step=step, facts=facts, confirmed_fields=confirmed,
+                        deadline=deadline, mock=mock)
+    if step in ("this_week", "find_your_way_in"):
+        resp.plan = build_full_plan(facts, deadline)
+        resp.mock = resp.mock or resp.plan.mock
+    if step == "find_your_way_in":
+        resp.referrals = build_referrals(facts)
+        resp.mock = resp.mock or resp.referrals.mock
+    if step in NEXT_LABEL:
+        resp.quick_replies = [QuickReply(value="next", label=NEXT_LABEL[step])]
+    return resp

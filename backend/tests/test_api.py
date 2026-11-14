@@ -269,7 +269,7 @@ def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
 
 @pytest.mark.parametrize("name,model", [
     ("intake", "IntakeResponse"), ("intake_questions", "IntakeResponse"), ("intake_out_of_scope", "IntakeResponse"),
-    ("plan", "PlanResponse"), ("referrals", "ReferralResponse")])
+    ("plan", "PlanResponse"), ("referrals", "ReferralResponse"), ("chat", "ChatResponse")])
 def test_saved_examples_match_response_models(name, model):
     import models
     from services import mocks
@@ -292,3 +292,68 @@ def test_openapi_docs_page_works():
     assert {"/intake", "/plan", "/rules", "/referrals"} <= spec["paths"].keys()
     assert "intake" in spec["paths"]["/intake"]["post"]["requestBody"]["content"]["application/json"]["examples"]
     assert client.get("/docs").status_code == 200
+
+
+# ---------- /chat ----------
+
+def _msg(text):
+    return [{"role": "user", "text": text}]
+
+
+def test_chat_asks_one_question_at_a_time_and_tracks_guesses(monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"citizenship_group": "other", "city": "Helsinki"})
+    body = client.post("/chat", json={"messages": _msg("I lost my job in Helsinki")}).json()
+    assert body["step"] == "about_you"
+    assert body["question"]["id"] == "permit_type"
+    assert body["reply"].endswith(body["question"]["question"])
+    assert body["facts"]["city"] == "Helsinki"
+    assert body["confirmed_fields"] == []  # extracted facts are guesses until confirmed
+
+
+def test_chat_edited_facts_win_over_answers_and_extraction(monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"city": "Espoo", "permit_type": "student"})
+    body = client.post("/chat", json={
+        "messages": _msg("I live in Espoo"), "facts": {"city": "Tampere"},
+        "answers": {"permit_type": "work_based"}, "edited_facts": {"city": "Helsinki"}}).json()
+    assert body["facts"]["city"] == "Helsinki"
+    assert body["facts"]["permit_type"] == "work_based"
+    assert set(body["confirmed_fields"]) == {"permit_type", "city"}
+
+
+def test_chat_does_not_reextract_when_last_message_is_from_assistant(monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: pytest.fail("re-extracted an old message"))
+    msgs = [*_msg("hi"), {"role": "assistant", "text": "Which permit?"}]
+    body = client.post("/chat", json={"messages": msgs, "facts": {"citizenship_group": "eu_eea"}}).json()
+    assert body["step"] == "deadline"
+
+
+def test_chat_moves_through_the_steps(verified, live_services, referral_exa, monkeypatch):
+    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: None)
+    session = {"messages": [], "facts": WORK_FACTS}
+    d = client.post("/chat", json=session).json()
+    assert d["step"] == "deadline" and d["deadline"]["deadline_date"] == "2027-02-01"
+    assert d["quick_replies"] == [{"value": "next", "label": "Show me this week"}]
+    assert "plan" not in d and "referrals" not in d
+
+    w = client.post("/chat", json={**session, "step": "deadline", "action": "next"}).json()
+    assert w["step"] == "this_week" and len(w["plan"]["this_week"]) == 3
+
+    f = client.post("/chat", json={**session, "step": "this_week", "action": "next"}).json()
+    assert f["step"] == "find_your_way_in" and f["referrals"]["companies"]
+    assert f["quick_replies"] == []
+
+    # Staying on the last step doesn't overflow.
+    again = client.post("/chat", json={**session, "step": "find_your_way_in", "action": "next"}).json()
+    assert again["step"] == "find_your_way_in"
+
+
+def test_chat_goes_back_to_questions_if_an_edit_makes_a_fact_unknown(verified):
+    body = client.post("/chat", json={"facts": WORK_FACTS, "step": "this_week",
+                                      "edited_facts": {"permit_type": None}}).json()
+    assert body["step"] == "about_you" and body["question"]["id"] == "permit_type"
+
+
+def test_chat_out_of_scope(monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"job_was_in_finland": False})
+    body = client.post("/chat", json={"messages": _msg("I lost my job in Norway")}).json()
+    assert body["out_of_scope"] is True and body["link"]

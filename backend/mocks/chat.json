@@ -1,0 +1,63 @@
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "text": "I'm from India and worked in a restaurant in Helsinki for a year on a work permit. My job ended on 1 November."
+      }
+    ],
+    "facts": {},
+    "answers": {},
+    "edited_facts": {},
+    "step": null,
+    "action": null
+  },
+  "response": {
+    "reply": "Thank you. Here is your deadline and the rule behind it. Take your time with it.",
+    "step": "deadline",
+    "facts": {
+      "citizenship_group": "other",
+      "citizenship_country": "India",
+      "permit_type": "work_based",
+      "years_on_work_permit": 1.0,
+      "job_end_date": "2026-11-01",
+      "city": "Helsinki",
+      "field": "restaurant worker",
+      "studied_in_finland": false,
+      "family_in_finland": false
+    },
+    "confirmed_fields": [],
+    "quick_replies": [
+      {
+        "value": "next",
+        "label": "Show me this week"
+      }
+    ],
+    "deadline": {
+      "status": "ok",
+      "explanation": "If employment ends early, a work-based permit held for 2 years or less has a 3-month protection period to find a new job. Based on your last day of work, the date is 2027-02-01.",
+      "applies": true,
+      "months": 3,
+      "deadline_date": "2027-02-01",
+      "days_left": 79,
+      "possible_dates": [],
+      "missing": [],
+      "rule_id": "work-based-three-months",
+      "source": {
+        "title": "Migri – Changes to work-based residence permits",
+        "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US"
+      },
+      "verified": true,
+      "live_checks": [
+        {
+          "rule_id": "work-based-three-months",
+          "status": "verified",
+          "checked_at": "2026-11-14T09:00:00+00:00",
+          "evidence_snippet": "Example check result: the page states a 3-month period for permits held 2 years or less."
+        }
+      ]
+    },
+    "out_of_scope": false,
+    "mock": true
+  }
+}

@@ -153,3 +153,41 @@ class ReferralResponse(BaseModel):
     communities: list[Community]
     drafts: list[Draft]
     mock: bool
+
+
+Step = Literal["about_you", "deadline", "this_week", "find_your_way_in"]
+STEPS: list[str] = ["about_you", "deadline", "this_week", "find_your_way_in"]
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(default_factory=list)
+    facts: dict = Field(default_factory=dict)
+    answers: dict = Field(default_factory=dict)
+    edited_facts: dict = Field(default_factory=dict)
+    step: Optional[Step] = None
+    action: Optional[Literal["next"]] = None
+
+
+class QuickReply(BaseModel):
+    value: str
+    label: str
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    step: Step
+    facts: Facts
+    confirmed_fields: list[str] = Field(default_factory=list)
+    question: Optional[Question] = None
+    quick_replies: list[QuickReply] = Field(default_factory=list)
+    deadline: Optional[Deadline] = None
+    plan: Optional[PlanResponse] = None
+    referrals: Optional[ReferralResponse] = None
+    out_of_scope: bool = False
+    link: Optional[str] = None
+    mock: bool = False

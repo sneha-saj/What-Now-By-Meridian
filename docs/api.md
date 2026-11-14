@@ -18,6 +18,7 @@ Every response has `mock: true` when a fallback was used (no API key, or a call 
 | `POST /plan` | Deadline, 3 actions for this week, a timeline and plan B, all with official sources |
 | `GET /rules` | The deadline rules, their latest live check against Migri, and trusted domains |
 | `POST /referrals` | Companies hiring, people to contact, communities, and draft messages |
+| `POST /chat` | Guided chat: the same steps, one message at a time, with a live "Your situation" card |
 | `GET /health` | Which integrations have keys configured |
 
 ---
@@ -608,6 +609,118 @@ Response:
       "message": "Hi, I saw that Example Bistro is hiring line cooks in Helsinki. I've worked in a Helsinki restaurant kitchen for a year and I'm looking for my next role. Would you have a few minutes for a short chat, or could you point me to the right person? Thank you! [Your name]"
     }
   ],
+  "mock": true
+}
+```
+
+---
+
+## POST /chat
+
+The guided chat behind the web app. There are no accounts and nothing is stored on the server: the
+browser keeps the session and sends it with each request.
+
+Facts are merged in this order (later wins): the current `facts`, facts Gemini reads from the latest
+user message, tapped `answers`, then `edited_facts` (what the user corrected on the card always wins).
+Gemini only reads the latest message when it's from the user, so old messages aren't re-read.
+
+Steps: `about_you` → `deadline` → `this_week` → `find_your_way_in`. The chat stays on `about_you` and
+asks one question at a time until the deadline has what it needs. After that, send `action: "next"`
+(the quick reply) to move on. If an edit makes a needed fact unknown, it goes back to `about_you`.
+
+**Input**
+
+| Field | Notes |
+| --- | --- |
+| `messages` | `[{role: "user" or "assistant", text}]` |
+| `facts` | The current "Your situation" card |
+| `answers` | Tapped answers, keyed by question `id` |
+| `edited_facts` | Fields the user corrected on the card |
+| `step` | The step the browser is on |
+| `action` | `"next"` to move to the next step |
+
+**Output**
+
+| Field | Notes |
+| --- | --- |
+| `reply` | Short, calm, plain-language message |
+| `step` | Current step |
+| `facts` | Updated "Your situation" card |
+| `confirmed_fields` | Fields the user tapped or edited in this request (the rest are guesses from their message) |
+| `question` | The next question (`about_you` only), same shape as in `/intake` |
+| `quick_replies` | e.g. `{"value": "next", "label": "Show me this week"}` |
+| `deadline` | From step `deadline` on, same as in `/plan` |
+| `plan` | From step `this_week` on, the `/plan` response |
+| `referrals` | On step `find_your_way_in`, the `/referrals` response |
+| `out_of_scope`, `link` | If the job was outside Finland |
+
+### Example
+
+Request:
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "text": "I'm from India and worked in a restaurant in Helsinki for a year on a work permit. My job ended on 1 November."
+    }
+  ],
+  "facts": {},
+  "answers": {},
+  "edited_facts": {},
+  "step": null,
+  "action": null
+}
+```
+
+Response:
+```json
+{
+  "reply": "Thank you. Here is your deadline and the rule behind it. Take your time with it.",
+  "step": "deadline",
+  "facts": {
+    "citizenship_group": "other",
+    "citizenship_country": "India",
+    "permit_type": "work_based",
+    "years_on_work_permit": 1.0,
+    "job_end_date": "2026-11-01",
+    "city": "Helsinki",
+    "field": "restaurant worker",
+    "studied_in_finland": false,
+    "family_in_finland": false
+  },
+  "confirmed_fields": [],
+  "quick_replies": [
+    {
+      "value": "next",
+      "label": "Show me this week"
+    }
+  ],
+  "deadline": {
+    "status": "ok",
+    "explanation": "If employment ends early, a work-based permit held for 2 years or less has a 3-month protection period to find a new job. Based on your last day of work, the date is 2027-02-01.",
+    "applies": true,
+    "months": 3,
+    "deadline_date": "2027-02-01",
+    "days_left": 79,
+    "possible_dates": [],
+    "missing": [],
+    "rule_id": "work-based-three-months",
+    "source": {
+      "title": "Migri – Changes to work-based residence permits",
+      "url": "https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US"
+    },
+    "verified": true,
+    "live_checks": [
+      {
+        "rule_id": "work-based-three-months",
+        "status": "verified",
+        "checked_at": "2026-11-14T09:00:00+00:00",
+        "evidence_snippet": "Example check result: the page states a 3-month period for permits held 2 years or less."
+      }
+    ]
+  },
+  "out_of_scope": false,
   "mock": true
 }
 ```

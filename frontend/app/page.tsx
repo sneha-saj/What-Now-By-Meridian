@@ -49,7 +49,7 @@ export default function Home() {
         <div>
           <h1 aria-label="Lost your job? Let's figure out what's next." className="animate-fade-up font-serif text-5xl font-semibold leading-[1.02] tracking-tight sm:text-7xl">
             <span aria-hidden="true" className="hero-rotating text-4xl sm:text-7xl">
-              <span>Laid off?</span><span>Fired?</span><span>Contract ended?</span>
+              <span>Laid off?</span><span>Lost your job?</span><span>Contract ended?</span>
             </span><br />
             <span className="text-accent-ink">Let&apos;s figure out</span> what&apos;s next.
           </h1>

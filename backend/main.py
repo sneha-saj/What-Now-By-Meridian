@@ -2,6 +2,7 @@
 
 from datetime import date
 
+import contextvars
 import json
 import logging
 import queue
@@ -35,9 +36,31 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"])
 
 
+class AccessCodeMiddleware:
+    """Sets, for each request, whether it may use the paid APIs (see config.ACCESS_CODES). Plain ASGI so the
+    setting reaches the endpoint and its worker threads."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        code = dict(scope.get("headers") or []).get(b"x-access-code", b"").decode("utf-8", "ignore")
+        token = config.set_live(config.live_for(code))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            config.reset_live(token)
+
+
+app.add_middleware(AccessCodeMiddleware)
+
+
 @app.get("/health")
 def health():
-    return {"ok": True, "gemini": bool(config.gemini_key()), "exa": bool(config.exa_key()),
+    return {"ok": True, "live": config.live(), "access_codes": bool(config.ACCESS_CODES),
+            "gemini": bool(config.gemini_key()), "exa": bool(config.exa_key()),
             "context_dev": bool(config.context_key()), "voice": elevenlabs.available()}
 
 
@@ -309,7 +332,7 @@ def _stream(run, what: str):
             events.put({"type": "error"})
         events.put(None)
 
-    threading.Thread(target=work, daemon=True).start()
+    threading.Thread(target=contextvars.copy_context().run, args=(work,), daemon=True).start()  # keeps the live/demo setting
 
     def gen():
         while (event := events.get()) is not None:
@@ -411,7 +434,7 @@ def chat_stream(req: ChatRequest):
             events.put({"type": "error"})
         events.put(None)
 
-    threading.Thread(target=work, daemon=True).start()
+    threading.Thread(target=contextvars.copy_context().run, args=(work,), daemon=True).start()  # keeps the live/demo setting
 
     def gen():
         while (event := events.get()) is not None:
@@ -614,7 +637,7 @@ def opportunities_stream(req: OpportunitiesRequest):
             events.put({"type": "error"})
         events.put(None)
 
-    threading.Thread(target=work, daemon=True).start()
+    threading.Thread(target=contextvars.copy_context().run, args=(work,), daemon=True).start()  # keeps the live/demo setting
 
     def gen():
         while (event := events.get()) is not None:

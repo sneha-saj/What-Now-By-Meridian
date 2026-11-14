@@ -61,7 +61,8 @@ app.add_middleware(AccessCodeMiddleware)
 def health():
     return {"ok": True, "live": config.live(), "access_codes": bool(config.ACCESS_CODES),
             "gemini": bool(config.gemini_key()), "exa": bool(config.exa_key()),
-            "context_dev": bool(config.context_key()), "voice": elevenlabs.available()}
+            "context_dev": bool(config.context_key()),
+            "voice_configured": bool(config.elevenlabs_key()), "voice": elevenlabs.available()}
 
 
 @app.get("/rules", summary="Deadline rules, their latest live check and trusted domains")

@@ -132,6 +132,7 @@ export type ChatResponse = {
   referrals?: ReferralResponse;
   out_of_scope: boolean;
   link?: string;
+  links?: Source[];
   mock: boolean;
 };
 

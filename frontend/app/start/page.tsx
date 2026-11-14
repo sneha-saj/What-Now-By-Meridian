@@ -9,6 +9,7 @@ import type { Field } from "@/lib/facts";
 import { toLogLine, type LogLine } from "@/lib/activity";
 import { allLive, applyExaEvent, buildNodes, type NodeId, type Searching } from "@/lib/roadmap";
 import { ActivityLog } from "@/components/ActivityLog";
+import { Checklist } from "@/components/Checklist";
 import { AskPanel, type AskEntry } from "@/components/AskPanel";
 import { FlowProgress } from "@/components/FlowProgress";
 import { HowWeKnow } from "@/components/HowWeKnow";
@@ -29,7 +30,7 @@ type Saved = {
   deadline?: Deadline;
   plan?: PlanResponse;
   referrals?: ReferralResponse;
-  outOfScope?: { message: string; link?: string };
+  outOfScope?: { message: string; link?: string; links?: { title: string; url: string }[] };
   doneActions: Record<number, boolean>;
   doneNodes: Partial<Record<NodeId, boolean>>;
   drafts: Record<string, string>;
@@ -94,7 +95,7 @@ export default function StartPage() {
       const res = await chatStream({ messages: [], facts: s.facts, step: "find_your_way_in", ...req }, onEvent);
       setQVersion((v) => v + 1);
       if (res.out_of_scope) {
-        update({ outOfScope: { message: res.reply, link: res.link }, question: undefined });
+        update({ facts: res.facts, outOfScope: { message: res.reply, link: res.link, links: res.links }, question: undefined });
       } else if (res.question) {
         update({ facts: res.facts, question: res.question, outOfScope: undefined });
       } else {
@@ -152,10 +153,20 @@ export default function StartPage() {
       {/* Row 2: only the current step */}
       <div>
         {s.outOfScope ? (
-          <GentleWarning>
-            <p>{s.outOfScope.message}</p>
-            {s.outOfScope.link && <a href={s.outOfScope.link} target="_blank" rel="noreferrer" className="font-bold underline">Read more on InfoFinland</a>}
-          </GentleWarning>
+          <section aria-labelledby="redirect-title" className="animate-fade-up mx-auto max-w-3xl space-y-5 rounded-3xl border border-rule bg-card p-6 sm:p-10">
+            <h2 id="redirect-title" className="font-serif text-3xl font-semibold leading-snug">{s.outOfScope.message}</h2>
+            <ul className="space-y-3">
+              {(s.outOfScope.links?.length ? s.outOfScope.links : s.outOfScope.link ? [{ title: "InfoFinland", url: s.outOfScope.link }] : []).map((l) => (
+                <li key={l.url}>
+                  <a href={l.url} target="_blank" rel="noreferrer"
+                    className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-rule bg-paper px-4 py-3 font-bold hover:border-ink">
+                    {l.title}<span aria-hidden className="text-ink-soft">↗</span><span className="sr-only">(opens in a new tab)</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p className="text-ink-soft">Got something wrong? Tap a detail below to change it, or start over.</p>
+          </section>
         ) : !s.built ? (
           finding ? (
             <section aria-labelledby="finding-title" className="animate-fade-up mx-auto max-w-3xl space-y-6 rounded-3xl border border-rule bg-card p-6 sm:p-10">
@@ -166,11 +177,14 @@ export default function StartPage() {
               <ActivityLog lines={log} busy={busy} last={3} />
             </section>
           ) : s.question ? (
-            <div className="mx-auto max-w-3xl space-y-4">
-              <QuestionCard key={`${s.question.id}-${qVersion}`} question={s.question} busy={busy}
-                onAnswer={(value) => send({ answers: { [s.question!.id]: value } as Partial<Facts> })}
-                onText={(text) => send({ messages: [{ role: "user", text }] })} />
-              <ActivityLog lines={log} busy={busy} last={3} />
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <div className="space-y-4">
+                <QuestionCard key={`${s.question.id}-${qVersion}`} question={s.question} busy={busy}
+                  onAnswer={(value) => send({ answers: { [s.question!.id]: value } as Partial<Facts> })}
+                  onText={(text) => send({ messages: [{ role: "user", text }] })} />
+                <ActivityLog lines={log} busy={busy} last={3} />
+              </div>
+              <Checklist facts={s.facts} />
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-4">

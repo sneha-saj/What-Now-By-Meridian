@@ -346,7 +346,7 @@ def test_chat_edited_facts_win_over_answers_and_extraction(monkeypatch):
 def test_chat_does_not_reextract_when_last_message_is_from_assistant(monkeypatch):
     monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: pytest.fail("re-extracted an old message"))
     msgs = [*_msg("hi"), {"role": "assistant", "text": "Which permit?"}]
-    body = client.post("/chat", json={"messages": msgs, "facts": {"citizenship_group": "eu_eea", "city": "Espoo", "field": ""}}).json()
+    body = client.post("/chat", json={"messages": msgs, "facts": {"citizenship_group": "other", "permit_type": "permanent", "city": "Espoo", "field": ""}}).json()
     assert body["step"] == "deadline"
 
 
@@ -522,3 +522,12 @@ def test_exa_ask_filters_citations_to_official_domains(monkeypatch):
     out = exa_search.ask("Can I extend my permit?", True)
     assert [c["url"] for c in out["citations"]] == ["https://migri.fi/en/x"]
     assert out["citations"][0]["published"] == "2026-09-01"
+
+
+def test_eu_citizens_get_a_kind_message_and_links_not_a_roadmap(monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"citizenship_group": "eu_eea", "citizenship_country": "Germany"})
+    monkeypatch.setattr(main, "build_full_plan", lambda *a: pytest.fail("built a roadmap for a citizen"))
+    body = client.post("/chat", json={"messages": _msg("I'm German and lost my job in Helsinki")}).json()
+    assert body["out_of_scope"] is True and "doesn't depend on your job" in body["reply"]
+    assert [l["url"] for l in body["links"]][0] == "https://tyomarkkinatori.fi/en"
+    assert "deadline" not in body and "question" not in body

@@ -202,6 +202,7 @@ class ChatResponse(BaseModel):
     referrals: Optional[ReferralResponse] = None
     out_of_scope: bool = False
     link: Optional[str] = None
+    links: list[Source] = Field(default_factory=list)
     mock: bool = False
 
 

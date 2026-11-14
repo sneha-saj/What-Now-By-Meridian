@@ -30,7 +30,7 @@ def gemini_key() -> str | None:
     return _key("GEMINI_API_KEY")
 
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 ENABLE_OXYLABS = _flag("ENABLE_OXYLABS")
 ENABLE_ELEVENLABS = _flag("ENABLE_ELEVENLABS")

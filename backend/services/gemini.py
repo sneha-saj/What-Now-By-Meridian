@@ -68,7 +68,9 @@ def _call(prompt: str, schema: Any = None, purpose: str = "") -> Any | None:
         out = parsed.model_dump() if isinstance(parsed, BaseModel) else json.loads(resp.text)
     except Exception as e:  # noqa: BLE001 - demo resilience: never crash the UI
         if not limits.note_failure("Gemini", e):
-            log.warning("Gemini call failed, using fallback: %s", type(e).__name__)
+            # The SDK's error text holds the HTTP status and Google's message, never the API key.
+            log.warning("Gemini call failed, using fallback: %s %s %s", type(e).__name__,
+                        getattr(e, "code", ""), str(getattr(e, "message", "") or e)[:200])
         return None
     filecache.write(CACHE_PATH, k, out, CACHE_TTL)
     activity.emit({"type": "gemini", "status": "done", "purpose": purpose})

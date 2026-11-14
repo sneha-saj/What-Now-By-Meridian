@@ -39,8 +39,20 @@ def _write_cache(cache: dict) -> None:
     except OSError as exc:
         log.warning("Could not save live-check cache: %s", exc)
 
+MAX_PAGE_AGE_HOURS = 168
+
+
+def _failed_status(result) -> str | None:
+    for st in getattr(result, "statuses", None) or []:
+        status = getattr(st, "status", None) or (st.get("status") if isinstance(st, dict) else None)
+        if status and status != "success":
+            err = getattr(st, "error", None) or (st.get("error") if isinstance(st, dict) else None)
+            return f"{status} {getattr(err, 'tag', None) or err or ''}".strip()
+    return None
+
+
 def _fetch_page(url: str) -> str:
-    """Text of the exact Migri URL via Exa contents (fresh within 24h). Cached 24h by URL: the rules share
+    """Text of the exact Migri URL via Exa contents (Exa copy under a week old). Cached 24h by URL: the rules share
     one page, so this is one Exa call a day. Raises if Exa reports the URL failed."""
     k = filecache.key("page", url)
     cached = filecache.read(PAGE_CACHE_PATH, k)
@@ -48,12 +60,17 @@ def _fetch_page(url: str) -> str:
         return cached
     from exa_py import Exa
     client = Exa(api_key=config.exa_key())
-    result = client.get_contents([url], text=True, max_age_hours=24, livecrawl_timeout=10000)
-    for st in getattr(result, "statuses", None) or []:
-        status = getattr(st, "status", None) or (st.get("status") if isinstance(st, dict) else None)
-        if status and status != "success":
-            err = getattr(st, "error", None) or (st.get("error") if isinstance(st, dict) else None)
-            raise RuntimeError(f"Exa could not fetch the Migri page: {status} {err or ''}".strip())
+    # Migri's page is slow to crawl live, so accept Exa's copy if it's under a week old. If a fresh crawl still
+    # times out, try once more from Exa's cache only (-1). At most two calls, never a loop.
+    result = client.get_contents([url], text=True, max_age_hours=MAX_PAGE_AGE_HOURS, livecrawl_timeout=20000)
+    if _failed_status(result):
+        log.info("Live crawl of %s failed (%s); trying Exa's cached copy", url, _failed_status(result))
+        result = client.get_contents([url], text=True, max_age_hours=-1)
+    if (status := _failed_status(result)):
+        # Migri blocks Exa's crawler on some URLs (403) and the exact URL may not be stored. Read the same
+        # page from Exa's search index instead: one search limited to migri.fi, preferring the exact page.
+        log.info("Contents failed (%s); reading the page from Exa's migri.fi index", status)
+        return _from_search(client, url, k)
     results = getattr(result, "results", result)
     if not results:
         raise RuntimeError("Exa returned no result for the Migri page")
@@ -63,6 +80,21 @@ def _fetch_page(url: str) -> str:
     if text:
         filecache.write(PAGE_CACHE_PATH, k, text, CACHE_TTL)
     return text
+
+def _from_search(client, url: str, k: str) -> str:
+    path = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
+    res = client.search(
+        "work-based residence permit protection period unemployment three months six months new job",
+        include_domains=["migri.fi"], num_results=3, contents={"text": {"max_characters": 20000}},
+    )
+    pages = sorted(res.results, key=lambda r: path not in (r.url or ""))  # the exact page first, if found
+    page = next((p for p in pages if getattr(p, "text", None)), None)
+    if page is None:
+        raise RuntimeError("Exa found no Migri page about the protection period")
+    log.info("Read %s from Exa's index: %d chars, page date %s", page.url, len(page.text), getattr(page, "published_date", None))
+    filecache.write(PAGE_CACHE_PATH, k, page.text[:20000], CACHE_TTL)
+    return page.text[:20000]
+
 
 class _Verdict(BaseModel):
     reasoning: str

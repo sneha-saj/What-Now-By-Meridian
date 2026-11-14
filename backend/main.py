@@ -320,6 +320,14 @@ STEP_REPLY = {
                          "read them, change anything, and send them yourself if you want to."),
 }
 FIRST_REPLY = "Thank you for telling me. One quick question: "
+CITIZEN_REPLY = ("Good news: as an EU/EEA or Finnish citizen, your right to stay in Finland doesn't depend on your job, "
+                 "so there's no permit deadline to worry about. What Now? is built for people on a residence permit, "
+                 "but these official services can help you with income and your next job.")
+CITIZEN_LINKS = [
+    Source(title="Register as a jobseeker (Job Market Finland)", url="https://tyomarkkinatori.fi/en"),
+    Source(title="Unemployment benefits (Kela)", url="https://www.kela.fi/unemployment"),
+    Source(title="Unemployment in Finland (InfoFinland)", url="https://www.infofinland.fi/en/work-and-enterprise/unemployment"),
+]
 
 
 def _merge_chat_facts(req: ChatRequest, extracted: dict) -> tuple[Facts, list[str]]:
@@ -399,11 +407,18 @@ def run_chat(req: ChatRequest) -> ChatResponse:
             if extracted is None:
                 extracted, mock = mocks.extract_facts(latest.text, today), True
         if extracted.get("job_was_in_finland") is False:
-            return ChatResponse(reply=("What Now? only covers jobs in Finland. If your job was in another country, "
-                                       "that country's official services are the right place to start."),
-                                step="about_you", facts=Facts(), out_of_scope=True, link=OUT_OF_SCOPE_LINK, mock=mock)
+            return ChatResponse(reply=("I'm sorry about your job. What Now? only covers jobs in Finland, so the official "
+                                       "services of the country where you worked are the best place to start."),
+                                step="about_you", facts=Facts(), out_of_scope=True, link=OUT_OF_SCOPE_LINK,
+                                links=[Source(title="Moving and working in Finland (InfoFinland)", url=OUT_OF_SCOPE_LINK)],
+                                mock=mock)
 
     facts, confirmed = _merge_chat_facts(req, extracted)
+    if facts.citizenship_group == "eu_eea":
+        # Not who What Now? is for: a kind message and useful links, no roadmap.
+        activity.emit({"type": "app", "who": "code", "text": "EU/EEA citizen: no permit deadline, showing useful links"})
+        return ChatResponse(reply=CITIZEN_REPLY, step="about_you", facts=facts, confirmed_fields=confirmed,
+                            out_of_scope=True, links=CITIZEN_LINKS, mock=mock)
     if extracted:
         found = [FIELD_NAMES[k] for k, v in extracted.items() if k in FIELD_NAMES and v is not None]
         activity.emit({"type": "app", "who": "gemini" if not mock else "app",

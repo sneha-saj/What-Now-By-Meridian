@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 import activity
 import config
+import sources_log
 import filecache
 import limits
 from countries.finland import DEADLINE_RULES
@@ -117,6 +118,7 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
         activity.emit({"type": "exa", "status": "searching", "purpose": "rule check", "query": rule["source_url"],
                        "domains": ["migri.fi"]})
         page = _fetch_page(rule["source_url"])
+        sources_log.record([{"title": rule.get("description", "Migri"), "url": rule["source_url"]}], "rule check")
         activity.emit({"type": "exa", "status": "found", "purpose": "rule check", "query": rule["source_url"],
                        "results": [{"title": "Migri", "url": rule["source_url"]}], "count": 1})
         if not page:

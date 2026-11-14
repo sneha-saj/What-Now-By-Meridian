@@ -16,11 +16,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import activity
 import config
-from models import (STEPS, Action, ChatRequest, ChatResponse, Community, Company, Contact, Deadline, Draft, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
+import sources_log
+from models import (STEPS, Action, AskRequest, AskResponse, AskSource, ChatRequest, ChatResponse, Community, Company, Contact, Deadline, Draft, QuickReply, Facts, IntakeRequest, IntakeResponse, PlanBOption, PlanRequest,
                     PlanResponse, PossibleDate, ReferralRequest, ReferralResponse, Source,
                     TimelineStep)
+import ask as ask_rules
 import plan_b
-from questions import APPROX, canonical_permit, needed_fields, questions_for
+from questions import APPROX, canonical_permit, needed_fields, next_field, question, questions_for
 from rules import calculate_deadline
 from countries.finland import DEADLINE_RULES, SOURCE_TITLE, SOURCE_URL, TRUSTED_DOMAINS
 from live_check import check_all_rules, get_live_check
@@ -40,10 +42,11 @@ def health():
 @app.get("/rules", summary="Deadline rules, their latest live check and trusted domains")
 def rules():
     """The Finland deadline rules from the country config, each with its latest live check against the
-    official page (cached 24h), plus the domains we trust for sources."""
+    official page (cached 24h), the domains we trust, and `sources_used`: every page Exa used recently
+    (url, title, domain, page date, roadmap step)."""
     if config.USE_MOCK:
-        return mocks.example("rules")
-    return {"rules": check_all_rules(), "trusted_domains": TRUSTED_DOMAINS}
+        return {**mocks.example("rules"), "sources_used": []}
+    return {"rules": check_all_rules(), "trusted_domains": TRUSTED_DOMAINS, "sources_used": sources_log.recent()}
 
 
 def _examples(*names: str) -> dict:
@@ -407,10 +410,12 @@ def run_chat(req: ChatRequest) -> ChatResponse:
                        "text": f"Picked out from your message: {', '.join(found)}" if found else "Nothing clear in that message yet"})
     first = sum(m.role == "user" for m in req.messages) <= 1 and not req.answers and not req.edited_facts
     missing = needed_fields(facts)
-    if missing:
-        q = questions_for(facts, today)[0]
-        activity.emit({"type": "app", "who": "code",
-                       "text": f"Still needed for your deadline: {', '.join(FIELD_NAMES[m] for m in missing)}. Asking about {FIELD_NAMES[missing[0]]}"})
+    ask = next_field(facts)
+    if ask:
+        q = question(ask, today)
+        why = (f"still needed for your deadline: {', '.join(FIELD_NAMES[m] for m in missing)}" if missing
+               else f"optional, it makes the search specific to you")
+        activity.emit({"type": "app", "who": "code", "text": f"Asking about {FIELD_NAMES[ask]} ({why})"})
         reply = (FIRST_REPLY if first else "") + q.question
         return ChatResponse(reply=reply, step="about_you", facts=facts, confirmed_fields=confirmed,
                             question=q, mock=mock)
@@ -455,3 +460,34 @@ def run_chat(req: ChatRequest) -> ChatResponse:
     if step in NEXT_LABEL:
         resp.quick_replies = [QuickReply(value="next", label=NEXT_LABEL[step])]
     return resp
+
+
+# ---------- /ask ----------
+
+@app.post("/ask", response_model=AskResponse, response_model_exclude_none=True,
+          summary="Ask a question; Exa answers from live sources")
+def ask_question(req: AskRequest):
+    """Exa's Answer endpoint answers with citations. Questions about rules (permits, benefits, registering)
+    are limited to the trusted official domains. Off-topic questions get a polite no. Answers are cached 24h."""
+    q = req.question.strip()
+    if not q or not ask_rules.on_topic(q):
+        return AskResponse(answer=ask_rules.OFF_TOPIC_REPLY, off_topic=True)
+    official = ask_rules.about_rules(q)
+    f = req.facts
+    context = ", ".join(x for x in [
+        f.permit_type and f"{f.permit_type.replace('_', ' ')} permit", f.city and f"lives in {f.city}",
+        f.field and f"works as {f.field}"] if x)
+    step = ask_rules.suggested_step(q)
+    out = None if config.USE_MOCK else exa_search.ask(q, official, context)
+    if out is None:
+        return AskResponse(answer=("I can't look that up live right now. For permits, check migri.fi; for benefits, "
+                                   "kela.fi; for registering as a jobseeker, tyomarkkinatori.fi."),
+                           suggested_roadmap_step=step, official_only=official, mock=True)
+    sources = [AskSource(title=c["title"], url=c["url"], domain=exa_search._domain(c["url"]), date=c.get("published"))
+               for c in out["citations"]]
+    answer = out["answer"]
+    if official and not sources:
+        answer = ("I couldn't find this on the official sites (Migri, Kela, InfoFinland, Työmarkkinatori). "
+                  "Please check with Migri or your union.")
+    return AskResponse(answer=answer, sources=sources, suggested_roadmap_step=step if sources else None,
+                       official_only=official)

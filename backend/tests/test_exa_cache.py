@@ -155,3 +155,14 @@ def test_plan_queries_use_city_region_and_field():
     topics = dict(exa_search.plan_topics("cook", [], "Helsinki"))
     assert "Helsinki" in topics["register_jobseeker"]
     assert "Uusimaa" in topics["labour_shortage"] and "cook" in topics["labour_shortage"]
+
+
+def test_every_source_exa_uses_is_recorded_with_its_step(monkeypatch):
+    import sources_log
+    monkeypatch.setattr(exa_search, "_get_client", lambda: RecordingExa())
+    exa_search.search_plan_sources([("unemployment_benefits", "q")])
+    rows = sources_log.recent()
+    assert rows and rows[0]["url"] == "https://www.kela.fi/a" and rows[0]["domain"] == "kela.fi"
+    assert rows[0]["step"] == "This week"
+    exa_search.search_plan_sources([("unemployment_benefits", "q2")])
+    assert len([r for r in sources_log.recent() if r["url"] == "https://www.kela.fi/a"]) == 1  # deduplicated

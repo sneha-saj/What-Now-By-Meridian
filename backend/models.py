@@ -203,3 +203,24 @@ class ChatResponse(BaseModel):
     out_of_scope: bool = False
     link: Optional[str] = None
     mock: bool = False
+
+
+class AskRequest(BaseModel):
+    question: str
+    facts: Facts = Field(default_factory=Facts)
+
+
+class AskSource(BaseModel):
+    title: str
+    url: str
+    domain: str
+    date: Optional[str] = None
+
+
+class AskResponse(BaseModel):
+    answer: str
+    sources: list[AskSource] = Field(default_factory=list)
+    suggested_roadmap_step: Optional[Literal["week1", "wayin", "week2", "week4", "week8", "final", "deadline"]] = None
+    off_topic: bool = False
+    official_only: bool = False
+    mock: bool = False

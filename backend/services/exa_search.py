@@ -15,6 +15,7 @@ from pathlib import Path
 import activity
 import config
 import limits
+import sources_log
 
 log = logging.getLogger(__name__)
 MAX_PARALLEL = 6
@@ -36,10 +37,10 @@ def _search(exa, query: str, purpose: str, **kwargs):
     activity.emit({"type": "exa", "status": "searching", "purpose": purpose, "query": query,
                    "domains": kwargs.get("include_domains") or [], "category": kwargs.get("category")})
     res = exa.search(query, **kwargs)
+    found = [{"title": r.title or r.url, "url": r.url, "published": getattr(r, "published_date", None)} for r in res.results]
+    sources_log.record(found, purpose)
     activity.emit({"type": "exa", "status": "found", "purpose": purpose, "query": query,
-                   "results": [{"title": r.title or r.url, "url": r.url,
-                                "published": getattr(r, "published_date", None)} for r in res.results[:5]],
-                   "count": len(res.results)})
+                   "results": found[:5], "count": len(res.results)})
     return res
 
 _client = None
@@ -343,3 +344,42 @@ def search_plan_sources(topics: list[tuple[str, str]], per_topic: int = 3) -> li
     if results:
         _cache_write(key, results)
     return results
+
+
+ASK_CACHE_TTL = timedelta(hours=24)
+
+
+def ask(question: str, official_only: bool, context: str = "") -> dict | None:
+    """Exa's Answer endpoint: a grounded answer with citations. For rules questions, limited (by system prompt
+    and by filtering citations) to the trusted official domains. None if Exa is unavailable."""
+    key = _cache_key("ask", {"q": question.strip().lower(), "official": official_only, "ctx": context})
+    cached = _cache_read(key)
+    if cached is not None:
+        activity.emit({"type": "exa", "status": "cached", "purpose": "ask", "count": len(cached.get("citations", []))})
+        return cached
+    exa = _get_client()
+    if exa is None:
+        return None
+    domains = config.OFFICIAL_DOMAINS
+    system = ("Answer for a person in Finland who lost their job. Plain language, 2-4 short sentences, no markdown. "
+              + (f"Use ONLY these official sites: {', '.join(domains)}. If they don't answer it, say so. " if official_only else "")
+              + (f"Their situation: {context}." if context else ""))
+    activity.emit({"type": "exa", "status": "searching", "purpose": "ask", "query": question,
+                   "domains": domains if official_only else []})
+    try:
+        res = exa.answer(question, system_prompt=system, user_location="FI")
+    except Exception as e:  # noqa: BLE001
+        if not limits.note_failure("Exa", e):
+            log.warning("Exa answer failed: %s", type(e).__name__)
+        return None
+    citations = [{"title": getattr(c, "title", None) or getattr(c, "url", ""), "url": getattr(c, "url", ""),
+                  "published": (getattr(c, "published_date", None) or "")[:10] or None}
+                 for c in (getattr(res, "citations", None) or []) if getattr(c, "url", None)]
+    if official_only:
+        citations = [c for c in citations if any(_domain(c["url"]).endswith(d) for d in domains)]
+    out = {"answer": (getattr(res, "answer", None) or "").strip(), "citations": citations[:5]}
+    sources_log.record(out["citations"], "ask")
+    activity.emit({"type": "exa", "status": "found", "purpose": "ask", "query": question,
+                   "results": out["citations"], "count": len(out["citations"])})
+    _cache_write(key, out)
+    return out

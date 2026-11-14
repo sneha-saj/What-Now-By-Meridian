@@ -65,3 +65,62 @@ DEADLINE_RULES = [
         "last_verified": LAST_VERIFIED,
     },
 ]
+
+
+# ---------- Intake questions ----------
+# Code (not AI) picks the next missing field in this order and asks its fixed question.
+# Required fields are what the deadline needs. Optional ones personalise the search; "Skip" stores "".
+REQUIRED_FIELDS = ["citizenship_group", "permit_type", "years_on_work_permit", "job_end_date"]
+OPTIONAL_FIELDS = ["city", "field"]
+
+QUESTION_BANK = {
+    "citizenship_group": {
+        "question": "Are you a citizen of an EU or EEA country?",
+        "options": [
+            {"value": "eu_eea", "label": "Yes, EU / EEA"},
+            {"value": "other", "label": "No, another country"},
+            {"value": "unknown", "label": "Not sure"},
+        ],
+    },
+    "permit_type": {
+        "question": "What kind of residence permit do you have?",
+        "options": [{"value": p["id"], "label": p["label"]} for p in PERMIT_TYPES if p["id"] != "eu_eea_citizen"],
+    },
+    "years_on_work_permit": {
+        "question": "How long have you had a work-based permit in Finland, in total?",
+        "options": [
+            {"value": "under_2", "label": "2 years or less"},
+            {"value": "over_2", "label": "More than 2 years"},
+            {"value": "not_sure", "label": "Not sure"},
+        ],
+    },
+    "job_end_date": {
+        "question": "When was (or is) your last day of work?",
+        "kind": "date",
+        "options": "relative_dates",  # Today / About a week ago / About a month ago, computed from today
+    },
+    "city": {
+        "question": "Which city do you live in?",
+        "options": [
+            {"value": "Helsinki", "label": "Helsinki"},
+            {"value": "Espoo", "label": "Espoo"},
+            {"value": "Vantaa", "label": "Vantaa"},
+            {"value": "Tampere", "label": "Tampere"},
+            {"value": "Turku", "label": "Turku"},
+            {"value": "Oulu", "label": "Oulu"},
+            {"value": "", "label": "Skip"},
+        ],
+    },
+    "field": {
+        "question": "What kind of work do you do?",
+        "options": [
+            {"value": "restaurant worker", "label": "Restaurant / hospitality"},
+            {"value": "software developer", "label": "IT / software"},
+            {"value": "nurse", "label": "Health and care"},
+            {"value": "construction worker", "label": "Construction"},
+            {"value": "warehouse worker", "label": "Logistics / warehouse"},
+            {"value": "cleaner", "label": "Cleaning"},
+            {"value": "", "label": "Skip"},
+        ],
+    },
+}

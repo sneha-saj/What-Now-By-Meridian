@@ -16,12 +16,14 @@ import pytest  # noqa: E402
 def _isolated_caches_and_limits(monkeypatch, tmp_path):
     import limits
     import live_check
+    import sources_log
     from services import exa_search, gemini
 
     monkeypatch.setattr(exa_search, "CACHE_PATH", tmp_path / "exa.json")
     monkeypatch.setattr(gemini, "CACHE_PATH", tmp_path / "gemini.json")
     monkeypatch.setattr(live_check, "CACHE_PATH", tmp_path / "live.json")
     monkeypatch.setattr(live_check, "PAGE_CACHE_PATH", tmp_path / "pages.json")
+    monkeypatch.setattr(sources_log, "PATH", tmp_path / "sources.json")
     limits.reset()
     yield
     limits.reset()

@@ -346,7 +346,7 @@ def test_chat_edited_facts_win_over_answers_and_extraction(monkeypatch):
 def test_chat_does_not_reextract_when_last_message_is_from_assistant(monkeypatch):
     monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: pytest.fail("re-extracted an old message"))
     msgs = [*_msg("hi"), {"role": "assistant", "text": "Which permit?"}]
-    body = client.post("/chat", json={"messages": msgs, "facts": {"citizenship_group": "eu_eea"}}).json()
+    body = client.post("/chat", json={"messages": msgs, "facts": {"citizenship_group": "eu_eea", "city": "Espoo", "field": ""}}).json()
     assert body["step"] == "deadline"
 
 
@@ -408,7 +408,7 @@ def test_chat_stream_explains_who_did_what(monkeypatch, verified):
         events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
     texts = [e["text"] for e in events if e["type"] == "app"]
     assert texts[0] == "Picked out from your message: citizenship, city"
-    assert texts[1].startswith("Still needed for your deadline: permit type") and "Asking about permit type" in texts[1]
+    assert texts[1].startswith("Asking about permit type (still needed for your deadline: permit type")
 
     with client.stream("POST", "/chat/stream", json={"facts": WORK_FACTS, "step": "deadline"}) as r:
         events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
@@ -448,3 +448,77 @@ def test_referrals_are_capped_and_events_outside_30_days_lose_their_date(monkeyp
     assert len(body["companies"]) == 5 and len(body["contacts"]) == 3 and len(body["communities"]) <= 3
     far = [g for g in body["communities"] if g["name"] == "Helsinki Chefs Meetup"][0]
     assert far["date_if_event"] is None and far["type"] == "professional_group"
+
+
+def test_question_order_is_fixed_required_then_optional():
+    from models import Facts
+    from questions import next_field
+    f = Facts()
+    order = []
+    answers = {"citizenship_group": "other", "permit_type": "work_based", "years_on_work_permit": "under_2",
+               "job_end_date": "2026-11-01", "city": "Helsinki", "field": ""}
+    while (field := next_field(f)) is not None:
+        order.append(field)
+        f = f.model_copy(update={field: answers[field]})
+    assert order == ["citizenship_group", "permit_type", "years_on_work_permit", "job_end_date", "city", "field"]
+
+
+def test_skipped_optional_question_is_not_asked_again(verified, live_services):
+    facts = {k: v for k, v in WORK_FACTS.items() if k != "city"}
+    q = client.post("/chat", json={"facts": facts}).json()
+    assert q["question"]["id"] == "city" and {"value": "", "label": "Skip"} in q["question"]["options"]
+    done = client.post("/chat", json={"facts": facts, "answers": {"city": ""}}).json()
+    assert "question" not in done and done["step"] == "deadline"
+
+
+# ---------- /ask ----------
+
+def test_ask_off_topic_is_politely_rejected(monkeypatch):
+    monkeypatch.setattr(main.exa_search, "ask", lambda *a: pytest.fail("Exa called for an off-topic question"))
+    body = client.post("/ask", json={"question": "What's a good pizza recipe?"}).json()
+    assert body["off_topic"] is True and "losing a job in Finland" in body["answer"]
+
+
+def test_ask_rules_question_uses_official_sources_and_suggests_a_step(monkeypatch):
+    seen = {}
+
+    def fake_ask(q, official, context):
+        seen.update(official=official, context=context)
+        return {"answer": "You can apply for labour market subsidy.",
+                "citations": [{"title": "Kela", "url": "https://www.kela.fi/labour-market-subsidy", "published": "2026-10-01"}]}
+
+    monkeypatch.setattr(main.exa_search, "ask", fake_ask)
+    body = client.post("/ask", json={"question": "Can I get unemployment benefit from Kela?",
+                                     "facts": {"permit_type": "work_based", "city": "Helsinki"}}).json()
+    assert seen["official"] is True and "Helsinki" in seen["context"]
+    assert body["sources"] == [{"title": "Kela", "url": "https://www.kela.fi/labour-market-subsidy", "domain": "kela.fi", "date": "2026-10-01"}]
+    assert body["suggested_roadmap_step"] == "week1"
+
+
+def test_ask_rules_question_without_official_citations_says_so(monkeypatch):
+    monkeypatch.setattr(main.exa_search, "ask", lambda *a: {"answer": "Maybe.", "citations": []})
+    body = client.post("/ask", json={"question": "Can I extend my residence permit?"}).json()
+    assert "couldn't find this on the official sites" in body["answer"] and "suggested_roadmap_step" not in body
+
+
+def test_ask_without_exa_falls_back(monkeypatch):
+    monkeypatch.setattr(main.exa_search, "ask", lambda *a: None)
+    body = client.post("/ask", json={"question": "How do I find companies hiring cooks?"}).json()
+    assert body["mock"] is True and body["suggested_roadmap_step"] == "wayin"
+
+
+def test_exa_ask_filters_citations_to_official_domains(monkeypatch):
+    from types import SimpleNamespace
+    from services import exa_search
+
+    class FakeExa:
+        def answer(self, q, **kw):
+            assert "migri.fi" in kw["system_prompt"]
+            return SimpleNamespace(answer="Yes.", citations=[
+                SimpleNamespace(url="https://migri.fi/en/x", title="Migri", published_date="2026-09-01T00:00:00Z"),
+                SimpleNamespace(url="https://someblog.com/y", title="Blog", published_date=None)])
+
+    monkeypatch.setattr(exa_search, "_get_client", lambda: FakeExa())
+    out = exa_search.ask("Can I extend my permit?", True)
+    assert [c["url"] for c in out["citations"]] == ["https://migri.fi/en/x"]
+    assert out["citations"][0]["published"] == "2026-09-01"

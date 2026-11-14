@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from countries.finland import PERMIT_TYPES
+from countries.finland import OPTIONAL_FIELDS, QUESTION_BANK, REQUIRED_FIELDS
 from models import Facts, Option, Question
 from rules import _canonical_permit
 
@@ -29,47 +29,51 @@ def canonical_permit(f: Facts) -> str | None:
 
 
 def needed_fields(f: Facts) -> list[str]:
-    needed = []
-    if f.citizenship_group is None:
-        needed.append("citizenship_group")
+    """Required fields the deadline still needs, in the config's fixed order."""
     permit = canonical_permit(f)
-    if permit in NO_DEADLINE_PERMITS:
-        return needed
-    if permit is None:
-        needed.append("permit_type")
-    if permit == "work_based" and f.years_on_work_permit is None:
-        needed.append("years_on_work_permit")
-    if f.job_end_date is None:
-        needed.append("job_end_date")
+    needed = []
+    for field in REQUIRED_FIELDS:
+        if field == "citizenship_group" and f.citizenship_group is None:
+            needed.append(field)
+        elif field == "permit_type" and permit is None:
+            needed.append(field)
+        elif field == "years_on_work_permit" and permit == "work_based" and f.years_on_work_permit is None:
+            needed.append(field)
+        elif field == "job_end_date" and permit not in NO_DEADLINE_PERMITS and f.job_end_date is None:
+            needed.append(field)
+    if permit in NO_DEADLINE_PERMITS:  # nothing else matters for the deadline
+        needed = [x for x in needed if x == "citizenship_group"] if permit != "eu_eea_citizen" else []
     return needed[:MAX_QUESTIONS]
 
 
-def _question(field: str, today: date) -> Question:
-    if field == "citizenship_group":
-        return Question(id=field, question="Are you a citizen of an EU or EEA country?", options=[
-            Option(value="eu_eea", label="Yes, EU / EEA"),
-            Option(value="other", label="No, another country"),
-            Option(value="unknown", label="Not sure"),
-        ])
-    if field == "permit_type":
-        return Question(id=field, question="What kind of residence permit do you have?", options=[
-            Option(value=p["id"], label=p["label"]) for p in PERMIT_TYPES if p["id"] != "eu_eea_citizen"
-        ])
-    if field == "years_on_work_permit":
-        return Question(id=field, question="How long have you had a work-based permit in Finland, in total?", options=[
-            Option(value="under_2", label="2 years or less"),
-            Option(value="over_2", label="More than 2 years"),
-            Option(value="not_sure", label="Not sure"),
-        ])
-    if field == "job_end_date":
-        return Question(id=field, kind="date", question="When was (or is) your last day of work?", options=[
+def optional_missing(f: Facts) -> list[str]:
+    """Optional fields never answered (None). Skipped ones are "" and not asked again."""
+    return [field for field in OPTIONAL_FIELDS if getattr(f, field) is None]
+
+
+def next_field(f: Facts) -> str | None:
+    """Deterministic: the first missing required field, then the first unanswered optional one."""
+    needed = needed_fields(f)
+    if needed:
+        return needed[0]
+    optional = optional_missing(f)
+    return optional[0] if optional else None
+
+
+def question(field: str, today: date | None = None) -> Question:
+    today = today or date.today()
+    q = QUESTION_BANK[field]
+    if q["options"] == "relative_dates":
+        options = [
             Option(value=today.isoformat(), label="Today"),
             Option(value=APPROX + (today - timedelta(days=7)).isoformat(), label="About a week ago"),
             Option(value=APPROX + (today - timedelta(days=30)).isoformat(), label="About a month ago"),
-        ])
-    raise ValueError(field)
+        ]
+    else:
+        options = [Option(**o) for o in q["options"]]
+    return Question(id=field, question=q["question"], kind=q.get("kind", "choice"), options=options)
 
 
 def questions_for(f: Facts, today: date | None = None) -> list[Question]:
-    today = today or date.today()
-    return [_question(field, today) for field in needed_fields(f)]
+    """Up to 3 questions for the required fields still missing (used by /intake)."""
+    return [question(field, today) for field in needed_fields(f)]

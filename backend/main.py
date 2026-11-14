@@ -10,6 +10,8 @@ from models import (Deadline, Facts, IntakeRequest, IntakeResponse, PlanRequest,
                     Referral, ReferralRequest, ReferralResponse, Source, Step)
 from questions import questions_for
 from rules import compute_deadline
+from countries.finland import TRUSTED_DOMAINS
+from live_check import check_all_rules, get_live_check
 from services import exa_search, gemini, mocks
 
 app = FastAPI(title="What Now? by Meridian")
@@ -21,6 +23,11 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS,
 def health():
     return {"ok": True, "gemini": bool(config.gemini_key()), "exa": bool(config.exa_key()),
             "oxylabs": config.ENABLE_OXYLABS, "elevenlabs": config.ENABLE_ELEVENLABS}
+
+
+@app.get("/rules")
+def rules():
+    return {"rules": check_all_rules(), "trusted_domains": TRUSTED_DOMAINS}
 
 
 @app.post("/intake", response_model=IntakeResponse)
@@ -38,8 +45,15 @@ def intake(req: IntakeRequest):
 def plan(req: PlanRequest):
     f = req.facts
     d = compute_deadline(f.to_rules())
+    live = get_live_check(d.rule_id)
+    warning = None
+    if live and live["status"] != "verified":
+        warning = "This rule may have changed. Please check Migri."
+        d.deadline = None
+        d.days_left = None
     deadline = Deadline(status=d.status, reason=d.reason, deadline=d.deadline, months=d.months,
-                        days_left=d.days_left, missing=d.missing, source=Source(**d.source))
+                        days_left=d.days_left, missing=d.missing, source=Source(**d.source),
+                        live_check=live, warning=warning)
 
     permit = (f.permit_type or "work").replace("_", " ")
     queries = [

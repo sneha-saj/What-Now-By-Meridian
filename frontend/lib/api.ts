@@ -21,7 +21,12 @@ export type Deadline = {
   days_left?: number | null;
   missing: string[];
   source: Source;
+  live_check?: LiveCheck | null;
+  warning?: string | null;
 };
+export type LiveCheck = { status: "verified" | "mismatch" | "error"; checked_at: string; evidence_snippet: string };
+export type Rule = { id: string; description: string; months: number | null; applies_to: string[]; source_url: string; in_force_since: string; last_verified: string; live_check: LiveCheck };
+export type RulesResponse = { rules: Rule[]; trusted_domains: string[] };
 export type Step = { title: string; detail: string; sources: Source[] };
 export type PlanResponse = { deadline: Deadline; this_week: Step[]; mock: boolean };
 
@@ -49,4 +54,9 @@ export const api = {
   intake: (text: string) => post<IntakeResponse>("/intake", { text }),
   plan: (facts: Facts) => post<PlanResponse>("/plan", { facts }),
   referrals: (facts: Facts) => post<ReferralResponse>("/referrals", { facts }),
+  rules: async () => {
+    const res = await fetch("/api/rules");
+    if (!res.ok) throw new Error(`/rules failed (${res.status})`);
+    return res.json() as Promise<RulesResponse>;
+  },
 };

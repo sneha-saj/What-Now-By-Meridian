@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from models import Facts, Option, Question
 from rules import missing_fields
+from countries.finland import PERMIT_TYPES
 
 MAX_QUESTIONS = 3
 
@@ -17,13 +18,7 @@ def _question(field: str, today: date) -> Question:
         ])
     if field == "permit_type":
         return Question(field=field, question="What kind of residence permit do you have?", options=[
-            Option(label="Work-based", value="work"),
-            Option(label="Specialist", value="specialist"),
-            Option(label="EU Blue Card", value="eu_blue_card"),
-            Option(label="Student", value="student"),
-            Option(label="Family", value="family"),
-            Option(label="Permanent", value="permanent"),
-            Option(label="Not sure", value="other"),
+            Option(label=item["label"], value=item["id"]) for item in PERMIT_TYPES
         ])
     if field == "job_end_date":
         return Question(field=field, kind="date", question="When was (or is) your last day of work?", options=[

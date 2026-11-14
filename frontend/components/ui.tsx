@@ -93,6 +93,15 @@ export function DeadlineCard({ d }: { d: Deadline }) {
         <SourceChip source={d.source} />
         <span className="text-xs text-calm-500">Not legal advice — confirm with Migri.</span>
       </div>
+      {d.warning ? (
+        <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+          {d.warning} <a className="underline" href={d.source.url} target="_blank" rel="noreferrer">Check Migri</a>
+        </p>
+      ) : d.live_check?.status === "verified" ? (
+        <a href="/how-we-know" className="mt-3 inline-flex rounded-full bg-calm-50 px-3 py-1 text-sm text-calm-700 underline">
+          ✓ Checked against Migri today · How we know this
+        </a>
+      ) : null}
     </Card>
   );
 }

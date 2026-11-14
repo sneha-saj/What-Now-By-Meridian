@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from countries.finland import TRUSTED_DOMAINS
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -31,6 +32,6 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 ENABLE_OXYLABS = _flag("ENABLE_OXYLABS")
 ENABLE_ELEVENLABS = _flag("ENABLE_ELEVENLABS")
 
-OFFICIAL_DOMAINS = ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"]
+OFFICIAL_DOMAINS = TRUSTED_DOMAINS
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")

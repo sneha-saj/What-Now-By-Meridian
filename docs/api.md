@@ -7,13 +7,14 @@ http://localhost:8000/docs (every endpoint has the examples below built in).
 Finland, living in Helsinki, whose job ended on 1 November 2026.
 
 The example responses are saved in `backend/mocks/` and are what the API returns when `USE_MOCK=true`.
-Official sources in them are real pages. Example hiring signals are marked as samples (`example.com`).
+Official sources in them are real pages. Sample perks are clearly marked samples (`example.com`), because we
+don't put invented offers in front of users as real.
 
 **Short display fields.** Every roadmap item (`this_week`, `timeline`, `plan_b`) and every opportunity item has
-`title_short` (max 6 words), `why_short` (max 12 words) and `primary_action` (`kind`: `open_link`, `reach_out`,
-or `check_conditions`; `label` and `url`) for compact cards. Gemini writes them; code enforces the limits
+`title_short` (max 6 words), `why_short` (max 12 words) and `primary_action` (`kind`: `open_link` or
+`check_conditions`, `label`, `url`) for compact cards. Gemini writes them; code enforces the limits
 and derives them from the long fields when missing. Long fields (`how`, `steps`, `highlight`, `eligibility_note`)
-are for the expanded view. `/opportunities` also returns `counts` per section and `total`.
+are for the expanded view. `/opportunities` also returns `counts` (`certificate`, `discounts`, `incentives`, `total`).
 
 Every response has `mock: true` when a fallback was used (no API key, or a call failed). The demo always runs.
 
@@ -24,7 +25,7 @@ Every response has `mock: true` when a fallback was used (no API key, or a call 
 | `GET /rules` | The deadline rules, their latest live check against Migri, and trusted domains |
 | `POST /chat` | Guided chat: the same steps, one message at a time, with a live "Your situation" card |
 | `POST /chat/stream` | Same as `/chat`, streamed with live progress, Exa activity and partial results |
-| `POST /opportunities` (+ `/stream`) | Hiring signals, support, events and perks, all from live Exa sources |
+| `POST /opportunities` (+ `/stream`) | Perks and support: job search certificate, city discounts, employer incentives, all from live Exa sources |
 | `POST /ask` | Ask a question; Exa's Answer endpoint replies with sources |
 | `GET /health` | Which integrations have keys configured |
 
@@ -48,9 +49,9 @@ where it makes sense. It never asks for permit numbers or passport details.
 If the job was outside Finland: `out_of_scope: true`, `message`, `link` instead of facts.
 
 Questions are deterministic: the Finland config (`backend/countries/finland.py`) lists `REQUIRED_FIELDS`
-(citizenship group, permit type, years on a work permit, job end date), then `OPTIONAL_FIELDS` (city, field), with a
-fixed `QUESTION_BANK`. Gemini only extracts facts; code picks the next missing field. Optional questions have
-"Skip" (stored as `""`, not asked again). Approximate date answers arrive as `about:YYYY-MM-DD` and set
+(citizenship group, permit type, years on a work permit, job end date), with a fixed `QUESTION_BANK`. Only these
+deadline facts are asked; city and work are taken from the opening message or added later on the "Your situation"
+card (the Opportunities tab asks for the city). Gemini only extracts facts; code picks the next missing field. Approximate date answers arrive as `about:YYYY-MM-DD` and set
 `job_end_date_approximate`; the deadline then has `deadline_is_approximate: true`.
 
 Facts: `citizenship_group` (`eu_eea` / `other` / `unknown`), `citizenship_country`, `permit_type`,
@@ -686,7 +687,7 @@ polite no without calling Exa. Answers are cached for 24 hours.
 
 **Input**: `{"question": "...", "facts": {...}}` (facts add context: permit, city, field).
 
-**Output**: `answer`, `sources` (`title`, `url`, `domain`, `date`), `suggested_roadmap_step` (`week1`, `wayin`,
+**Output**: `answer`, `sources` (`title`, `url`, `domain`, `date`), `suggested_roadmap_step` (`week1`,
 `week2`, `week4`, `week8`, `final` or `deadline`, when the answer fits a step), `off_topic`, `official_only`,
 `facts_update` (new facts found in the question that differ from the current situation, e.g. `{"years_on_work_permit": 3}`;
 the app sends them to `/chat` as `edited_facts` so the roadmap rebuilds), `mock`. A question that is only a
@@ -715,17 +716,18 @@ Response (illustrative):
 
 ## POST /opportunities (and /opportunities/stream)
 
-Separate from the roadmap (which stays short: deadline and this week's 3 steps). About 9 Exa searches and
-1 Gemini call per city and field, run in parallel and cached for 24 hours. Every item has an Exa source URL;
-nothing is invented. Without Exa the sections come back empty with `mock: true`.
+Separate from the roadmap (which stays short: deadline and this week's 3 steps). Returns only **Perks and
+support**: 3 Exa searches (one per perk) on the trusted domains plus the city's official sites (`CITY_DOMAINS`
+in the country config), and 1 Gemini call to sort them, run in parallel and cached for 24 hours. Every item has
+an Exa source URL and the page date Exa reported (`source_date`, `null` if the page has none); nothing is
+invented. Without Exa it comes back empty with `mock: true`.
 
-| Section | What it is | Rules enforced in code |
+| Field | What it is | Rules enforced in code |
 | --- | --- | --- |
-| `hidden_jobs` | Companies with hiring signals (new openings, expansions, funding, new locations) in the user's city and field: `company`, `signal`, `signal_date`, `source_url`, `why_it_fits`, `action: "reach_out"` | Signal page dated within the last 60 days |
-| `support` | Support types from the country config (labour market training, language courses, mentoring, start-up grant): `name`, `what_it_is`, `why_it_may_apply`, `eligibility_note`, `source_url`, `source_date` | Only plausible matches; always "May apply, check the conditions." |
-| `events` | Recruitment fairs, meetups and community events: `name`, `date`, `place`, `url`, `why_relevant` | Stated date within the next 30 days |
-| `perks_and_support` | `certificate` (how to get the job search certificate, first), `discounts` (`name`, `discount`, `proof_needed`, `city`, `source_url`, `source_date`), `incentives` (`name`, `what_it_is`, `conditions_plain`, `may_apply`, `caveat`, `source_url`, `source_date`) | Only discounts Exa found; incentive conditions like "3 months unemployed" that clash with the permit deadline get a plain caveat |
+| `perks_and_support.certificate` | How to get the job search certificate (proof you're a jobseeker), shown first: `name`, `how_to_get`, `source_url`, `source_date` | Only from the certificate search |
+| `perks_and_support.discounts` | City discounts for unemployed jobseekers: `name`, `discount`, `proof_needed`, `city`, `source_url`, `source_date` | Only discounts Exa found, max 6 |
+| `perks_and_support.incentives` | Employer hiring incentives: `name`, `what_it_is`, `conditions_plain`, `may_apply`, `caveat`, `source_url`, `source_date` | Never claims eligibility ("may apply"); conditions like "3 months unemployed" that clash with the permit deadline get a plain caveat |
+| `counts` | `certificate`, `discounts`, `incentives`, `total` | |
 
-Searches use the trusted domains plus the city's official sites (`CITY_DOMAINS` in the country config).
-The stream sends the same events as `/chat/stream`, with partial sections `hidden_jobs`, `support`, `events`,
-`perks_and_support`. Example: `backend/mocks/opportunities.json` (used for `USE_MOCK=true`).
+The stream sends the same events as `/chat/stream`, with the partial `perks_and_support`.
+Example: `backend/mocks/opportunities.json` (used for `USE_MOCK=true`).

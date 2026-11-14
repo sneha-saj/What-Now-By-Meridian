@@ -39,17 +39,26 @@ def _write_cache(cache: dict) -> None:
         log.warning("Could not save live-check cache: %s", exc)
 
 def _fetch_page(url: str) -> str:
-    """Page text via Exa contents. Cached 24h by URL: the rules share one Migri page, so one Exa call."""
+    """Text of the exact Migri URL via Exa contents (fresh within 24h). Cached 24h by URL: the rules share
+    one page, so this is one Exa call a day. Raises if Exa reports the URL failed."""
     k = filecache.key("page", url)
     cached = filecache.read(PAGE_CACHE_PATH, k)
     if cached is not None:
         return cached
     from exa_py import Exa
     client = Exa(api_key=config.exa_key())
-    result = client.get_contents([url], text=True)
+    result = client.get_contents([url], text=True, max_age_hours=24, livecrawl_timeout=10000)
+    for st in getattr(result, "statuses", None) or []:
+        status = getattr(st, "status", None) or (st.get("status") if isinstance(st, dict) else None)
+        if status and status != "success":
+            err = getattr(st, "error", None) or (st.get("error") if isinstance(st, dict) else None)
+            raise RuntimeError(f"Exa could not fetch the Migri page: {status} {err or ''}".strip())
     results = getattr(result, "results", result)
+    if not results:
+        raise RuntimeError("Exa returned no result for the Migri page")
     page = results[0]
-    text = (getattr(page, "text", None) or getattr(page, "content", None) or "")[:20000]
+    text = (getattr(page, "text", None) or "")[:20000]
+    log.info("Fetched %s: %d chars, page date %s", url, len(text), getattr(page, "published_date", None))
     if text:
         filecache.write(PAGE_CACHE_PATH, k, text, CACHE_TTL)
     return text
@@ -118,7 +127,7 @@ def check_rule(rule: dict, *, force: bool = False) -> dict:
         entry = {"rule_id": rule["id"], "status": "verified" if verified else "mismatch", "checked_at": checked_at, "evidence_snippet": evidence}
     except Exception as exc:  # graceful degradation for unavailable upstreams
         limits.note_failure(service, exc)
-        log.warning("Live check failed for %s: %s", rule["id"], type(exc).__name__)
+        log.warning("Live check failed for %s: %s: %s", rule["id"], type(exc).__name__, str(exc)[:200])
         entry = {"rule_id": rule["id"], "status": "error", "checked_at": checked_at,
                  "evidence_snippet": "Couldn't check right now"}
     cache[rule["id"]] = entry

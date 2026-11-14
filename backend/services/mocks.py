@@ -110,6 +110,7 @@ def extract_facts(text: str, today: date) -> dict:
 
     if (end := job_end_date(t, today)) is not None:
         facts["job_end_date"] = end.isoformat()
+        facts["job_end_date_approximate"] = bool(re.search(r"last (week|month)|weeks? ago|months? ago|few|about|around", t))
 
     if m := re.search(r"(\d+(?:\.\d+)?)\s+years?", t):
         facts["years_on_work_permit"] = float(m.group(1))

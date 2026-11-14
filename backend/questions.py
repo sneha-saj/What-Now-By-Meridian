@@ -12,6 +12,7 @@ from models import Facts, Option, Question
 from rules import _canonical_permit
 
 MAX_QUESTIONS = 3
+APPROX = "about:"  # prefix on quick-reply dates that are only approximate
 NO_DEADLINE_PERMITS = {"student", "family_based", "permanent", "eu_eea_citizen"}
 
 
@@ -63,8 +64,8 @@ def _question(field: str, today: date) -> Question:
     if field == "job_end_date":
         return Question(id=field, kind="date", question="When was (or is) your last day of work?", options=[
             Option(value=today.isoformat(), label="Today"),
-            Option(value=(today - timedelta(days=7)).isoformat(), label="About a week ago"),
-            Option(value=(today - timedelta(days=30)).isoformat(), label="About a month ago"),
+            Option(value=APPROX + (today - timedelta(days=7)).isoformat(), label="About a week ago"),
+            Option(value=APPROX + (today - timedelta(days=30)).isoformat(), label="About a month ago"),
         ])
     raise ValueError(field)
 

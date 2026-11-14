@@ -102,7 +102,7 @@ def test_referral_searches_limit_results_and_use_categories(monkeypatch, tmp_pat
     people = exa_search.search_people(companies, "cook", "Helsinki")
     people_calls = [c for c in client.calls if c[1].get("category") == "people"]
     assert len(people_calls) == 3  # top 3 companies only
-    assert all(c[1]["num_results"] == 2 for c in people_calls)
+    assert all(c[1]["num_results"] == 1 for c in people_calls)
     assert people[0] == {"name": "Aino Virtanen", "role": "Head Chef", "company": "Co 0",
                          "profile_url": "https://linkedin.com/in/aino", "highlight": "12 cooks"}
 
@@ -149,3 +149,9 @@ def test_searches_report_live_activity(monkeypatch, tmp_path):
     assert searching[0]["domains"] == ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"]
     assert found[0]["results"][0]["url"] == "https://www.kela.fi/a"
     assert events[-1]["status"] == "cached"
+
+
+def test_plan_queries_use_city_region_and_field():
+    topics = dict(exa_search.plan_topics("cook", [], "Helsinki"))
+    assert "Helsinki" in topics["register_jobseeker"]
+    assert "Uusimaa" in topics["labour_shortage"] and "cook" in topics["labour_shortage"]

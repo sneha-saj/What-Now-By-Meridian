@@ -1,6 +1,6 @@
 """What Now? by Meridian — agent backend."""
 
-from datetime import date
+from datetime import date, timedelta
 
 import contextvars
 import json
@@ -20,7 +20,7 @@ from models import (STEPS, Action, ChatRequest, ChatResponse, Community, Company
                     PlanResponse, PossibleDate, ReferralRequest, ReferralResponse, Source,
                     TimelineStep)
 import plan_b
-from questions import canonical_permit, needed_fields, questions_for
+from questions import APPROX, canonical_permit, needed_fields, questions_for
 from rules import calculate_deadline
 from countries.finland import DEADLINE_RULES, SOURCE_TITLE, SOURCE_URL, TRUSTED_DOMAINS
 from live_check import check_all_rules, get_live_check
@@ -85,6 +85,9 @@ def intake(req: IntakeRequest = Body(openapi_examples=_examples("intake", "intak
 
     merged = {k: v for k, v in raw.items() if k in Facts.model_fields and v is not None}
     merged.update({k: v for k, v in req.answers.items() if k in Facts.model_fields})  # answers win
+    end = merged.get("job_end_date")
+    if isinstance(end, str) and end.startswith(APPROX):
+        merged["job_end_date"], merged["job_end_date_approximate"] = end[len(APPROX):], True
     facts = Facts.model_validate(merged)
     return IntakeResponse(facts=facts, missing_questions=questions_for(facts, today), mock=mock)
 
@@ -124,6 +127,7 @@ def build_deadline(f: Facts, today: date) -> Deadline:
         status=status, explanation=r["explanation"], applies=r["applies"], months=r["months"],
         deadline_date=r["deadline_date"], possible_dates=possible, missing=missing, rule_id=r["rule_id"],
         source=Source(title=SOURCE_TITLE, url=r["source_url"]), verified=check_status == "verified",
+        deadline_is_approximate=bool(f.job_end_date_approximate) and r["deadline_date"] is not None,
         rule_in_force_since=next((x["in_force_since"] for x in DEADLINE_RULES if x["id"] in rule_ids), None),
         check_status=check_status, live_checks=checks,
     )
@@ -148,7 +152,7 @@ def build_plan(f: Facts, d: Deadline, today: date) -> dict | None:
     if not gemini.available():  # no point spending Exa credits if Gemini can't write the plan
         return None
     cands = plan_b.candidates(f, canonical_permit(f))
-    topics = exa_search.plan_topics(f.field, cands)
+    topics = exa_search.plan_topics(f.field, cands, f.city)
     sources = exa_search.search_plan_sources(topics)
     if not sources:
         return None
@@ -214,6 +218,7 @@ def build_full_plan(f: Facts, d: Deadline | None = None) -> PlanResponse:
 
 MAX_DRAFT_WORDS = 80
 MAX_WHY_WORDS = 20
+MAX_COMPANIES, MAX_CONTACTS, MAX_COMMUNITIES = 5, 3, 3
 
 
 def _clean_sentence(text: str | None) -> str | None:
@@ -270,11 +275,12 @@ def build_referrals(f: Facts) -> ReferralResponse:
 
     out_companies = [Company(name=_clean_name(c["name"]), url=c["url"],
                              hiring_now=bool(c.get("hiring_evidence")), hiring_evidence=c.get("hiring_evidence"),
-                             source=Source(title=_clean_name(c["name"]), url=c["url"]),
+                             hiring_evidence_date=c.get("hiring_evidence_date"),
+                             source=Source(title=_clean_name(c["name"]), url=c["url"], published=c.get("published")),
                              why_relevant=_clean_sentence(why.get(c["id"])) or f"Came up in a search for {field} employers near {city}.")
-                     for c in companies]
+                     for c in companies][:MAX_COMPANIES]
     out_contacts, out_drafts = [], []
-    for c in contacts:
+    for c in contacts[:MAX_CONTACTS]:
         d = drafts.get(c["id"], {})
         message = d.get("message", "")
         if not message or len(message.split()) > MAX_DRAFT_WORDS:
@@ -287,8 +293,13 @@ def build_referrals(f: Facts) -> ReferralResponse:
     for g in communities:
         n = kinds.get(g["id"], {})
         kind = n.get("type") if n.get("type") in ("professional_group", "event", "union") else g["kind"]
-        out_communities.append(Community(name=g["name"], url=g["url"], type=kind,
-                                         date_if_event=n.get("date_if_event") if kind == "event" else None))
+        when = n.get("date_if_event") if kind == "event" else None
+        if when and not (today <= when <= (date.fromisoformat(today) + timedelta(days=30)).isoformat()):
+            when, kind = None, "professional_group"  # only events in the next 30 days keep a date
+        out_communities.append(Community(name=_clean_name(g["name"]), url=g["url"], type=kind,
+                                         date_if_event=when, published=g.get("published")))
+    out_communities.sort(key=lambda g: (g.date_if_event is None, g.type != "union"))  # dated events first
+    out_communities = out_communities[:MAX_COMMUNITIES]
     return ReferralResponse(companies=out_companies, contacts=out_contacts, communities=out_communities,
                             drafts=out_drafts, mock=not notes)
 
@@ -315,6 +326,12 @@ def _merge_chat_facts(req: ChatRequest, extracted: dict) -> tuple[Facts, list[st
     merged.update({k: v for k, v in extracted.items() if k in known and v is not None})
     merged.update({k: v for k, v in req.answers.items() if k in known})
     merged.update({k: v for k, v in req.edited_facts.items() if k in known})
+    # "About a week ago" arrives as "about:2026-11-07"; an exact date (tapped, picked or edited) clears the flag.
+    end = merged.get("job_end_date")
+    if isinstance(end, str) and end.startswith(APPROX):
+        merged["job_end_date"], merged["job_end_date_approximate"] = end[len(APPROX):], True
+    elif "job_end_date" in req.answers or "job_end_date" in req.edited_facts:
+        merged["job_end_date_approximate"] = False
     confirmed = [k for k in {**req.answers, **req.edited_facts} if k in known]
     return Facts.model_validate(merged), confirmed
 

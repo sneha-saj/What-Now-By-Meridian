@@ -235,7 +235,7 @@ def test_referrals_with_exa_and_gemini(monkeypatch, referral_exa):
                                    "why_this_person": "Leads the kitchen.", "profile_url": "https://linkedin.com/in/aino"}
     assert "12 cooks" in body["drafts"][0]["message"]
     assert body["communities"][0] == {"name": "Helsinki Chefs Meetup", "type": "event", "date_if_event": "2026-11-20",
-                                      "url": "https://meetup.com/x"}
+                                      "url": "https://meetup.com/x", "published": None}
     assert body["communities"][1]["date_if_event"] is None  # dates only for events
 
 
@@ -252,7 +252,7 @@ def test_referrals_without_gemini_still_return_exa_results(monkeypatch, referral
     body = client.post("/referrals", json={"facts": {"field": "cook"}}).json()
     assert body["mock"] is True
     assert len(body["companies"]) == 4 and len(body["drafts"]) == 1
-    assert [g["type"] for g in body["communities"]] == ["professional_group", "union"]
+    assert sorted(g["type"] for g in body["communities"]) == ["professional_group", "union"]
 
 
 def test_referrals_without_exa_list_only_real_help_services(monkeypatch):
@@ -413,3 +413,38 @@ def test_chat_stream_explains_who_did_what(monkeypatch, verified):
     with client.stream("POST", "/chat/stream", json={"facts": WORK_FACTS, "step": "deadline"}) as r:
         events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
     assert any(e["type"] == "app" and e["who"] == "code" and "plain code: 3 months → 2027-02-01" in e["text"] for e in events)
+
+
+def test_approximate_job_end_date_marks_deadline_approximate(verified):
+    body = client.post("/chat", json={"facts": {**WORK_FACTS, "job_end_date": None}, "step": "deadline",
+                                      "answers": {"job_end_date": "about:2026-11-01"}}).json()
+    assert body["facts"]["job_end_date"] == "2026-11-01" and body["facts"]["job_end_date_approximate"] is True
+    assert body["deadline"]["deadline_is_approximate"] is True and body["deadline"]["deadline_date"] == "2027-02-01"
+
+    exact = client.post("/chat", json={"facts": body["facts"], "step": "deadline",
+                                       "edited_facts": {"job_end_date": "2026-11-03"}}).json()
+    assert exact["facts"]["job_end_date_approximate"] is False
+    assert exact["deadline"]["deadline_is_approximate"] is False
+
+
+def test_date_question_marks_vague_options():
+    from datetime import date
+    from questions import questions_for
+    from models import Facts
+    q = [q for q in questions_for(Facts(citizenship_group="other", permit_type="work_based", years_on_work_permit=1), date(2026, 11, 14))
+         if q.id == "job_end_date"][0]
+    assert [o.value for o in q.options] == ["2026-11-14", "about:2026-11-07", "about:2026-10-15"]
+
+
+def test_referrals_are_capped_and_events_outside_30_days_lose_their_date(monkeypatch, referral_exa):
+    many = [{"name": f"Co {i}", "url": f"https://c{i}.fi", "highlight": "h", "hiring_evidence": None} for i in range(8)]
+    people = [{"name": f"P{i}", "role": "Chef", "company": "Co 0", "profile_url": f"https://p{i}", "highlight": "h"} for i in range(5)]
+    monkeypatch.setattr(main.exa_search, "search_companies", lambda *a: [dict(c) for c in many])
+    monkeypatch.setattr(main.exa_search, "search_people", lambda *a: [dict(p) for p in people])
+    monkeypatch.setattr(main.gemini, "write_referral_notes", lambda *a: {
+        "companies": [], "drafts": [],
+        "communities": [{"id": "G1", "type": "event", "date_if_event": "2030-01-01"}]})
+    body = client.post("/referrals", json={"facts": {"field": "cook"}}).json()
+    assert len(body["companies"]) == 5 and len(body["contacts"]) == 3 and len(body["communities"]) <= 3
+    far = [g for g in body["communities"] if g["name"] == "Helsinki Chefs Meetup"][0]
+    assert far["date_if_event"] is None and far["type"] == "professional_group"

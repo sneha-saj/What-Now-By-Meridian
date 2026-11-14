@@ -14,6 +14,7 @@ class Facts(BaseModel):
     # A number of years, or a bucket from the tap-to-answer question.
     years_on_work_permit: Optional[Union[float, YearsBucket]] = None
     job_end_date: Optional[date] = None
+    job_end_date_approximate: Optional[bool] = None  # from a vague answer like "about a week ago"
     city: Optional[str] = None
     field: Optional[str] = None
     studied_in_finland: Optional[bool] = None
@@ -81,6 +82,7 @@ class Deadline(BaseModel):
     missing: list[str] = Field(default_factory=list)
     rule_id: Optional[str] = None
     rule_in_force_since: Optional[str] = None
+    deadline_is_approximate: bool = False
     source: Source
     verified: bool = False
     check_status: Literal["verified", "mismatch", "error", "none"] = "none"
@@ -131,6 +133,7 @@ class Company(BaseModel):
     url: str
     hiring_now: bool = False
     hiring_evidence: Optional[str] = None
+    hiring_evidence_date: Optional[str] = None
     source: Source
 
 
@@ -147,6 +150,7 @@ class Community(BaseModel):
     type: Literal["professional_group", "event", "union"]
     date_if_event: Optional[str] = None
     url: str
+    published: Optional[str] = None
 
 
 class Draft(BaseModel):

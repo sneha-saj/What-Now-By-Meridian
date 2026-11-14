@@ -53,7 +53,7 @@ def test_rules_sharing_a_page_fetch_it_once(monkeypatch):
         def __init__(self, api_key):
             pass
 
-        def get_contents(self, urls, text):
+        def get_contents(self, urls, text, **kwargs):
             fetches.append(urls)
             return SimpleNamespace(results=[SimpleNamespace(text="Migri page text")])
 

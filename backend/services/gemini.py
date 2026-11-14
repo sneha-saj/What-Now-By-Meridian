@@ -93,6 +93,7 @@ class Extracted(BaseModel):
     permit_type: Optional[str] = None
     years_on_work_permit: Optional[float] = None
     job_end_date: Optional[str] = None
+    job_end_date_approximate: Optional[bool] = None
     city: Optional[str] = None
     field: Optional[str] = None
     studied_in_finland: Optional[bool] = None
@@ -107,6 +108,8 @@ Use null whenever something is not stated or unclear. Never guess. Today is {tod
 - permit_type: one of {permit_ids}
 - years_on_work_permit: total years on a work-based permit in Finland, as a number
 - job_end_date: last day of work as YYYY-MM-DD (resolve "yesterday", "last Friday" etc. from today)
+- job_end_date_approximate: true if they gave a vague time ("last week", "a few weeks ago", "about a month
+  ago", "early November"), false if exact ("yesterday", "last Friday", "1 November")
 - city: city in Finland
 - field: their job or industry, short, in English
 - studied_in_finland, family_in_finland: true/false if stated

@@ -171,6 +171,19 @@ def _cached_search(kind: str, params: dict, run):
     return results or None
 
 
+REGION = {"helsinki": "Uusimaa", "espoo": "Uusimaa", "vantaa": "Uusimaa", "kauniainen": "Uusimaa",
+          "tampere": "Pirkanmaa", "turku": "Varsinais-Suomi", "oulu": "Pohjois-Pohjanmaa",
+          "jyväskylä": "Keski-Suomi", "lahti": "Päijät-Häme", "kuopio": "Pohjois-Savo", "pori": "Satakunta"}
+
+
+def region_of(city: str | None) -> str | None:
+    return REGION.get((city or "").strip().lower())
+
+
+def _date(r) -> str | None:
+    return (getattr(r, "published_date", None) or "")[:10] or None
+
+
 def _hl(r) -> str:
     return " ... ".join(getattr(r, "highlights", None) or [])[:600]
 
@@ -195,7 +208,7 @@ def search_companies(field: str, city: str, n: int = 8) -> list[dict] | None:
         calls = [
             dict(query=f"companies in or near {city}, Finland hiring {field} or in labour-shortage sectors",
                  category="company", num_results=n, contents={"highlights": True}, objective=objective),
-            dict(query=f"{field} job openings in {city}, Finland, English-speaking, posted recently",
+            dict(query=f"{field} jobs {city} Finland open positions",
                  num_results=10, contents={"highlights": True},
                  objective=(f"Current job posts or careers pages for {field} roles in or near {city}, Finland. "
                             "Prefer the employer's own careers page or a live job listing.")),
@@ -204,14 +217,18 @@ def search_companies(field: str, city: str, n: int = 8) -> list[dict] | None:
         companies, posts = _parallel(lambda i: _search(exa, calls[i].pop("query"), purposes[i], **calls[i]).results, [0, 1])
         evidence = {}
         for p in posts:
-            evidence.setdefault(_domain(p.url), p.url)
+            evidence.setdefault(_domain(p.url), (p.url, _date(p)))
         out = []
         for r in companies[:n]:
-            proof = r.url if CAREERS_PATH.search(urlparse(r.url).path + "/") else evidence.get(_domain(r.url))
-            out.append({"name": r.title or _domain(r.url), "url": r.url, "highlight": _hl(r), "hiring_evidence": proof})
+            if CAREERS_PATH.search(urlparse(r.url).path + "/"):
+                proof, proof_date = r.url, _date(r)
+            else:
+                proof, proof_date = evidence.get(_domain(r.url), (None, None))
+            out.append({"name": r.title or _domain(r.url), "url": r.url, "highlight": _hl(r), "published": _date(r),
+                        "hiring_evidence": proof, "hiring_evidence_date": proof_date})
         out.sort(key=lambda c: c["hiring_evidence"] is None)  # companies with evidence first
         return out
-    return _cached_search("companies", {"field": field, "city": city, "n": n, "v": 2}, run)
+    return _cached_search("companies", {"field": field, "city": city, "n": n, "v": 3}, run)
 
 
 def _split_profile_title(title: str) -> tuple[str, str]:
@@ -220,7 +237,7 @@ def _split_profile_title(title: str) -> tuple[str, str]:
     return (parts[0] if parts else title), (parts[1] if len(parts) > 1 else "")
 
 
-def search_people(companies: list[dict], field: str, city: str, top: int = 3, per_company: int = 2) -> list[dict] | None:
+def search_people(companies: list[dict], field: str, city: str, top: int = 3, per_company: int = 1) -> list[dict] | None:
     """Public professional profiles of likely contacts at the top companies."""
     names = [c["name"] for c in companies[:top]]
 
@@ -246,10 +263,10 @@ def search_people(companies: list[dict], field: str, city: str, top: int = 3, pe
 
 def search_communities(field: str, city: str, today: str, n: int = 3) -> list[dict] | None:
     """International professional groups, upcoming meetups/events and union career services."""
+    month = datetime.fromisoformat(today).strftime("%B %Y")
     queries = [
-        ("professional_group", f"international professionals {field} network, meetups or events in {city} Finland "
-                               f"in the next 30 days from {today}"),
-        ("union", f"trade union career services for {field} workers in Finland, in English"),
+        ("professional_group", f"{field} events and meetups in {city} {month} for international professionals"),
+        ("union", f"trade union for {field} workers in Finland career services in English"),
     ]
 
     def run(exa):
@@ -260,9 +277,10 @@ def search_communities(field: str, city: str, today: str, n: int = 3) -> list[di
                 objective=("Help an international job seeker in Finland find professional groups, upcoming events "
                            "(next 30 days) and union career services. Pull event dates when stated."),
             )
-            return [{"name": r.title or r.url, "url": r.url, "kind": kind, "highlight": _hl(r)} for r in res.results]
+            return [{"name": r.title or r.url, "url": r.url, "kind": kind, "highlight": _hl(r), "published": _date(r)}
+                    for r in res.results]
         return [g for group in _parallel(one, queries) for g in group]
-    return _cached_search("communities", {"field": field, "city": city, "today": today, "n": n}, run)
+    return _cached_search("communities", {"field": field, "city": city, "today": today, "n": n, "v": 2}, run)
 
 
 PLAN_OBJECTIVE = (
@@ -277,13 +295,16 @@ TOPIC_PURPOSE = {"register_jobseeker": "registering as a jobseeker", "unemployme
                  "labour_shortage": "labour-shortage sectors", "plan_b": "other permits"}
 
 
-def plan_topics(field: str | None, candidates: list[dict]) -> list[tuple[str, str]]:
-    """(topic, query) pairs for the /plan search: the 3 core topics plus one per Plan B candidate."""
-    shortage = "labour shortage occupations in Finland occupational barometer"
+def plan_topics(field: str | None, candidates: list[dict], city: str | None = None) -> list[tuple[str, str]]:
+    """(topic, query) pairs for the /plan search: the 3 core topics plus one per Plan B candidate.
+    Personalised with the user's field, city and region so results are specific, not generic."""
+    region = region_of(city)
+    shortage = f"labour shortage occupations {region or 'Finland'} occupational barometer"
     if field:
         shortage += f" {field}"
+    where = f"in {city} " if city else "in Finland "
     return [
-        ("register_jobseeker", "register as an unemployed jobseeker in Finland as a foreigner"),
+        ("register_jobseeker", f"register as an unemployed jobseeker {where}employment services foreigner"),
         ("unemployment_benefits", "unemployment benefits Finland Kela or unemployment fund for immigrants"),
         ("labour_shortage", shortage),
         *[(f"plan_b:{c['id']}", c["query"]) for c in candidates],

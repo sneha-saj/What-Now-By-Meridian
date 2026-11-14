@@ -5,7 +5,7 @@ const SOURCES = ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"];
 const GET = [
   { n: "1", title: "Your exact deadline", text: "3 or 6 months, checked against Migri today." },
   { n: "2", title: "3 steps this week", text: "Each one linked to its official source." },
-  { n: "3", title: "Opportunities near you", text: "Recent hiring signals, events and support with sources." },
+  { n: "3", title: "Perks and support", text: "Job search certificate, city discounts and hiring incentives." },
 ];
 
 /** A small, labelled example of the roadmap: the signature amber "meridian" line from today to the deadline. */
@@ -24,7 +24,7 @@ function RoadmapPreview() {
         {[
           { t: "Register as a jobseeker", s: "tyomarkkinatori.fi" },
           { t: "Check Kela support", s: "kela.fi" },
-          { t: "Explore hiring signals nearby", s: "recent company news" },
+          { t: "Get your job search certificate", s: "tyomarkkinatori.fi" },
         ].map((x, i) => (
           <li key={x.t} className="animate-fade-up relative flex items-start gap-4" style={{ animationDelay: `${200 + i * 120}ms` }}>
             <span aria-hidden className="relative z-10 mt-1 h-5 w-5 shrink-0 rounded-full border-2 border-accent bg-accent" />
@@ -54,7 +54,7 @@ export default function Home() {
             <span className="text-accent-ink">Let&apos;s figure out</span> what&apos;s next.
           </h1>
           <p className="mt-6 max-w-md text-xl text-ink-soft">
-            How long you can stay, what to do this week, and opportunities near you.
+            How long you can stay, what to do this week, and the perks and support you can get.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
             <a href="/start" className="inline-flex min-h-14 items-center gap-2 rounded-2xl bg-ink px-7 text-lg font-bold text-paper shadow-sm hover:bg-ink/90">
@@ -80,6 +80,18 @@ export default function Home() {
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* Coming soon: not built yet, so no button and no backend */}
+      <section aria-labelledby="soon-title" className="mx-auto max-w-6xl px-5 pt-14 sm:px-8">
+        <div className="rounded-3xl border border-dashed border-rule bg-card p-6 sm:p-8">
+          <span className="rounded-full bg-accent-soft px-3 py-1 text-sm font-bold text-accent-ink">Coming soon</span>
+          <h2 id="soon-title" className="mt-3 font-serif text-2xl font-semibold">Find your way in</h2>
+          <p className="mt-1 max-w-2xl text-ink-soft">
+            Many jobs in Finland are filled through people you know. Soon What Now? will find growing companies and the
+            people who can refer you, with a message ready to send.
+          </p>
+        </div>
       </section>
 
       {/* How it works: one line */}

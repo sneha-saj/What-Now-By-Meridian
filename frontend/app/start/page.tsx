@@ -152,11 +152,11 @@ export default function StartPage() {
   }
 
   const [oppLoading, setOppLoading] = useState(false);
-  const factsKey = JSON.stringify(["no-contacts-v2", s.facts.city, s.facts.field, s.facts.permit_type, s.facts.years_on_work_permit, s.facts.job_end_date]);
+  const factsKey = JSON.stringify(["perks-v3", s.facts.city, s.facts.field, s.facts.permit_type, s.facts.years_on_work_permit, s.facts.job_end_date]);
 
   // Opportunities load once per situation, when the tab is first opened (results are cached server-side too).
   useEffect(() => {
-    if (!loaded || s.tab !== "opportunities" || !s.built || !s.facts.city || !s.facts.field || oppLoading || s.oppFor === factsKey) return;
+    if (!loaded || s.tab !== "opportunities" || !s.built || !s.facts.city || oppLoading || s.oppFor === factsKey) return;
     setOppLoading(true);
     setSearching({});
     update({ opp: {}, oppFor: factsKey });
@@ -262,7 +262,7 @@ export default function StartPage() {
   const opportunitiesHint = s.built && s.tab === "roadmap" && (
     <button onClick={() => goTab("opportunities")}
       className="flex w-full items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4 text-left font-bold text-accent-ink hover:border-accent">
-      Next: recent hiring signals, support and events near you <span aria-hidden>→</span>
+      Next: perks and support for jobseekers <span aria-hidden>→</span>
     </button>
   );
   const live = allLive(nodes);
@@ -374,13 +374,12 @@ export default function StartPage() {
               )}
               {tab === "opportunities" && (
                 <div className="space-y-6">
-                  {(!s.facts.city || !s.facts.field) ? (
+                  {!s.facts.city ? (
                     <section className="rounded-2xl border border-rule bg-card px-5 py-5">
-                      <h2 className="font-serif text-3xl font-semibold">Find opportunities near you</h2>
-                      <p className="mt-2 text-ink-soft">City and type of work make the hiring, support, and event searches relevant. Add them here when you want to explore this tab.</p>
-                      <div className="mt-4 flex flex-wrap gap-3">
-                        {!s.facts.city && <Button variant="chip" onClick={() => { setEditing("city"); stripRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>Add city</Button>}
-                        {!s.facts.field && <Button variant="chip" onClick={() => { setEditing("field"); stripRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>Add type of work</Button>}
+                      <h2 className="font-serif text-3xl font-semibold">Perks and support where you live</h2>
+                      <p className="mt-2 text-ink-soft">Discounts and support depend on your city. Add it here when you want to explore this tab.</p>
+                      <div className="mt-4">
+                        <Button variant="chip" onClick={() => { setEditing("city"); stripRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>Add city</Button>
                       </div>
                     </section>
                   ) : (

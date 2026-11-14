@@ -35,7 +35,7 @@ function Quotes({ sources, live }: { sources: Source[]; live: boolean }) {
 
 /** The live, specific item for a step, highlighted so it's obvious it came from Exa. */
 function LiveFindCallout({ f }: { f: LiveFind }) {
-  const when = f.note === "Event" ? (f.date ? formatDate(f.date) : null) : ago(f.date);
+  const when = ago(f.date);
   return (
     <a href={f.url} target="_blank" rel="noreferrer"
       className="flex items-start gap-3 rounded-2xl border border-verified/30 bg-verified-soft/60 p-4 hover:border-verified">
@@ -43,7 +43,7 @@ function LiveFindCallout({ f }: { f: LiveFind }) {
       <span className="min-w-0">
         <span className="block text-sm font-bold text-verified">Found live by Exa{f.note ? ` · ${f.note}` : ""}</span>
         <span className="block font-bold underline decoration-verified/40 underline-offset-4">{f.label}</span>
-        <span className="block text-sm text-ink-soft">{hostOf(f.url)}{when ? ` · ${f.note === "Event" ? when : `updated ${when}`}` : ""}</span>
+        <span className="block text-sm text-ink-soft">{hostOf(f.url)}{when ? ` · updated ${when}` : ""}</span>
         <span className="sr-only">(opens in a new tab)</span>
       </span>
     </a>
@@ -70,7 +70,7 @@ function StatusLine({ n }: { n: RoadNode }) {
   if (n.id === "today") return <p className="flex items-center gap-1.5 text-ink-soft"><PersonIcon /> From your answers</p>;
   const done = n.state === "done" && <span className="inline-flex items-center gap-1 font-bold text-verified"><CheckIcon /> Done ·</span>;
   if (n.liveFind) {
-    const when = n.liveFind.note === "Event" ? null : ago(n.liveFind.date);
+    const when = ago(n.liveFind.date);
     return (
       <p className="flex flex-wrap items-center gap-1.5 text-ink-soft">
         {done}<GlobeIcon className="h-4 w-4 text-verified" />

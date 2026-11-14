@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { OpportunitiesResponse } from "@/lib/api";
 import { isSample } from "@/lib/format";
 import { GlobeIcon } from "./icons";
-import { Button, Card, SourceChip, cx, formatDate } from "./primitives";
+import { Button, Card, SourceChip, cx } from "./primitives";
 
 const SHOW = 3;
 
@@ -43,9 +43,6 @@ export function Opportunities({
   data: Partial<OpportunitiesResponse>;
   loading: boolean;
 }) {
-  const jobs = useMore(data.hidden_jobs ?? []);
-  const support = useMore(data.support ?? []);
-  const events = useMore(data.events ?? []);
   const perks = data.perks_and_support;
   const perkItems = [...(perks?.discounts ?? [])];
   const discounts = useMore(perkItems);
@@ -55,28 +52,9 @@ export function Opportunities({
       <div>
         <h2 id="opp-title" className="font-serif text-3xl font-semibold sm:text-4xl">Opportunities</h2>
         <p className="mt-2 text-lg text-ink-soft">
-          Found live by Exa for your city and type of work. Every item links to where it came from.
+          Found live by Exa on official and city sites for where you live. Every item links to where it came from, with the page date.
         </p>
       </div>
-
-      <Section title="Hidden jobs" intro="Companies that just opened, expanded or raised money: they're likely hiring before they advertise."
-        empty={!jobs.shown.length} searching={loading}>
-        <ul className="space-y-4">
-          {jobs.shown.map((j, i) => (
-            <li key={i} className="border-b border-rule pb-4 last:border-0 last:pb-0">
-              <p className="font-serif text-xl font-semibold">{j.company}</p>
-              <p className="mt-1"><GlobeIcon className="mr-1.5 h-4 w-4 text-verified" />{j.signal}
-                <span className="text-ink-soft"> · {formatDate(j.signal_date)}</span></p>
-              <p className="mt-1 text-ink-soft">{j.why_it_fits}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Src url={j.source_url} title="News" date={j.signal_date} />
-                <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-sm font-bold text-accent-ink">Reach out</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3"><More {...jobs} /></div>
-      </Section>
 
       <Section title="Perks and support" intro="Proof you're a jobseeker, discounts, and help employers can get for hiring you."
         empty={!perks?.certificate && !perkItems.length && !perks?.incentives.length} searching={loading}>
@@ -114,39 +92,8 @@ export function Opportunities({
         </div>
       </Section>
 
-      <Section title="Support you may be able to get" intro="Courses and programmes whose conditions may fit you. Always check the conditions."
-        empty={!support.shown.length} searching={loading}>
-        <ul className="space-y-4">
-          {support.shown.map((s, i) => (
-            <li key={i}>
-              <p className="font-bold">{s.name}</p>
-              <p className="mt-1">{s.what_it_is}</p>
-              <p className="mt-1 text-ink-soft">{s.why_it_may_apply} {s.eligibility_note}</p>
-              <div className="mt-2"><Src url={s.source_url} title="Official page" date={s.source_date} /></div>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3"><More {...support} /></div>
-      </Section>
-
-      <Section title="Events in the next 30 days" intro="Recruitment fairs, meetups and community events in your city."
-        empty={!events.shown.length} searching={loading}>
-        <ul className="space-y-3">
-          {events.shown.map((e, i) => (
-            <li key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="font-serif text-lg font-semibold">{formatDate(e.date)}</span>
-              <a href={e.url} target="_blank" rel="noreferrer" className="font-bold underline decoration-rule underline-offset-4 hover:decoration-ink">
-                {e.name}<span className="sr-only"> (opens in a new tab)</span>
-              </a>
-              {e.place && <span className="text-ink-soft">{e.place}</span>}
-              <span className="basis-full text-ink-soft">{e.why_relevant}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3"><More {...events} /></div>
-      </Section>
       {data.mock && !loading && (
-        <p className="text-sm text-ink-soft">Some of this couldn&apos;t be checked live right now, so those sections may be empty.</p>
+        <p className="text-sm text-ink-soft">Some of this couldn&apos;t be checked live right now, so this may be empty.</p>
       )}
     </section>
   );

@@ -6,10 +6,7 @@ export type LogLine = { id: number; who: Who; text: string; at: string };
 
 const PURPOSE_LABEL: Record<string, string> = {
   "rule check": "Migri's rule page",
-  companies: "companies hiring near you",
-  "job posts": "current job posts",
-  events: "groups and events in the next 30 days",
-  unions: "union career services",
+  perks: "perks and support for jobseekers",
 };
 
 let seq = 0;

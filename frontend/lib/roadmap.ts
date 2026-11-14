@@ -80,7 +80,7 @@ export function liveFindFor(id: NodeId, i: RoadmapInput): LiveFind | undefined {
 
 const DAY = 86_400_000;
 // The roadmap stays short: Today → this week's 3 steps → your deadline (Plan B lives in the deadline step).
-// Hiring signals, support and events are on the Opportunities tab.
+// Perks and support are on the Opportunities tab.
 const WEEKS: { id: NodeId; week: number; label: string }[] = [
   { id: "week1", week: 1, label: "This week" },
 ];

@@ -8,7 +8,7 @@ import { Button, GentleWarning, SourceChip } from "./primitives";
 export type AskEntry = { question: string; res: AskResponse; added?: boolean };
 
 const STEP_NAME: Record<RoadStep, string> = {
-  week1: "This week", wayin: "Opportunities", week2: "Week 2", week4: "Week 4", week8: "Week 8",
+  week1: "This week", week2: "Week 2", week4: "Week 4", week8: "Week 8",
   final: "Plan B", deadline: "Your deadline",
 };
 

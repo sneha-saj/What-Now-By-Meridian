@@ -49,7 +49,7 @@ export type LiveCheck = { status: "verified" | "mismatch" | "error"; checked_at:
 export type Rule = { id: string; description: string; months: number | null; applies_to: string[]; source_url: string; in_force_since: string; last_verified: string; live_check: LiveCheck };
 export type UsedSource = { url: string; title: string; domain: string; date?: string | null; step: string; used_at: string };
 export type RulesResponse = { rules: Rule[]; trusted_domains: string[]; sources_used?: UsedSource[] };
-export type RoadStep = "week1" | "wayin" | "week2" | "week4" | "week8" | "final" | "deadline";
+export type RoadStep = "week1" | "week2" | "week4" | "week8" | "final" | "deadline";
 export type AskSource = { title: string; url: string; domain: string; date?: string | null };
 export type AskResponse = {
   answer: string;
@@ -60,7 +60,7 @@ export type AskResponse = {
   facts_update?: Partial<Facts>;
   mock: boolean;
 };
-export type PrimaryAction = { kind: "open_link" | "reach_out" | "check_conditions"; label: string; url?: string | null };
+export type PrimaryAction = { kind: "open_link" | "check_conditions"; label: string; url?: string | null };
 /** Short display fields on every roadmap and opportunity item (long fields stay for the expanded view). */
 export type Short = { title_short: string; why_short: string; primary_action?: PrimaryAction | null };
 export type Action = Short & { title: string; why: string; how: string[]; sources: Source[] };
@@ -133,7 +133,7 @@ export type StreamEvent =
   | AppEvent
   | { type: "partial"; key: "deadline"; data: Deadline }
   | { type: "partial"; key: "plan"; data: PlanResponse }
-  | { type: "partial"; key: "hidden_jobs" | "support" | "events" | "perks_and_support"; data: unknown };
+  | { type: "partial"; key: "perks_and_support"; data: unknown };
 
 async function streamPost<T>(path: string, body: unknown, onEvent: (e: StreamEvent) => void): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -171,7 +171,7 @@ export async function chatStream(req: ChatRequest, onEvent: (e: StreamEvent) => 
   }
 }
 
-/** POST /opportunities/stream: live events and sections, then the result. Falls back to /opportunities. */
+/** POST /opportunities/stream: live events, then Perks and support. Falls back to /opportunities. */
 export async function opportunitiesStream(facts: Facts, onEvent: (e: StreamEvent) => void): Promise<OpportunitiesResponse> {
   try {
     return await streamPost<OpportunitiesResponse>("/opportunities/stream", { facts }, onEvent);
@@ -180,19 +180,13 @@ export async function opportunitiesStream(facts: Facts, onEvent: (e: StreamEvent
   }
 }
 
-export type HiddenJob = Short & { company: string; signal: string; signal_date: string; source_url: string; why_it_fits: string; action: "reach_out" };
-export type SupportItem = Short & { name: string; what_it_is: string; why_it_may_apply: string; eligibility_note: string; source_url: string; source_date?: string | null };
-export type EventItem = Short & { name: string; date: string; place?: string | null; url: string; why_relevant: string };
 export type Certificate = Short & { name: string; how_to_get: string; source_url: string; source_date?: string | null };
 export type Discount = Short & { name: string; discount: string; proof_needed: string; city: string; source_url: string; source_date?: string | null };
 export type Incentive = Short & { name: string; what_it_is: string; conditions_plain: string; may_apply: boolean; caveat: string; source_url: string; source_date?: string | null };
 export type PerksAndSupport = { certificate?: Certificate | null; discounts: Discount[]; incentives: Incentive[] };
 export type OpportunitiesResponse = {
-  hidden_jobs: HiddenJob[];
-  support: SupportItem[];
-  events: EventItem[];
   perks_and_support: PerksAndSupport;
-  counts?: { hidden_jobs: number; support: number; events: number; certificate: number; discounts: number; incentives: number; total: number };
+  counts?: { certificate: number; discounts: number; incentives: number; total: number };
   mock: boolean;
 };
 

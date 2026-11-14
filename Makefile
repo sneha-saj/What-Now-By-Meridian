@@ -35,4 +35,4 @@ test: $(VENV)
 	cd backend && .venv/bin/pytest -q
 
 clean:
-	rm -rf $(VENV) frontend/node_modules frontend/.next
+	rm -rf $(VENV) frontend/node_modules frontend/.next frontend/.next-dev

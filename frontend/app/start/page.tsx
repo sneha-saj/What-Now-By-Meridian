@@ -41,6 +41,7 @@ type Saved = {
   added: Partial<Record<NodeId, AddedItem[]>>;
   opp?: Partial<OpportunitiesResponse>;
   oppFor?: string; // the facts the opportunities were found for
+  savedId?: string; // set when this roadmap came from (or was saved to) the saved list
 };
 
 const KEY = "what-now-roadmap-v2";
@@ -167,7 +168,7 @@ export default function StartPage() {
       <main id="main" className="mx-auto max-w-7xl px-5 sm:px-8">
         <Welcome busy={busy} onSubmit={(text) => { update({ started: true }); send({ messages: [{ role: "user", text }] }); }}
           saved={saved}
-          onOpen={(id) => { const r = saved.find((x) => x.id === id); if (r) setS({ ...empty(), ...r.state }); }}
+          onOpen={(id) => { const r = saved.find((x) => x.id === id); if (r) setS({ ...empty(), ...r.state, savedId: r.id }); }}
           onDelete={(id) => { deleteSaved(id); setSaved(listSaved<Saved>()); }} />
       </main>
     );
@@ -211,8 +212,13 @@ export default function StartPage() {
         <>
           <span className="text-sm">Start a new situation. Keep this one?</span>
           {s.built && (
-            <Button variant="chip" onClick={() => { saveRoadmap(roadmapTitle(), s); setSaved(listSaved<Saved>()); clearAll(); }}>
-              Save this roadmap
+            <Button variant="chip" onClick={() => {
+              const summary = FIELDS.map((f) => display(f, s.facts[f.id], s.facts)).filter((t): t is string => !!t);
+              saveRoadmap(roadmapTitle(), summary, s, s.savedId);
+              setSaved(listSaved<Saved>());
+              clearAll();
+            }}>
+              {s.savedId ? "Save changes" : "Save this roadmap"}
             </Button>
           )}
           <Button variant="chip" onClick={clearAll}>Discard</Button>

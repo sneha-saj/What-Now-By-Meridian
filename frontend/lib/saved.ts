@@ -2,7 +2,7 @@
  * Saved roadmaps live in this browser only (localStorage). No accounts, nothing on a server.
  * Each entry is a snapshot of the /start session so it can be reopened later.
  */
-export type SavedRoadmap<T> = { id: string; title: string; savedAt: string; state: T };
+export type SavedRoadmap<T> = { id: string; title: string; summary: string[]; savedAt: string; state: T };
 
 const KEY = "what-now-saved-roadmaps";
 
@@ -23,9 +23,11 @@ function write<T>(items: SavedRoadmap<T>[]): boolean {
   }
 }
 
-export function saveRoadmap<T>(title: string, state: T): boolean {
-  const entry = { id: String(Date.now()), title, savedAt: new Date().toISOString(), state };
-  return write([entry, ...listSaved<T>()]);
+/** Save a roadmap with its own situation. Passing an existing id updates that entry instead of adding a copy. */
+export function saveRoadmap<T>(title: string, summary: string[], state: T, id?: string): string | null {
+  const entryId = id ?? String(Date.now());
+  const entry = { id: entryId, title, summary, savedAt: new Date().toISOString(), state };
+  return write([entry, ...listSaved<T>().filter((r) => r.id !== entryId)]) ? entryId : null;
 }
 
 export function deleteSaved(id: string) {

@@ -62,7 +62,7 @@ export function QuestionCard({
 export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete }: {
   busy?: boolean;
   onSubmit: (text: string) => void;
-  saved?: { id: string; title: string; savedAt: string }[];
+  saved?: { id: string; title: string; summary?: string[]; savedAt: string }[];
   onOpen?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
@@ -95,7 +95,12 @@ export function Welcome({ busy, onSubmit, saved = [], onOpen, onDelete }: {
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rule bg-card px-4 py-3">
                 <span>
                   <span className="font-bold">{r.title}</span>
-                  <span className="block text-sm text-ink-soft">Saved {new Date(r.savedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  {!!r.summary?.length && (
+                    <span className="mt-1 flex flex-wrap gap-1.5">
+                      {r.summary.map((t) => <span key={t} className="rounded-full border border-ink/15 bg-paper px-2.5 py-0.5 text-sm">{t}</span>)}
+                    </span>
+                  )}
+                  <span className="mt-1 block text-sm text-ink-soft">Saved {new Date(r.savedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                 </span>
                 <span className="flex gap-2">
                   <Button variant="chip" onClick={() => onOpen?.(r.id)}>Open</Button>

@@ -141,6 +141,8 @@ class _Action(BaseModel):
     why: str
     how: list[str]
     source_ids: list[str]
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
 
 
 class _Week(BaseModel):
@@ -153,6 +155,8 @@ class _PlanB(BaseModel):
     candidate_id: str
     why: str
     source_ids: list[str]
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
 
 
 class GeneratedPlan(BaseModel):
@@ -166,6 +170,9 @@ PLAN_PROMPT = """You help a worried person in Finland who has lost their job. Be
 Use ONLY facts from the SOURCES below. Do not use outside knowledge. Cite sources by id.
 If the sources do not cover something they need, write "Check with Migri or your union" instead of guessing.
 The deadline below was computed by our rules engine: do not change it or invent another date.
+
+For every item also give title_short (max 6 words) and why_short (max 12 words): plain, complete phrases
+for a compact card, e.g. "Register as a jobseeker" / "Keeps your benefit options open from day one".
 
 Write:
 1. this_week: exactly 3 actions, most urgent first. Each has a title, why (one calm sentence),
@@ -267,6 +274,8 @@ class _OppJob(BaseModel):
     company: str
     signal: str
     why_it_fits: str
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
 
 
 class _OppSupport(BaseModel):
@@ -275,6 +284,8 @@ class _OppSupport(BaseModel):
     what_it_is: str
     why_it_may_apply: str
     plausible: bool
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
 
 
 class _OppEvent(BaseModel):
@@ -283,6 +294,8 @@ class _OppEvent(BaseModel):
     date: Optional[str] = None
     place: Optional[str] = None
     why_relevant: str
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
 
 
 class _OppCertificate(BaseModel):
@@ -295,6 +308,8 @@ class _OppDiscount(BaseModel):
     name: str
     discount: str
     proof_needed: str
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
 
 
 class _OppIncentive(BaseModel):
@@ -304,6 +319,8 @@ class _OppIncentive(BaseModel):
     conditions_plain: str
     may_apply: bool
     caveat: str
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
 
 
 class OpportunityNotes(BaseModel):
@@ -318,6 +335,7 @@ class OpportunityNotes(BaseModel):
 OPPORTUNITIES_PROMPT = """You help a person in Finland who lost their job find opportunities. Use ONLY the rows below.
 Cite each item by its row id. Leave a row out if it doesn't clearly fit. Never invent names, dates or discounts.
 Today is {today}. Plain language, one sentence per field, no markdown.
+For every item also give title_short (max 6 words) and why_short (max 12 words): complete phrases for a compact card.
 
 hidden_jobs: rows marked [hiring] that describe a real hiring signal (new opening, expansion, new location,
   funding) at a company that could hire this person. company, signal (what changed), why_it_fits.
@@ -354,6 +372,8 @@ class _ContactDraft(BaseModel):
     id: str
     why_this_person: str
     message: str
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
 
 
 class ContactDrafts(BaseModel):
@@ -362,7 +382,7 @@ class ContactDrafts(BaseModel):
 
 DRAFTS_PROMPT = """Draft one short, polite, personal message (max 80 words) from a job seeker to each contact below.
 Mention one real detail from the contact's company signal. No exaggeration. End with "[Your name]".
-{incentive}These are drafts; nothing is sent. Also give why_this_person in one sentence.
+{incentive}These are drafts; nothing is sent. Also give why_this_person in one sentence, and why_short (max 12 words).
 
 Job seeker: {facts}
 

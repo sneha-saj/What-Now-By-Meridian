@@ -1,7 +1,9 @@
 from datetime import date
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from urllib.parse import urlparse
+
+from pydantic import BaseModel, Field, model_validator
 
 CitizenshipGroup = Literal["eu_eea", "other", "unknown"]
 YearsBucket = Literal["under_2", "over_2", "not_sure"]
@@ -58,6 +60,50 @@ class PlanRequest(BaseModel):
     facts: Facts
 
 
+# ---------- Short display fields ----------
+# Every roadmap and opportunity item carries title_short (max 6 words), why_short (max 12 words) and one
+# primary_action for the compact view. Longer fields (steps, highlights, eligibility) stay for the expanded view.
+# If Gemini didn't provide short versions (or overshot), they're derived from the long fields here, in code.
+
+TITLE_WORDS, WHY_WORDS = 6, 12
+
+
+def shorten(text: str | None, max_words: int) -> str:
+    words = " ".join((text or "").split()).split(" ")
+    if len(words) <= max_words:
+        return " ".join(words).strip()
+    return " ".join(words[:max_words]).rstrip(",;:–-") + "…"
+
+
+def _domain(url: str | None) -> str:
+    host = urlparse(url or "").netloc.lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+class PrimaryAction(BaseModel):
+    kind: Literal["open_link", "reach_out", "copy_draft", "check_conditions"]
+    label: str
+    url: Optional[str] = None
+
+
+class Display(BaseModel):
+    title_short: str = ""
+    why_short: str = ""
+    primary_action: Optional[PrimaryAction] = None
+
+    def _defaults(self) -> tuple[str, str, Optional[PrimaryAction]]:  # overridden per item type
+        return "", "", None
+
+    @model_validator(mode="after")
+    def _fill_short_fields(self):
+        title, why, action = self._defaults()
+        self.title_short = shorten(self.title_short or title, TITLE_WORDS)
+        self.why_short = shorten(self.why_short or why, WHY_WORDS)
+        if self.primary_action is None:
+            self.primary_action = action
+        return self
+
+
 class Source(BaseModel):
     title: str
     url: str
@@ -91,26 +137,40 @@ class Deadline(BaseModel):
     warning_link: Optional[str] = None
 
 
-class Action(BaseModel):
+class Action(Display):
     title: str
     why: str
     how: list[str]
     sources: list[Source]
 
+    def _defaults(self):
+        src = self.sources[0] if self.sources else None
+        return self.title, self.why, PrimaryAction(kind="open_link", label=f"Go to {_domain(src.url)}", url=src.url) if src else None
 
-class TimelineStep(BaseModel):
+
+class TimelineStep(Display):
     week: str
     steps: list[str]
     sources: list[Source]
 
+    def _defaults(self):
+        src = self.sources[0] if self.sources else None
+        return (self.steps[0] if self.steps else self.week), self.week, (
+            PrimaryAction(kind="open_link", label=f"Go to {_domain(src.url)}", url=src.url) if src else None)
 
-class PlanBOption(BaseModel):
+
+class PlanBOption(Display):
     id: str = ""
     option: str
     who_it_fits: str = ""
     why: str
     latest_start_date: Optional[str] = None
     sources: list[Source]
+
+    def _defaults(self):
+        src = self.sources[0] if self.sources else None
+        return self.option, self.who_it_fits or self.why, (
+            PrimaryAction(kind="check_conditions", label="Check the conditions", url=src.url) if src else None)
 
 
 class PlanResponse(BaseModel):
@@ -229,7 +289,7 @@ class AskResponse(BaseModel):
 
 # ---------- /opportunities ----------
 
-class HiddenJob(BaseModel):
+class HiddenJob(Display):
     company: str
     signal: str
     signal_date: str
@@ -237,8 +297,11 @@ class HiddenJob(BaseModel):
     why_it_fits: str
     action: Literal["reach_out"] = "reach_out"
 
+    def _defaults(self):
+        return self.company, self.signal, PrimaryAction(kind="reach_out", label="Reach out", url=self.source_url)
 
-class OppContact(BaseModel):
+
+class OppContact(Display):
     name: str
     role: str
     company: str
@@ -246,8 +309,12 @@ class OppContact(BaseModel):
     profile_url: str
     draft: str
 
+    def _defaults(self):
+        return f"{self.name}, {self.role}", self.why_this_person, PrimaryAction(
+            kind="copy_draft", label="Copy message", url=self.profile_url)
 
-class SupportItem(BaseModel):
+
+class SupportItem(Display):
     name: str
     what_it_is: str
     why_it_may_apply: str
@@ -255,23 +322,34 @@ class SupportItem(BaseModel):
     source_url: str
     source_date: Optional[str] = None
 
+    def _defaults(self):
+        return self.name, self.why_it_may_apply, PrimaryAction(kind="check_conditions", label="Check the conditions",
+                                                                url=self.source_url)
 
-class EventItem(BaseModel):
+
+class EventItem(Display):
     name: str
     date: str
     place: Optional[str] = None
     url: str
     why_relevant: str
 
+    def _defaults(self):
+        return self.name, self.why_relevant, PrimaryAction(kind="open_link", label="See the event", url=self.url)
 
-class Certificate(BaseModel):
+
+class Certificate(Display):
     name: str
     how_to_get: str
     source_url: str
     source_date: Optional[str] = None
 
+    def _defaults(self):
+        return "Get your job search certificate", self.how_to_get, PrimaryAction(
+            kind="open_link", label="How to get it", url=self.source_url)
 
-class Discount(BaseModel):
+
+class Discount(Display):
     name: str
     discount: str
     proof_needed: str
@@ -279,8 +357,11 @@ class Discount(BaseModel):
     source_url: str
     source_date: Optional[str] = None
 
+    def _defaults(self):
+        return self.name, self.discount, PrimaryAction(kind="open_link", label="See the discount", url=self.source_url)
 
-class Incentive(BaseModel):
+
+class Incentive(Display):
     name: str
     what_it_is: str
     conditions_plain: str
@@ -288,6 +369,10 @@ class Incentive(BaseModel):
     caveat: str
     source_url: str
     source_date: Optional[str] = None
+
+    def _defaults(self):
+        return self.name, self.caveat or self.what_it_is, PrimaryAction(
+            kind="check_conditions", label="Check the conditions", url=self.source_url)
 
 
 class PerksAndSupport(BaseModel):
@@ -300,10 +385,32 @@ class OpportunitiesRequest(BaseModel):
     facts: Facts
 
 
+class OpportunityCounts(BaseModel):
+    hidden_jobs: int = 0
+    people: int = 0
+    support: int = 0
+    events: int = 0
+    certificate: int = 0
+    discounts: int = 0
+    incentives: int = 0
+    total: int = 0
+
+
 class OpportunitiesResponse(BaseModel):
     hidden_jobs: list[HiddenJob] = Field(default_factory=list)
     people: list[OppContact] = Field(default_factory=list)
     support: list[SupportItem] = Field(default_factory=list)
     events: list[EventItem] = Field(default_factory=list)
     perks_and_support: PerksAndSupport = Field(default_factory=PerksAndSupport)
+    counts: OpportunityCounts = Field(default_factory=OpportunityCounts)
     mock: bool = False
+
+    @model_validator(mode="after")
+    def _count_sections(self):
+        p = self.perks_and_support
+        c = OpportunityCounts(hidden_jobs=len(self.hidden_jobs), people=len(self.people), support=len(self.support),
+                              events=len(self.events), certificate=int(p.certificate is not None),
+                              discounts=len(p.discounts), incentives=len(p.incentives))
+        c.total = c.hidden_jobs + c.people + c.support + c.events + c.certificate + c.discounts + c.incentives
+        self.counts = c
+        return self

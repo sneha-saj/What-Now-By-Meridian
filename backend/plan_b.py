@@ -16,6 +16,7 @@ def candidates(f: Facts, permit: str | None) -> list[dict]:
         return []
     out = [{
         "id": "new_employer",
+        "title_short": "New permit, new employer",
         "option": "A new work-based residence permit",
         "who_it_fits": "Anyone who gets a job offer from a new employer before the deadline.",
         "query": "apply for a new work-based residence permit with a new employer Finland",
@@ -23,6 +24,7 @@ def candidates(f: Facts, permit: str | None) -> list[dict]:
     if f.studied_in_finland:
         out.append({
             "id": "job_seeker_graduate",
+        "title_short": "Job-seeker permit after graduating",
             "option": "Residence permit to look for work after graduating",
             "who_it_fits": "People who completed a degree or research in Finland.",
             "query": "residence permit for looking for work after graduation Finland",
@@ -30,12 +32,14 @@ def candidates(f: Facts, permit: str | None) -> list[dict]:
     if f.family_in_finland:
         out.append({
             "id": "family",
+        "title_short": "Family-based permit",
             "option": "Family-based residence permit",
             "who_it_fits": "People whose spouse, partner or other close family member lives in Finland.",
             "query": "family-based residence permit Finland spouse",
         })
     out.append({
         "id": "entrepreneur",
+        "title_short": "Entrepreneur permit",
         "option": "Residence permit for an entrepreneur",
         "who_it_fits": "People who want to start or run their own business in Finland.",
         "query": "residence permit for an entrepreneur Finland",

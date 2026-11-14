@@ -58,9 +58,12 @@ export type AskResponse = {
   official_only: boolean;
   mock: boolean;
 };
-export type Action = { title: string; why: string; how: string[]; sources: Source[] };
-export type TimelineStep = { week: string; steps: string[]; sources: Source[] };
-export type PlanBOption = {
+export type PrimaryAction = { kind: "open_link" | "reach_out" | "copy_draft" | "check_conditions"; label: string; url?: string | null };
+/** Short display fields on every roadmap and opportunity item (long fields stay for the expanded view). */
+export type Short = { title_short: string; why_short: string; primary_action?: PrimaryAction | null };
+export type Action = Short & { title: string; why: string; how: string[]; sources: Source[] };
+export type TimelineStep = Short & { week: string; steps: string[]; sources: Source[] };
+export type PlanBOption = Short & {
   id: string;
   option: string;
   who_it_fits: string;
@@ -204,13 +207,13 @@ export async function opportunitiesStream(facts: Facts, onEvent: (e: StreamEvent
   }
 }
 
-export type HiddenJob = { company: string; signal: string; signal_date: string; source_url: string; why_it_fits: string; action: "reach_out" };
-export type OppContact = { name: string; role: string; company: string; why_this_person: string; profile_url: string; draft: string };
-export type SupportItem = { name: string; what_it_is: string; why_it_may_apply: string; eligibility_note: string; source_url: string; source_date?: string | null };
-export type EventItem = { name: string; date: string; place?: string | null; url: string; why_relevant: string };
-export type Certificate = { name: string; how_to_get: string; source_url: string; source_date?: string | null };
-export type Discount = { name: string; discount: string; proof_needed: string; city: string; source_url: string; source_date?: string | null };
-export type Incentive = { name: string; what_it_is: string; conditions_plain: string; may_apply: boolean; caveat: string; source_url: string; source_date?: string | null };
+export type HiddenJob = Short & { company: string; signal: string; signal_date: string; source_url: string; why_it_fits: string; action: "reach_out" };
+export type OppContact = Short & { name: string; role: string; company: string; why_this_person: string; profile_url: string; draft: string };
+export type SupportItem = Short & { name: string; what_it_is: string; why_it_may_apply: string; eligibility_note: string; source_url: string; source_date?: string | null };
+export type EventItem = Short & { name: string; date: string; place?: string | null; url: string; why_relevant: string };
+export type Certificate = Short & { name: string; how_to_get: string; source_url: string; source_date?: string | null };
+export type Discount = Short & { name: string; discount: string; proof_needed: string; city: string; source_url: string; source_date?: string | null };
+export type Incentive = Short & { name: string; what_it_is: string; conditions_plain: string; may_apply: boolean; caveat: string; source_url: string; source_date?: string | null };
 export type PerksAndSupport = { certificate?: Certificate | null; discounts: Discount[]; incentives: Incentive[] };
 export type OpportunitiesResponse = {
   hidden_jobs: HiddenJob[];
@@ -218,6 +221,7 @@ export type OpportunitiesResponse = {
   support: SupportItem[];
   events: EventItem[];
   perks_and_support: PerksAndSupport;
+  counts?: { hidden_jobs: number; people: number; support: number; events: number; certificate: number; discounts: number; incentives: number; total: number };
   mock: boolean;
 };
 

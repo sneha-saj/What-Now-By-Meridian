@@ -166,7 +166,8 @@ def build_plan(f: Facts, d: Deadline, today: date) -> dict | None:
     if not out:
         return None
 
-    this_week = [Action(title=a["title"], why=a["why"], how=a["how"], sources=_cite(a["source_ids"], by_id))
+    this_week = [Action(title=a["title"], why=a["why"], how=a["how"], sources=_cite(a["source_ids"], by_id),
+                        title_short=a.get("title_short") or "", why_short=a.get("why_short") or "")
                  for a in out.get("this_week", [])]
     this_week = [a for a in this_week if a.sources][:3]  # every action must cite a real source
     if len(this_week) < 3:
@@ -179,16 +180,17 @@ def build_plan(f: Facts, d: Deadline, today: date) -> dict | None:
         c = by_cand.get(p.get("candidate_id"))
         cited = _cite(p.get("source_ids", []), by_id)
         if c and cited:
-            plan_b_out.append(_plan_b_option(c, p["why"], cited, d))
+            plan_b_out.append(_plan_b_option(c, p["why"], cited, d, p.get("why_short") or ""))
     return {"this_week": this_week, "timeline": [w for w in timeline if w.sources],
             **_with_plan_b_note(plan_b_out, cands)}
 
 
-def _plan_b_option(c: dict, why: str, sources: list[Source], d: Deadline) -> PlanBOption:
+def _plan_b_option(c: dict, why: str, sources: list[Source], d: Deadline, why_short: str = "") -> PlanBOption:
     # Apply while your current permit's protection period still runs: that's the deadline from the rules engine.
     latest = d.deadline_date.isoformat() if d.deadline_date else None
     return PlanBOption(id=c["id"], option=c["option"], who_it_fits=c["who_it_fits"], why=why,
-                       latest_start_date=latest, sources=sources)
+                       latest_start_date=latest, sources=sources, title_short=c.get("title_short", ""),
+                       why_short=why_short)
 
 
 def _with_plan_b_note(options: list[PlanBOption], cands: list[dict]) -> dict:

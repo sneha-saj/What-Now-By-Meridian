@@ -31,6 +31,11 @@ def _template_draft(c: dict, field: str) -> str:
             "short chat about your team or a pointer to the right person. Thank you! [Your name]")
 
 
+def _short(n: dict) -> dict:
+    """Gemini's short card text, if it gave any (limits are enforced by the models)."""
+    return {"title_short": n.get("title_short") or "", "why_short": n.get("why_short") or ""}
+
+
 def _deadline_conflict(conditions: str, months: int | None) -> str | None:
     m = re.search(r"\b(\d+|three|six|two)\s+months?\b", conditions.lower())
     if not m or not months:
@@ -66,12 +71,12 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
         r = row(n)
         if r and r["section"] == "hidden_jobs" and r.get("published") and date.fromisoformat(r["published"]) >= since:
             hidden.append(HiddenJob(company=n["company"], signal=n["signal"], signal_date=r["published"],
-                                    source_url=r["url"], why_it_fits=n["why_it_fits"]))
+                                    source_url=r["url"], why_it_fits=n["why_it_fits"], **_short(n)))
     hidden = hidden[:MAX_ITEMS]
     _partial("hidden_jobs", hidden)
 
     support = [SupportItem(name=n["name"], what_it_is=n["what_it_is"], why_it_may_apply=n["why_it_may_apply"],
-                           eligibility_note=MAY_APPLY, source_url=r["url"], source_date=r.get("published"))
+                           eligibility_note=MAY_APPLY, source_url=r["url"], source_date=r.get("published"), **_short(n))
                for n in notes.get("support", []) if n.get("plausible") and (r := row(n)) and r["section"].startswith("support:")]
     support = support[:MAX_ITEMS]
     _partial("support", support)
@@ -85,7 +90,7 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
             continue  # no stated date, no event
         if r and r["section"] == "events" and today <= when <= until:
             events.append(EventItem(name=n["name"], date=when.isoformat(), place=n.get("place"), url=r["url"],
-                                    why_relevant=n["why_relevant"]))
+                                    why_relevant=n["why_relevant"], **_short(n)))
     events = sorted(events, key=lambda e: e.date)[:MAX_ITEMS]
     _partial("events", events)
 
@@ -94,7 +99,7 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
         perks.certificate = Certificate(name="Job search certificate (proof you're a jobseeker)", how_to_get=c["how_to_get"],
                                         source_url=r["url"], source_date=r.get("published"))
     perks.discounts = [Discount(name=n["name"], discount=n["discount"], proof_needed=n["proof_needed"], city=city,
-                                source_url=r["url"], source_date=r.get("published"))
+                                source_url=r["url"], source_date=r.get("published"), **_short(n))
                        for n in notes.get("discounts", []) if (r := row(n)) and r["section"].startswith("perks:")][:MAX_ITEMS]
     for n in notes.get("incentives", []):
         r = row(n)
@@ -103,7 +108,8 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
         caveat = _deadline_conflict(n["conditions_plain"], deadline_months) or n.get("caveat") or MAY_APPLY
         perks.incentives.append(Incentive(name=n["name"], what_it_is=n["what_it_is"], conditions_plain=n["conditions_plain"],
                                           may_apply=bool(n.get("may_apply")), caveat=caveat,
-                                          source_url=r["url"], source_date=r.get("published")))
+                                          source_url=r["url"], source_date=r.get("published"),
+                                          title_short=n.get("title_short") or ""))  # why_short: from the caveat
     perks.incentives = perks.incentives[:MAX_ITEMS]
     _partial("perks_and_support", perks)
 
@@ -123,7 +129,7 @@ def build(f: Facts, deadline_months: int | None, today: date | None = None) -> O
                 msg = _template_draft(c, field)
             people.append(OppContact(name=c["name"], role=c["role"] or "Professional", company=c["company"],
                                      why_this_person=d.get("why_this_person") or f"Works at {c['company']}.",
-                                     profile_url=c["profile_url"], draft=msg))
+                                     profile_url=c["profile_url"], draft=msg, why_short=d.get("why_short") or ""))
     _partial("people", people)
 
     return OpportunitiesResponse(hidden_jobs=hidden, people=people, support=support, events=events,

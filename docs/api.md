@@ -10,6 +10,12 @@ The example responses are saved in `backend/mocks/` and are what the API returns
 Official sources in them are real pages. Companies and people are clearly marked samples
 (`example.com`), because we don't put invented businesses or people in front of users as real.
 
+**Short display fields.** Every roadmap item (`this_week`, `timeline`, `plan_b`) and every opportunity item has
+`title_short` (max 6 words), `why_short` (max 12 words) and `primary_action` (`kind`: `open_link`, `reach_out`,
+`copy_draft` or `check_conditions`, `label`, `url`) for compact cards. Gemini writes them; code enforces the limits
+and derives them from the long fields when missing. Long fields (`how`, `steps`, `highlight`, `eligibility_note`)
+are for the expanded view. `/opportunities` also returns `counts` per section and `total`.
+
 Every response has `mock: true` when a fallback was used (no API key, or a call failed). The demo always runs.
 
 | Endpoint | Purpose |

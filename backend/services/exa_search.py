@@ -23,13 +23,26 @@ def _get_client():
     return _client
 
 
+OFFICIAL_OBJECTIVE = (
+    "Help a foreign worker in Finland who just lost their job understand what to do next. "
+    "Rank official guidance pages from Migri, Kela, InfoFinland and Tyomarkkinatori first; "
+    "exclude news, forums and law-firm marketing. Pull concrete facts: deadlines and time limits, "
+    "eligibility conditions, required registrations and the steps to take."
+)
+
+
+def _snippet(r) -> str:
+    highlights = getattr(r, "highlights", None) or []
+    return (" ... ".join(highlights) or getattr(r, "text", None) or "")[:1200]
+
+
 def _to_sources(results) -> list[dict]:
     out = []
     for r in results:
         out.append({
             "title": r.title or r.url,
             "url": r.url,
-            "snippet": (getattr(r, "text", None) or "")[:1200],
+            "snippet": _snippet(r),
         })
     return out
 
@@ -42,11 +55,12 @@ def search_official(queries: list[str], per_query: int = 3) -> list[dict] | None
     seen: dict[str, dict] = {}
     try:
         for q in queries:
-            res = exa.search_and_contents(
+            res = exa.search(
                 q,
                 num_results=per_query,
                 include_domains=config.OFFICIAL_DOMAINS,
-                text={"max_characters": 1500},
+                contents={"highlights": True},
+                objective=OFFICIAL_OBJECTIVE,
             )
             for s in _to_sources(res.results):
                 seen.setdefault(s["url"], s)
@@ -59,20 +73,24 @@ def search_official(queries: list[str], per_query: int = 3) -> list[dict] | None
 def search_referrals(occupation: str, city: str, n: int = 3) -> list[dict] | None:
     """Find companies hiring + people to contact.
 
-    TODO: swap to Exa Websets (exa.websets.create with criteria like
-    "hiring {occupation} in {city}, English-friendly") for richer, verified lists.
+    TODO: for richer, verified lists, move this to Exa's Agent API (/agent) —
+    the build-with-exa skill says list-building belongs there, not Websets.
     """
     exa = _get_client()
     if exa is None:
         return None
     try:
-        companies = exa.search_and_contents(
+        companies = exa.search(
             f"companies in {city}, Finland hiring {occupation} English-speaking",
-            category="company", num_results=n, text={"max_characters": 500},
+            category="company", num_results=n, contents={"highlights": True},
+            objective=(f"Find companies in {city}, Finland that currently hire {occupation}s and work in English, "
+                       "so a job seeker can contact them. Prefer company pages and careers pages."),
         ).results
-        people = exa.search_and_contents(
+        people = exa.search(
             f"{occupation} recruiter or hiring manager in {city}, Finland",
-            category="people", num_results=n, text={"max_characters": 500},
+            category="people", num_results=n, contents={"highlights": True},
+            objective=(f"Find recruiters or hiring managers who hire {occupation}s in {city}, Finland, "
+                       "so a job seeker can reach out to them directly."),
         ).results
     except Exception as e:  # noqa: BLE001
         log.warning("Exa referral search failed, using mock: %s", e)

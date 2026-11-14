@@ -63,6 +63,6 @@ def test_incentive_short_why_is_the_caveat():
 def test_opportunities_counts_sections():
     body = OpportunitiesResponse(**mocks.example("opportunities")).model_dump()
     c = body["counts"]
-    assert set(c) == {"certificate", "discounts", "incentives", "total"}
+    assert set(c) == {"certificate", "discounts", "incentives", "support", "total"}
     assert (c["certificate"], c["discounts"], c["incentives"]) == (1, 1, 1)
     assert c["total"] == 3

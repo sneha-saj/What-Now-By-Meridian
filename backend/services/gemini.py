@@ -257,10 +257,21 @@ class _OppIncentive(BaseModel):
     why_short: Optional[str] = None
 
 
+class _OppSupport(BaseModel):
+    row_id: str
+    name: str
+    what_it_is: str
+    who_can_get_it: Optional[str] = None
+    how_to_get: Optional[str] = None
+    title_short: Optional[str] = None
+    why_short: Optional[str] = None
+
+
 class OpportunityNotes(BaseModel):
     certificate: Optional[_OppCertificate] = None
     discounts: list[_OppDiscount]
     incentives: list[_OppIncentive]
+    support: list[_OppSupport] = Field(default_factory=list)
 
 
 OPPORTUNITIES_PROMPT = """You help a person in Finland who lost their job find perks and support. Use ONLY the rows below.
@@ -268,13 +279,15 @@ Cite each item by its row id. Leave a row out if it doesn't clearly fit. Never i
 Today is {today}. Plain language, one sentence per field, no markdown.
 For every item also give title_short (max 6 words) and why_short (max 12 words): complete phrases for a compact card.
 
-certificate: the [perks] row that explains how to get a job search certificate / proof of jobseeker status,
+certificate: the [perks:certificate] row that explains how to get a job search certificate / proof of jobseeker status,
   with how_to_get in plain steps. null if no row explains it.
-discounts: [perks] rows that state a concrete discount for unemployed jobseekers (sports, swimming, museums,
+discounts: [perks:discounts] rows that state a concrete discount for unemployed jobseekers (sports, swimming, museums,
   culture, courses): name, discount (exactly as stated), proof_needed.
-incentives: [perks] rows about employer hiring incentives: name, what_it_is, conditions_plain, may_apply (true only
+incentives: [perks:incentives] rows about employer hiring incentives: name, what_it_is, conditions_plain, may_apply (true only
   if the person plausibly meets the conditions), caveat (if a condition like "unemployed for 3 months" conflicts
   with their permit deadline of {deadline_months} months, say so plainly).
+support: rows marked with any other [perks:...] tag: each concrete kind of support, course or discount the row
+  describes: name, what_it_is (amounts exactly as stated), who_can_get_it, how_to_get. Only what the row says.
 
 Person: {facts}
 
@@ -283,7 +296,7 @@ ROWS:
 
 
 def write_opportunities(facts: dict, deadline_months, rows: list[dict], today: str) -> dict | None:
-    lines = "\n".join(f"[{r['id']}] [{r['purpose']}] {r['title']} ({r['url']}"
+    lines = "\n".join(f"[{r['id']}] [{r.get('section') or r['purpose']}] {r['title']} ({r['url']}"
                       f"{', ' + r['published'] if r.get('published') else ''})\n{(r.get('highlight') or '')[:500]}"
                       for r in rows)
     return structured_call(

@@ -7,7 +7,7 @@ You're a non-EU worker in Finland and you just lost your job. You type one sente
 1. **What we know so far**: the facts we know about you, filled in as you answer, editable any time. Gemini picks up to 3 extra questions that make your steps specific.
 2. **How long you can stay** to look for work. A plain rules engine works this out, not AI, and the rule is checked live against Migri's page.
 3. **Your steps, in order** (Step 1, 2, 3…), each with a source from migri.fi, kela.fi, infofinland.fi or tyomarkkinatori.fi. Add info to any step and Exa and Gemini update that step and the ones after it.
-4. **Perks and support**: the job search certificate first, then city discounts for unemployed jobseekers and employer hiring incentives (with their conditions; they only "may apply"). Each one links to its source, with the page date.
+4. **Perks and support** picked for your situation by plain rules: always the job search certificate, city discounts and employer hiring incentives (they only "may apply"); then, depending on your answers, your unemployment fund or other Kela support, free language courses and cheaper travel. Each item links to its source, with the page date, and "Why you see these" explains each pick.
 5. **How we know this**: every rule, source and live check in one place.
 6. **Ask**: ask a question in your own words; Exa answers from live sources, official ones for rules.
 

@@ -306,10 +306,35 @@ class Incentive(Display):
             kind="check_conditions", label="Check the conditions", url=self.source_url)
 
 
+class SupportItem(Display):
+    """Support from the topics picked for this person (fund, Kela, language courses, travel)."""
+    topic: str
+    name: str
+    what_it_is: str
+    how_to_get: Optional[str] = None
+    who_can_get_it: Optional[str] = None
+    source_url: str
+    source_date: Optional[str] = None
+    read_by: Optional[Literal["context.dev"]] = None
+
+    def _defaults(self):
+        return self.name, self.what_it_is, PrimaryAction(kind="open_link", label="See how", url=self.source_url)
+
+
+class PerkTopic(BaseModel):
+    """A topic shown on Perks and support: what it is, the fixed "why this helps" line, and why it was picked."""
+    id: str
+    title: str
+    label: str
+    reason: str
+
+
 class PerksAndSupport(BaseModel):
+    topics: list[PerkTopic] = Field(default_factory=list)
     certificate: Optional[Certificate] = None
     discounts: list[Discount] = Field(default_factory=list)
     incentives: list[Incentive] = Field(default_factory=list)
+    support: list[SupportItem] = Field(default_factory=list)
 
 
 class OpportunitiesRequest(BaseModel):
@@ -320,6 +345,7 @@ class OpportunityCounts(BaseModel):
     certificate: int = 0
     discounts: int = 0
     incentives: int = 0
+    support: int = 0
     total: int = 0
 
 
@@ -332,7 +358,7 @@ class OpportunitiesResponse(BaseModel):
     def _count_sections(self):
         p = self.perks_and_support
         c = OpportunityCounts(certificate=int(p.certificate is not None), discounts=len(p.discounts),
-                              incentives=len(p.incentives))
-        c.total = c.certificate + c.discounts + c.incentives
+                              incentives=len(p.incentives), support=len(p.support))
+        c.total = c.certificate + c.discounts + c.incentives + c.support
         self.counts = c
         return self

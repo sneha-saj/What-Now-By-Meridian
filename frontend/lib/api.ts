@@ -208,10 +208,18 @@ export async function opportunitiesStream(facts: Facts, onEvent: (e: StreamEvent
 export type Certificate = Short & { name: string; how_to_get: string; source_url: string; source_date?: string | null; read_by?: "context.dev" | null };
 export type Discount = Short & { name: string; discount: string; proof_needed: string; city: string; source_url: string; source_date?: string | null; read_by?: "context.dev" | null };
 export type Incentive = Short & { name: string; what_it_is: string; conditions_plain: string; may_apply: boolean; caveat: string; source_url: string; source_date?: string | null; read_by?: "context.dev" | null };
-export type PerksAndSupport = { certificate?: Certificate | null; discounts: Discount[]; incentives: Incentive[] };
+export type SupportItem = Short & {
+  topic: string; name: string; what_it_is: string; how_to_get?: string | null; who_can_get_it?: string | null;
+  source_url: string; source_date?: string | null; read_by?: "context.dev" | null;
+};
+/** A topic on Perks and support: picked by plain rules from the person's answers, with the reason. */
+export type PerkTopic = { id: string; title: string; label: string; reason: string };
+export type PerksAndSupport = {
+  topics?: PerkTopic[]; certificate?: Certificate | null; discounts: Discount[]; incentives: Incentive[]; support?: SupportItem[];
+};
 export type OpportunitiesResponse = {
   perks_and_support: PerksAndSupport;
-  counts?: { certificate: number; discounts: number; incentives: number; total: number };
+  counts?: { certificate: number; discounts: number; incentives: number; support?: number; total: number };
   mock: boolean;
 };
 

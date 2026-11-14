@@ -306,8 +306,8 @@ def _rows(res, purpose: str) -> list[dict]:
 
 
 def search_opportunities(field: str, city: str, today: str, city_domains: list[str], perk_queries: dict) -> dict | None:
-    """The Perks and support searches for one city, in parallel, cached 24h: one Exa search per perk
-    (certificate, discounts, incentives) on the official + city domains. Returns raw rows per section,
+    """The Perks and support searches for one city, in parallel, cached 24h: one Exa search per perk topic picked
+    for the person (see opportunities.perk_topics) on the official + city domains. Returns raw rows per section,
     or None if Exa is unavailable."""
     official = list(config.OFFICIAL_DOMAINS) + city_domains
     calls = [(f"perks:{k}", "perks", dict(
@@ -321,4 +321,5 @@ def search_opportunities(field: str, city: str, today: str, city_domains: list[s
             kw = dict(kw)
             return section, _rows(_search(exa, kw.pop("query"), purpose, **kw), purpose)
         return dict(_parallel(one, calls))
-    return _cached_search("opportunities", {"field": field, "city": city, "today": today, "v": 2}, run)
+    return _cached_search("opportunities", {"field": field, "city": city, "today": today, "topics": sorted(perk_queries),
+                                            "v": 3}, run)

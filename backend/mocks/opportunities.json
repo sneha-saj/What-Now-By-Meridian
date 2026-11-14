@@ -37,6 +37,26 @@
           "source_url": "https://example.com/pay-subsidy",
           "source_date": "2026-10-05"
         }
+      ],
+      "topics": [
+        {
+          "id": "certificate",
+          "title": "Job search certificate",
+          "label": "Unlocks jobseeker discounts",
+          "reason": "Shown to everyone: most jobseeker discounts ask for it."
+        },
+        {
+          "id": "discounts",
+          "title": "Discounts for jobseekers",
+          "label": "Saves money while you look for work",
+          "reason": "Shown to everyone in Helsinki."
+        },
+        {
+          "id": "incentives",
+          "title": "Help employers can get",
+          "label": "Can make you easier to hire",
+          "reason": "Shown to everyone: worth mentioning to employers."
+        }
       ]
     },
     "mock": true

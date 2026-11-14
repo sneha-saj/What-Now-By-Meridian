@@ -752,8 +752,13 @@ Response (illustrative):
 
 ## POST /opportunities (and /opportunities/stream)
 
-Separate from the roadmap (which stays short: deadline and this week's 3 steps). Returns only **Perks and
-support**: 3 Exa searches (one per perk) on the trusted domains plus the city's official sites (`CITY_DOMAINS`
+Separate from the steps. Returns **Perks and support**, with topics picked by plain rules (no AI) from a fixed list
+(`PERK_TOPICS` in the country config): the certificate, discounts and employer incentives always; then, in order,
+your unemployment fund (in a fund or not sure), other Kela support (not in a fund or not sure), free language courses
+(work-based or specialist permit), cheaper travel (city known); max 5. `perks_and_support.topics` lists them with a
+fixed `label` and the `reason` they were picked; `perks_and_support.support` holds the items for the extra topics
+(`topic`, `name`, `what_it_is`, `who_can_get_it`, `how_to_get`, source and date). Extra topics with nothing confirmed
+by a page are hidden. Before: 3 Exa searches (one per perk) on the trusted domains plus the city's official sites (`CITY_DOMAINS`
 in the country config), and 1 Gemini call to sort them, run in parallel and cached for 24 hours. Every item has
 an Exa source URL and the page date Exa reported (`source_date`, `null` if the page has none); nothing is
 invented. Without Exa it comes back empty with `mock: true`.

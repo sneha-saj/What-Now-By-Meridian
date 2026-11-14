@@ -176,9 +176,25 @@ CITY_DOMAINS = {
     "oulu": ["ouka.fi"],
 }
 
-# Perks: always try the job search certificate first, then discounts and employer hiring incentives.
-PERK_QUERIES = {
-    "certificate": "how to get a job search certificate proof of unemployed jobseeker status for discounts",
-    "discounts": "discounts for unemployed jobseekers swimming sports museums culture adult education courses",
-    "incentives": "employer hiring subsidy for hiring an unemployed jobseeker city employment benefit",
+# Perks and support: a fixed list of topics. Plain code in opportunities.perk_topics() picks which ones fit the
+# person (no AI): the first three always, the rest from their answers. Each topic is one Exa search on the trusted
+# + city domains; Context.dev then reads the top page. Nothing is shown unless a page confirms it.
+# `label` is the fixed line shown with the topic ("why this helps"); `query` is what Exa searches for.
+PERK_TOPICS = {
+    "certificate": {"title": "Job search certificate", "label": "Unlocks jobseeker discounts",
+                    "query": "how to get a job search certificate proof of unemployed jobseeker status for discounts"},
+    "discounts": {"title": "Discounts for jobseekers", "label": "Saves money while you look for work",
+                  "query": "discounts for unemployed jobseekers swimming sports museums culture adult education courses"},
+    "incentives": {"title": "Help employers can get", "label": "Can make you easier to hire",
+                   "query": "employer hiring subsidy for hiring an unemployed jobseeker city employment benefit"},
+    "fund_support": {"title": "Your unemployment fund", "label": "Earnings-related allowance and union help",
+                     "query": "unemployment fund earnings-related daily allowance how to apply when unemployed"},
+    "kela_extra": {"title": "Other support from Kela", "label": "Helps with Kela",
+                   "query": "Kela general housing allowance and other support for an unemployed person"},
+    "language_courses": {"title": "Free language courses", "label": "Finnish or Swedish helps you find work",
+                         "query": "free Finnish language course for unemployed immigrant jobseekers integration training"},
+    "travel_discount": {"title": "Cheaper travel", "label": "Lower travel costs while you look for work",
+                        "query": "public transport ticket discount for unemployed jobseekers"},
 }
+ALWAYS_PERKS = ["certificate", "discounts", "incentives"]
+MAX_PERK_TOPICS = 5

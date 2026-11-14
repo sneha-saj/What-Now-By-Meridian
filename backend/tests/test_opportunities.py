@@ -67,7 +67,8 @@ def test_opportunity_searches_are_limited_and_scoped(monkeypatch, tmp_path):
 
     monkeypatch.setattr(exa_search, "CACHE_PATH", tmp_path / "cache.json")
     monkeypatch.setattr(exa_search, "_get_client", lambda: FakeExa())
-    from countries.finland import PERK_QUERIES
+    from countries.finland import PERK_TOPICS
+    PERK_QUERIES = {t: PERK_TOPICS[t]["query"] for t in ("certificate", "discounts", "incentives")}
     out = exa_search.search_opportunities("cook", "Helsinki", "2026-11-14", ["hel.fi"], PERK_QUERIES)
     assert len(calls) == len(PERK_QUERIES) == 3
     assert all(kw["num_results"] <= 5 for _, kw in calls)
@@ -75,3 +76,50 @@ def test_opportunity_searches_are_limited_and_scoped(monkeypatch, tmp_path):
     assert set(out) == {"perks:certificate", "perks:discounts", "perks:incentives"}
     exa_search.search_opportunities("cook", "Helsinki", "2026-11-14", ["hel.fi"], PERK_QUERIES)
     assert len(calls) == 3  # second time from cache
+
+
+# ---------- which topics (plain rules) ----------
+
+def _ids(**facts):
+    return [t.id for t in opps.perk_topics(Facts(**facts))]
+
+
+def test_always_the_certificate_discounts_and_incentives_first():
+    assert _ids()[:3] == ["certificate", "discounts", "incentives"]
+
+
+def test_fund_members_get_fund_help_and_others_get_kela():
+    assert "fund_support" in _ids(unemployment_fund="yes") and "kela_extra" not in _ids(unemployment_fund="yes")
+    assert "kela_extra" in _ids(unemployment_fund="no") and "fund_support" not in _ids(unemployment_fund="no")
+    assert {"fund_support", "kela_extra"} <= set(_ids(unemployment_fund="not_sure"))
+
+
+def test_language_courses_for_work_permits_and_travel_only_with_a_city():
+    work = dict(citizenship_group="other", permit_type="work_based", unemployment_fund="yes")
+    assert "language_courses" in _ids(**work) and "travel_discount" not in _ids(**work)
+    assert "travel_discount" not in _ids(**work, city="Espoo")  # capped at 5: fund and courses come first
+    assert "travel_discount" in _ids(citizenship_group="other", permit_type="permanent", unemployment_fund="yes", city="Espoo")
+    assert "language_courses" not in _ids(citizenship_group="other", permit_type="permanent", unemployment_fund="yes")
+
+
+def test_at_most_five_topics_each_with_a_reason():
+    topics = opps.perk_topics(Facts(citizenship_group="other", permit_type="work_based", unemployment_fund="not_sure",
+                                    city="Espoo"))
+    assert len(topics) == 5 and all(t.reason and t.label for t in topics)
+
+
+def test_extra_topics_are_searched_and_shown_with_their_sources(monkeypatch):
+    seen = {}
+    raw = {**{k: [dict(r) for r in v] for k, v in RAW.items()},
+           "perks:kela_extra": [{"title": "Housing allowance", "url": "https://www.kela.fi/housing", "published": "2026-08-01",
+                                 "highlight": "General housing allowance", "purpose": "perks"}]}
+    monkeypatch.setattr(opps.exa_search, "search_opportunities",
+                        lambda field, city, today, domains, queries: seen.setdefault("q", queries) and raw)
+    monkeypatch.setattr(opps.gemini, "write_opportunities", lambda *a: {**NOTES, "support": [
+        {"row_id": "R4", "name": "General housing allowance", "what_it_is": "Help with rent", "how_to_get": "Apply in OmaKela"},
+        {"row_id": "R99", "name": "Invented", "what_it_is": "x"}]})
+    out = opps.build(Facts(**{**FACTS.model_dump(), "unemployment_fund": "no"}), 3, TODAY)
+    assert "kela_extra" in seen["q"] and "fund_support" not in seen["q"]
+    assert [s.name for s in out.perks_and_support.support] == ["General housing allowance"]
+    assert out.perks_and_support.support[0].source_url == "https://www.kela.fi/housing"
+    assert [t.id for t in out.perks_and_support.topics][:4] == ["certificate", "discounts", "incentives", "kela_extra"]

@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { getCode, loadHealth, setCode, useHealth } from "@/lib/access";
 import { CheckIcon } from "./icons";
 import { Button, cx } from "./primitives";
 
 /** "Judge? Enter access code": only shown when the server uses access codes. With a valid code the app runs live
  *  (Exa, Gemini, Context.dev, ElevenLabs); without one it's the free demo. */
-export function AccessCode({ className }: { className?: string }) {
+export function AccessCode({ className, initiallyOpen = false, onCancel }: {
+  className?: string; initiallyOpen?: boolean; onCancel?: () => void;
+}) {
   const health = useHealth();
-  const [open, setOpen] = useState(false);
+  const inputId = useId();
+  const [open, setOpen] = useState(initiallyOpen);
   const [text, setText] = useState("");
   const [state, setState] = useState<"idle" | "checking" | "wrong">("idle");
   if (!health?.access_codes) return null;
@@ -47,11 +50,11 @@ export function AccessCode({ className }: { className?: string }) {
         </p>
       ) : (
         <form onSubmit={check} className="flex flex-wrap items-center gap-2">
-          <label htmlFor="access-code" className="font-bold">Access code</label>
-          <input id="access-code" value={text} autoFocus autoComplete="off" onChange={(e) => { setText(e.target.value); setState("idle"); }}
+          <label htmlFor={inputId} className="font-bold">Access code</label>
+          <input id={inputId} value={text} autoFocus autoComplete="off" onChange={(e) => { setText(e.target.value); setState("idle"); }}
             className="min-h-11 w-48 rounded-xl border border-ink/25 bg-card px-3" />
           <Button type="submit" variant="chip" disabled={!text.trim() || state === "checking"}>{state === "checking" ? "Checking…" : "Use code"}</Button>
-          <Button type="button" variant="quiet" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button type="button" variant="quiet" onClick={() => { setOpen(false); onCancel?.(); }}>Cancel</Button>
           {state === "wrong" && <span role="alert" className="basis-full text-warn">That code didn&apos;t work. Check it and try again.</span>}
         </form>
       )}

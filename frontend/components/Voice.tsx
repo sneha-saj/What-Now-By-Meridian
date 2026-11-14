@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MicIcon, SpeakerIcon, StopIcon } from "./icons";
 import { cx } from "./primitives";
-import { accessHeaders, useHealth } from "@/lib/access";
+import { AccessCode } from "./AccessCode";
+import { accessHeaders, useHealth, type Health } from "@/lib/access";
 
-/** Whether voice (ElevenLabs) is available for this browser: set up on the server and, if access codes are used,
- *  a valid code entered. Buttons stay hidden until the server says yes. */
+/** Whether voice (ElevenLabs) is available for this browser. */
 export function useVoice(): boolean {
   return !!useHealth()?.voice;
 }
@@ -14,17 +15,45 @@ export function useVoice(): boolean {
 export const VOICE_NOTE = "Your recording is sent to ElevenLabs to turn it into text. We don't keep it.";
 const MAX_SECONDS = 60;
 
+function VoiceGate({ health, onClose }: { health: Health | null; onClose: () => void }) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
+      <section role="dialog" aria-modal="true" aria-labelledby="voice-gate-title"
+        className="w-full max-w-md space-y-4 rounded-2xl bg-card p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <h2 id="voice-gate-title" className="font-serif text-2xl font-semibold">
+            {health?.access_codes && !health.live ? "Speak is unavailable in demo mode" : "Speak is unavailable right now"}
+          </h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-full px-2 py-1 text-xl hover:bg-paper-deep">×</button>
+        </div>
+        {!health ? <p className="text-ink-soft">Checking voice availability…</p>
+          : health.access_codes && !health.live ? <>
+            <p className="text-ink-soft">If you&apos;re a judge, enter your access code to use the microphone.</p>
+            <AccessCode initiallyOpen onCancel={onClose} />
+          </> : <p className="text-ink-soft">Voice isn&apos;t available right now. You can type your answer instead.</p>}
+      </section>
+    </div>, document.body,
+  );
+}
+
 /** Voice typing: tap the mic to record, tap again to stop; the text is passed to `onText`.
  *  `inside` = a small icon placed inside a text box on the right (the box needs `relative` and right padding). */
 export function MicButton({ onText, disabled, className, inside = false }: {
   onText: (text: string) => void; disabled?: boolean; className?: string; inside?: boolean;
 }) {
-  const on = useVoice();
+  const health = useHealth();
+  const on = !!health?.voice;
+  const [gateOpen, setGateOpen] = useState(false);
   const [state, setState] = useState<"idle" | "recording" | "working" | "error">("idle");
   const rec = useRef<MediaRecorder | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); rec.current?.stream.getTracks().forEach((t) => t.stop()); }, []);
-  if (!on || typeof window === "undefined" || !("MediaRecorder" in window)) return null;
+  useEffect(() => { if (on) setGateOpen(false); }, [on]);
 
   async function start() {
     try {
@@ -58,18 +87,18 @@ export function MicButton({ onText, disabled, className, inside = false }: {
   }
 
   const label = state === "recording" ? "Stop recording" : state === "working" ? "Turning your voice into text" : "Speak instead of typing";
-  const visibleLabel = state === "recording" ? "Stop recording" : state === "working" ? "Writing it down…" : "Speak instead";
   const status = state === "recording" ? "Listening… tap stop when you're done" : state === "working" ? "Writing it down…"
     : state === "error" ? "Couldn't use the microphone. Please type instead." : "";
   const button = (
-    <button type="button" disabled={disabled || state === "working"} aria-label={label} title={`${label}. ${VOICE_NOTE}`}
-      onClick={() => (state === "recording" ? rec.current?.stop() : start())}
+    <button type="button" disabled={disabled || state === "working"}
+      aria-label={on ? label : health?.access_codes ? "Speak instead of typing; judge access required" : "Speak instead of typing; voice unavailable"}
+      title={on ? `${label}. ${VOICE_NOTE}` : "Speak instead of typing"}
+      onClick={() => !on ? setGateOpen(true) : state === "recording" ? rec.current?.stop() : start()}
       className={cx("inline-flex shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50",
-        inside ? "h-9 w-9 border shadow-sm" : "min-h-11 gap-2 border px-3",
+        inside ? "h-9 w-9 border shadow-sm" : "h-11 w-11 border",
         state === "recording" ? "border-accent bg-accent text-paper motion-safe:animate-pulse"
           : state === "error" ? "border-warn text-warn" : "border-ink/25 bg-card text-ink-soft hover:border-ink hover:text-ink")}>
       {state === "recording" ? <StopIcon /> : state === "working" ? <span aria-hidden className="motion-safe:animate-pulse">…</span> : <MicIcon className={inside ? "h-4 w-4" : "h-5 w-5"} />}
-      {!inside && <span className="text-sm font-bold">{visibleLabel}</span>}
     </button>
   );
   if (inside)
@@ -78,12 +107,14 @@ export function MicButton({ onText, disabled, className, inside = false }: {
         {status && <span aria-hidden className="hidden rounded-full bg-card px-2 py-0.5 text-xs text-ink-soft shadow-sm sm:inline">{status}</span>}
         {button}
         <span aria-live="polite" className="sr-only">{status}</span>
+        {gateOpen && typeof document !== "undefined" && <VoiceGate health={health} onClose={() => setGateOpen(false)} />}
       </span>
     );
   return (
     <span className={cx("inline-flex items-center gap-2", className)}>
       {button}
       <span aria-live="polite" className="text-sm text-ink-soft">{status}</span>
+      {gateOpen && typeof document !== "undefined" && <VoiceGate health={health} onClose={() => setGateOpen(false)} />}
     </span>
   );
 }

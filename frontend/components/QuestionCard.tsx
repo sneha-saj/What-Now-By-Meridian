@@ -127,14 +127,14 @@ export function Welcome({ busy, onSubmit, onStart, saved = [], onOpen, onDelete,
         className="space-y-3 rounded-2xl border border-rule bg-card/60 p-5">
         <label htmlFor="welcome-text" className="block font-bold">Or tell me in your own words</label>
         <p className="text-sm text-ink-soft">Write what happened in a sentence or two and I&apos;ll skip the questions you&apos;ve already answered.</p>
+        <div className="relative">
         <textarea id="welcome-text" rows={3} value={text} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (text.trim()) onSubmit(text.trim()); } }}
           placeholder="For example: I worked as a cook in Helsinki for a year on a work permit. I was laid off last Friday."
-          className="w-full rounded-xl border border-ink/25 bg-card p-4 outline-none placeholder:text-ink-soft/80 focus:border-ink" />
-        <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" variant="chip" disabled={busy || !text.trim()}>Show my steps</Button>
-          <MicButton disabled={busy} onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
+          className="w-full rounded-xl border border-ink/25 bg-card p-4 pr-14 outline-none placeholder:text-ink-soft/80 focus:border-ink" />
+          <MicButton inside disabled={busy} onText={(t) => setText((cur) => (cur.trim() ? `${cur.trim()} ${t}` : t))} />
         </div>
+        <Button type="submit" variant="chip" disabled={busy || !text.trim()}>Show my steps</Button>
         {voice && <p className="flex items-center gap-1.5 text-xs text-ink-soft"><MicIcon className="h-3.5 w-3.5" /> You can also tap the mic and say it out loud. {VOICE_NOTE}</p>}
       </form>
       {saved.length > 0 && (

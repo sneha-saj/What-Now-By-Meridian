@@ -56,3 +56,31 @@ def test_referrals_have_drafted_messages_and_sources():
     body = client.post("/referrals", json={"facts": {"occupation": "data analyst", "city": "Espoo"}}).json()
     assert body["referrals"]
     assert all(r["message"] and r["source"]["url"] for r in body["referrals"])
+
+
+def test_use_mock_returns_saved_examples_without_external_calls(monkeypatch):
+    import main
+
+    monkeypatch.setattr(main.config, "USE_MOCK", True)
+    monkeypatch.setattr(main, "get_live_check", lambda _id: {"status": "error", "checked_at": "2026-11-14T10:00:00+00:00", "evidence_snippet": "Mock mode"})
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("External service called while USE_MOCK is enabled")
+
+    monkeypatch.setattr(main.gemini, "extract_facts", unexpected)
+    monkeypatch.setattr(main.gemini, "write_steps", unexpected)
+    monkeypatch.setattr(main.gemini, "draft_messages", unexpected)
+    monkeypatch.setattr(main.exa_search, "search_official", unexpected)
+    monkeypatch.setattr(main.exa_search, "search_referrals", unexpected)
+
+    intake_body = client.post("/intake", json={"text": "ignored in saved example mode"}).json()
+    assert intake_body["mock"] is True
+    assert intake_body["facts"]["occupation"] == "software developer"
+
+    facts = {"citizenship": "non_eu", "permit_type": "work", "job_end_date": "2026-11-01",
+             "over_two_years_on_work_permit": False, "occupation": "developer", "city": "Espoo"}
+    plan_body = client.post("/plan", json={"facts": facts}).json()
+    assert plan_body["mock"] is True
+    assert len(plan_body["this_week"]) == 3
+    referrals_body = client.post("/referrals", json={"facts": facts}).json()
+    assert referrals_body["mock"] is True
+    assert len(referrals_body["referrals"]) == 2

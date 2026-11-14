@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.exa_search_cache.json
 
 # node
 node_modules/

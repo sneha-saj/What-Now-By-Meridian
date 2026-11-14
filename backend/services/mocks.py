@@ -4,7 +4,28 @@ TODO: verify every URL below before the demo.
 """
 
 import re
+import json
+from copy import deepcopy
 from datetime import date, timedelta
+from pathlib import Path
+
+_EXAMPLES = json.loads(Path(__file__).with_name("mock_responses.json").read_text())
+
+
+def example_facts() -> dict:
+    return deepcopy(_EXAMPLES["intake_facts"])
+
+
+def example_sources() -> list[dict]:
+    return deepcopy(_EXAMPLES["official_sources"])
+
+
+def example_steps() -> list[dict]:
+    return deepcopy(_EXAMPLES["steps"])
+
+
+def example_referrals() -> tuple[list[dict], list[str]]:
+    return deepcopy(_EXAMPLES["referrals"]), list(_EXAMPLES["messages"])
 
 SOURCES = {
     "migri": {"title": "Migri – Finnish Immigration Service", "url": "https://migri.fi/en/home"},

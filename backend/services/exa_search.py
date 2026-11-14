@@ -3,12 +3,54 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import config
 
 log = logging.getLogger(__name__)
 
 _client = None
+CACHE_PATH = Path(__file__).resolve().parent.parent / ".exa_search_cache.json"
+CACHE_TTL = timedelta(hours=24)
+
+
+def _cache_key(kind: str, params: dict) -> str:
+    serialized = json.dumps({"kind": kind, **params}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _cache_read(key: str):
+    try:
+        cache = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+        entry = cache.get(key)
+        if not entry:
+            return None
+        expires_at = datetime.fromisoformat(entry["expires_at"])
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= expires_at:
+            return None
+        return entry["value"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _cache_write(key: str, value) -> None:
+    try:
+        try:
+            cache = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            cache = {}
+        cache[key] = {
+            "expires_at": (datetime.now(timezone.utc) + CACHE_TTL).isoformat(),
+            "value": value,
+        }
+        CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    except OSError as exc:
+        log.warning("Could not save Exa result cache: %s", exc)
 
 
 def _get_client():
@@ -49,6 +91,10 @@ def _to_sources(results) -> list[dict]:
 
 def search_official(queries: list[str], per_query: int = 3) -> list[dict] | None:
     """Search only official Finnish sources (Migri, Kela, InfoFinland, Työmarkkinatori)."""
+    key = _cache_key("official", {"queries": queries, "per_query": per_query})
+    cached = _cache_read(key)
+    if cached is not None:
+        return cached
     exa = _get_client()
     if exa is None:
         return None
@@ -67,7 +113,10 @@ def search_official(queries: list[str], per_query: int = 3) -> list[dict] | None
     except Exception as e:  # noqa: BLE001
         log.warning("Exa official search failed, using mock: %s", e)
         return None
-    return list(seen.values()) or None
+    results = list(seen.values()) or None
+    if results:
+        _cache_write(key, results)
+    return results
 
 
 def search_referrals(occupation: str, city: str, n: int = 3) -> list[dict] | None:
@@ -76,6 +125,10 @@ def search_referrals(occupation: str, city: str, n: int = 3) -> list[dict] | Non
     TODO: for richer, verified lists, move this to Exa's Agent API (/agent) —
     the build-with-exa skill says list-building belongs there, not Websets.
     """
+    key = _cache_key("referrals", {"occupation": occupation, "city": city, "n": n})
+    cached = _cache_read(key)
+    if cached is not None:
+        return cached
     exa = _get_client()
     if exa is None:
         return None
@@ -113,4 +166,7 @@ def search_referrals(occupation: str, city: str, n: int = 3) -> list[dict] | Non
             "why": f"Company in {city} that hires {occupation}s.",
             "source": {"title": c.title or c.url, "url": c.url},
         })
-    return contacts[: n * 2] or None
+    results = contacts[: n * 2] or None
+    if results:
+        _cache_write(key, results)
+    return results

@@ -33,9 +33,13 @@ def rules():
 @app.post("/intake", response_model=IntakeResponse)
 def intake(req: IntakeRequest):
     today = date.today()
-    raw = gemini.extract_facts(req.text, today.isoformat())
-    mock = raw is None
-    if mock:
+    if config.USE_MOCK:
+        raw = mocks.example_facts()
+        mock = True
+    else:
+        raw = gemini.extract_facts(req.text, today.isoformat())
+        mock = raw is None
+    if raw is None:
         raw = mocks.extract_facts(req.text, today)
     facts = Facts.model_validate({k: v for k, v in raw.items() if k in Facts.model_fields})
     return IntakeResponse(facts=facts, questions=questions_for(facts, today), mock=mock)
@@ -62,12 +66,13 @@ def plan(req: PlanRequest):
         "Kela unemployment benefit for immigrants",
     ]
     steps = None
-    sources = exa_search.search_official(queries)
+    sources = mocks.example_sources() if config.USE_MOCK else exa_search.search_official(queries)
+    raw_steps = None
     if sources:
         for i, s in enumerate(sources):
             s["id"] = f"S{i + 1}"
         by_id = {s["id"]: s for s in sources}
-        raw_steps = gemini.write_steps(f.model_dump(mode="json"), deadline.model_dump(mode="json"), sources)
+        raw_steps = mocks.example_steps() if config.USE_MOCK else gemini.write_steps(f.model_dump(mode="json"), deadline.model_dump(mode="json"), sources)
         if raw_steps:
             steps = []
             for st in raw_steps[:3]:
@@ -77,8 +82,8 @@ def plan(req: PlanRequest):
                     steps.append(Step(title=st["title"], detail=st["detail"], sources=cited))
             steps = steps or None
 
-    mock = steps is None
-    if mock:
+    mock = config.USE_MOCK or steps is None
+    if steps is None:
         steps = [Step(**s) for s in mocks.steps(d.status)]
     return PlanResponse(deadline=deadline, this_week=steps, mock=mock)
 
@@ -88,12 +93,17 @@ def referrals(req: ReferralRequest):
     occupation = req.facts.occupation or "professional"
     city = req.facts.city or "Helsinki"
 
-    contacts = exa_search.search_referrals(occupation, city)
-    mock = contacts is None
-    if mock:
+    if config.USE_MOCK:
+        contacts, messages = mocks.example_referrals()
+        mock = True
+    else:
+        contacts = exa_search.search_referrals(occupation, city)
+        mock = contacts is None
+    if contacts is None:
         contacts = mocks.referrals(occupation, city)
-
-    messages = gemini.draft_messages(req.facts.model_dump(mode="json"), contacts)
+        messages = None
+    if not config.USE_MOCK:
+        messages = gemini.draft_messages(req.facts.model_dump(mode="json"), contacts)
     if messages is None:
         messages = [mocks.message(c, occupation) for c in contacts]
 

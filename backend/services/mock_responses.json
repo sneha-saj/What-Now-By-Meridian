@@ -1,0 +1,28 @@
+{
+  "intake_facts": {
+    "citizenship": "non_eu",
+    "permit_type": "work",
+    "job_end_date": "2026-11-01",
+    "over_two_years_on_work_permit": false,
+    "occupation": "software developer",
+    "city": "Helsinki"
+  },
+  "official_sources": [
+    {"title": "Migri – End of employment", "url": "https://migri.fi/en/end-of-employment", "snippet": "You may have three or six months to find a new job, depending on your permit."},
+    {"title": "Job Market Finland – Register as a jobseeker", "url": "https://tyomarkkinatori.fi/en", "snippet": "Register as a jobseeker when your employment ends."},
+    {"title": "Kela – Unemployment", "url": "https://www.kela.fi/unemployment", "snippet": "Check whether you may be eligible for unemployment benefits."}
+  ],
+  "steps": [
+    {"title": "Check your permit details with Migri", "detail": "Confirm your permit end date and the protection period that applies to you.", "source_ids": ["S1"]},
+    {"title": "Register as a jobseeker", "detail": "Register with Job Market Finland as soon as your employment ends.", "source_ids": ["S2"]},
+    {"title": "Check your benefit options", "detail": "Ask Kela or your unemployment fund what support may be available.", "source_ids": ["S3"]}
+  ],
+  "referrals": [
+    {"name": "International House Helsinki", "role": "Guidance for internationals", "organization": "International House Helsinki", "why": "Offers guidance for people settling and working in Finland.", "source": {"title": "International House Helsinki", "url": "https://ihhelsinki.fi/"}},
+    {"name": "Work in Finland", "role": "International talent services", "organization": "Work in Finland", "why": "Shares information about working and finding opportunities in Finland.", "source": {"title": "Work in Finland", "url": "https://www.workinfinland.com/"}}
+  ],
+  "messages": [
+    "Hello, I am a software developer in Finland and I am looking for my next role. Would you be available for a short conversation about opportunities? Thank you, [Your name]",
+    "Hello, I am a software developer in Finland and I am exploring new roles. Could you point me to useful resources or relevant employers? Thank you, [Your name]"
+  ]
+}

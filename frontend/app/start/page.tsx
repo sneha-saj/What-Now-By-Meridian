@@ -374,6 +374,7 @@ export default function StartPage() {
               )}
               {tab === "opportunities" && (
                 <div className="space-y-6">
+                  {ask}
                   {!s.facts.city ? (
                     <section className="rounded-2xl border border-rule bg-card px-5 py-5">
                       <h2 className="font-serif text-3xl font-semibold">Perks and support where you live</h2>
@@ -388,7 +389,6 @@ export default function StartPage() {
                       <Opportunities data={s.opp ?? {}} loading={oppLoading} />
                     </>
                   )}
-                  {ask}
                 </div>
               )}
               {tab === "how" && <HowWeKnow embedded />}

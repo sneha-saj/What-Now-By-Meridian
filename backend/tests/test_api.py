@@ -325,7 +325,7 @@ def _msg(text):
 
 
 def test_chat_asks_one_question_at_a_time_and_tracks_guesses(monkeypatch):
-    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"citizenship_group": "other", "city": "Helsinki"})
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"lost_job": True, "citizenship_group": "other", "city": "Helsinki"})
     body = client.post("/chat", json={"messages": _msg("I lost my job in Helsinki")}).json()
     assert body["step"] == "about_you"
     assert body["question"]["id"] == "permit_type"
@@ -347,7 +347,7 @@ def test_chat_edited_facts_win_over_answers_and_extraction(monkeypatch):
 def test_chat_does_not_reextract_when_last_message_is_from_assistant(monkeypatch):
     monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: pytest.fail("re-extracted an old message"))
     msgs = [*_msg("hi"), {"role": "assistant", "text": "Which permit?"}]
-    body = client.post("/chat", json={"messages": msgs, "facts": {"citizenship_group": "other", "permit_type": "permanent", "city": "Espoo", "field": ""}}).json()
+    body = client.post("/chat", json={"messages": msgs, "facts": {"lost_job": True, "citizenship_group": "other", "permit_type": "permanent", "city": "Espoo", "field": ""}}).json()
     assert body["step"] == "deadline"
 
 
@@ -404,11 +404,11 @@ def test_chat_stream_sends_progress_then_result(verified, live_services):
 
 def test_chat_stream_explains_who_did_what(monkeypatch, verified):
     import json
-    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"citizenship_group": "other", "city": "Helsinki"})
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"lost_job": True, "citizenship_group": "other", "city": "Helsinki"})
     with client.stream("POST", "/chat/stream", json={"messages": _msg("I lost my job in Helsinki")}) as r:
         events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
     texts = [e["text"] for e in events if e["type"] == "app"]
-    assert texts[0] == "Picked out from your message: citizenship, city"
+    assert texts[0] == "Picked out from your message: whether you lost your job, citizenship, city"
     assert texts[1].startswith("Asking about permit type (still needed for your deadline: permit type")
 
     with client.stream("POST", "/chat/stream", json={"facts": WORK_FACTS, "step": "deadline"}) as r:
@@ -456,12 +456,12 @@ def test_question_order_is_fixed_required_then_optional():
     from questions import next_field
     f = Facts()
     order = []
-    answers = {"citizenship_group": "other", "permit_type": "work_based", "years_on_work_permit": "under_2",
+    answers = {"lost_job": True, "citizenship_group": "other", "permit_type": "work_based", "years_on_work_permit": "under_2",
                "job_end_date": "2026-11-01", "city": "Helsinki", "field": ""}
     while (field := next_field(f)) is not None:
         order.append(field)
         f = f.model_copy(update={field: answers[field]})
-    assert order == ["citizenship_group", "permit_type", "years_on_work_permit", "job_end_date", "city", "field"]
+    assert order == ["lost_job", "citizenship_group", "permit_type", "years_on_work_permit", "job_end_date", "city", "field"]
 
 
 def test_skipped_optional_question_is_not_asked_again(verified, live_services):
@@ -532,3 +532,23 @@ def test_eu_citizens_get_a_kind_message_and_links_not_a_roadmap(monkeypatch):
     assert body["out_of_scope"] is True and "doesn't depend on your job" in body["reply"]
     assert [l["url"] for l in body["links"]][0] == "https://tyomarkkinatori.fi/en"
     assert "deadline" not in body and "question" not in body
+
+
+
+def test_message_not_about_job_loss_asks_first_then_redirects_kindly(monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: {"lost_job": None})
+    q = client.post("/chat", json={"messages": _msg("I broke up")}).json()
+    assert q["question"]["id"] == "lost_job" and q["step"] == "about_you"
+    assert {"value": "false", "label": "No, it's something else"} in q["question"]["options"]
+
+    no = client.post("/chat", json={"facts": q["facts"], "answers": {"lost_job": "false"}}).json()
+    assert no["out_of_scope"] is True and "relationship" in no["reply"] and no["links"]
+
+    yes = client.post("/chat", json={"facts": q["facts"], "answers": {"lost_job": "true"}}).json()
+    assert yes["question"]["id"] == "citizenship_group"
+
+
+def test_job_loss_in_the_message_skips_the_check(monkeypatch):
+    monkeypatch.setattr(main.gemini, "extract_facts", lambda *a: None)  # keyword fallback
+    body = client.post("/chat", json={"messages": _msg("I was laid off last week, I'm on a work permit")}).json()
+    assert body["facts"]["lost_job"] is True and body["question"]["id"] != "lost_job"

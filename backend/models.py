@@ -10,6 +10,7 @@ YearsBucket = Literal["under_2", "over_2", "not_sure"]
 
 
 class Facts(BaseModel):
+    lost_job: Optional[bool] = None  # did they lose (or are about to lose) a job? None = not clear yet
     citizenship_group: Optional[CitizenshipGroup] = None
     citizenship_country: Optional[str] = None
     permit_type: Optional[str] = None

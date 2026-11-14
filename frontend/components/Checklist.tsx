@@ -3,7 +3,7 @@ import { FIELDS, display } from "@/lib/facts";
 import { CheckIcon } from "./icons";
 import { cx } from "./primitives";
 
-const REQUIRED = ["citizenship_group", "permit_type", "years_on_work_permit", "job_end_date"] as const;
+const REQUIRED = ["lost_job", "citizenship_group", "permit_type", "years_on_work_permit", "job_end_date"] as const;
 const OPTIONAL = ["city", "field"] as const;
 
 /** Beside the question: what we know so far. ✓ filled, ○ still needed. */

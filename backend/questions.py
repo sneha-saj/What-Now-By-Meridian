@@ -52,7 +52,10 @@ def optional_missing(f: Facts) -> list[str]:
 
 
 def next_field(f: Facts) -> str | None:
-    """Deterministic: the first missing required field, then the first unanswered optional one."""
+    """Deterministic: first check this is about losing a job, then the first missing required field,
+    then the first unanswered optional one."""
+    if f.lost_job is None and f.job_end_date is None:
+        return "lost_job"
     needed = needed_fields(f)
     if needed:
         return needed[0]

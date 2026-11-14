@@ -312,7 +312,7 @@ def build_referrals(f: Facts) -> ReferralResponse:
 
 # ---------- guided chat ----------
 
-FIELD_NAMES = {"citizenship_group": "citizenship", "citizenship_country": "country", "permit_type": "permit type",
+FIELD_NAMES = {"lost_job": "whether you lost your job", "citizenship_group": "citizenship", "citizenship_country": "country", "permit_type": "permit type",
                "years_on_work_permit": "time on a work permit", "job_end_date": "last day of work", "city": "city",
                "field": "your work", "studied_in_finland": "studies in Finland", "family_in_finland": "family in Finland"}
 NEXT_LABEL = {"deadline": "Show me this week", "this_week": "Help me find my way in"}
@@ -326,6 +326,13 @@ FIRST_REPLY = "Thank you for telling me. One quick question: "
 CITIZEN_REPLY = ("Good news: as an EU/EEA or Finnish citizen, your right to stay in Finland doesn't depend on your job, "
                  "so there's no permit deadline to worry about. What Now? is built for people on a residence permit, "
                  "but these official services can help you with income and your next job.")
+NOT_JOB_LOSS_REPLY = ("I'm sorry you're going through this. What Now? only helps with losing a job in Finland and "
+                      "what it means for your residence permit. If your permit is based on a relationship that has "
+                      "ended, Migri explains what happens next.")
+NOT_JOB_LOSS_LINKS = [
+    Source(title="Residence permits and changes in your situation (Migri)", url="https://migri.fi/en/home"),
+    Source(title="Living in Finland (InfoFinland)", url="https://www.infofinland.fi/en"),
+]
 CITIZEN_LINKS = [
     Source(title="Register as a jobseeker (Job Market Finland)", url="https://tyomarkkinatori.fi/en"),
     Source(title="Unemployment benefits (Kela)", url="https://www.kela.fi/unemployment"),
@@ -417,6 +424,10 @@ def run_chat(req: ChatRequest) -> ChatResponse:
                                 mock=mock)
 
     facts, confirmed = _merge_chat_facts(req, extracted)
+    if facts.lost_job is False:
+        activity.emit({"type": "app", "who": "code", "text": "Not about losing a job: showing useful links instead"})
+        return ChatResponse(reply=NOT_JOB_LOSS_REPLY, step="about_you", facts=facts, confirmed_fields=confirmed,
+                            out_of_scope=True, links=NOT_JOB_LOSS_LINKS, mock=mock)
     if facts.citizenship_group == "eu_eea":
         # Not who What Now? is for: a kind message and useful links, no roadmap.
         activity.emit({"type": "app", "who": "code", "text": "EU/EEA citizen: no permit deadline, showing useful links"})

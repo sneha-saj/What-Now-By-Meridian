@@ -8,6 +8,7 @@ export const YES_NO: Choice[] = [{ value: "true", label: "Yes" }, { value: "fals
 
 /** The facts we show, in order. `required` ones are what the deadline needs. */
 export const FIELDS: FieldDef[] = [
+  { id: "lost_job", label: "Lost your job", kind: "choice", choices: YES_NO },
   { id: "citizenship_group", label: "Citizenship", required: true, kind: "choice", choices: [
     { value: "eu_eea", label: "EU / EEA citizen" }, { value: "other", label: "Outside the EU / EEA" }, { value: "unknown", label: "Not sure" }] },
   { id: "citizenship_country", label: "Country", kind: "text" },
@@ -35,6 +36,7 @@ export function display(f: FieldDef, value: unknown, facts?: Facts): string | nu
   if (f.id === "job_end_date" && facts?.job_end_date_approximate) return `Last day around ${formatShortDate(String(value))}`;
   if (f.id === "years_on_work_permit" && typeof value === "number") return `${value} ${value === 1 ? "year" : "years"} on a work permit`;
   if (f.kind === "date") return `Last day ${formatShortDate(String(value))}`;
+  if (f.id === "lost_job") return value === true || value === "true" ? "Lost my job" : "Not about a job";
   if (f.choices === YES_NO) return value === true || value === "true" ? f.label : `Not ${f.label.toLowerCase()}`;
   if (f.choices) return f.choices.find((c) => c.value === String(value))?.label ?? String(value);
   return String(value);

@@ -89,10 +89,17 @@ def job_end_date(t: str, today: date) -> date | None:
     return None
 
 
+JOB_LOSS = re.compile(r"\b(laid off|layoff|lay-off|let go|fired|dismiss\w*|redundan\w*|lost (my|the|a) job|"
+                      r"job (ended|ends|is ending)|contract (ended|ends|is ending)|unemploy\w*|notice period|"
+                      r"last day (at|of) work)\b")
+
+
 def extract_facts(text: str, today: date) -> dict:
     """Keyword heuristics standing in for Gemini."""
     t = text.lower()
     facts: dict = {"job_was_in_finland": not OUTSIDE_FINLAND.search(t)}
+    if JOB_LOSS.search(t):
+        facts["lost_job"] = True
 
     if m := re.search(r"\bfrom (" + "|".join(EU_COUNTRIES) + r")\b", t):
         facts.update(citizenship_group="eu_eea", citizenship_country=m.group(1).title())

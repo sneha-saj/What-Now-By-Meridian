@@ -74,6 +74,14 @@ REQUIRED_FIELDS = ["citizenship_group", "permit_type", "years_on_work_permit", "
 OPTIONAL_FIELDS = ["city", "field"]
 
 QUESTION_BANK = {
+    # Asked first, only when the message didn't say anything about losing a job.
+    "lost_job": {
+        "question": "Have you lost your job, or are you about to?",
+        "options": [
+            {"value": "true", "label": "Yes"},
+            {"value": "false", "label": "No, it's something else"},
+        ],
+    },
     "citizenship_group": {
         "question": "Are you a citizen of an EU or EEA country?",
         "options": [

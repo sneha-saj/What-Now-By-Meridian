@@ -96,6 +96,7 @@ def _json_call(prompt: str) -> Any | None:
 # ---------- /intake ----------
 
 class Extracted(BaseModel):
+    lost_job: Optional[bool] = None
     job_was_in_finland: Optional[bool] = None
     citizenship_group: Optional[str] = None
     citizenship_country: Optional[str] = None
@@ -111,6 +112,8 @@ class Extracted(BaseModel):
 
 EXTRACT_PROMPT = """You read a short message from someone who lost (or is losing) their job and extract facts.
 Use null whenever something is not stated or unclear. Never guess. Today is {today}.
+- lost_job: true if they lost their job or are about to (laid off, fired, contract ending, notice); false if the
+  message is clearly about something else; null if it doesn't say
 - job_was_in_finland: false only if they clearly say the job was outside Finland
 - citizenship_group: "eu_eea" (EU/EEA/Swiss citizen) | "other" (any other country) | "unknown"
 - citizenship_country: country name in English

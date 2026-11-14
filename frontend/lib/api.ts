@@ -1,4 +1,5 @@
 export type Facts = {
+  lost_job?: boolean | null;
   citizenship_group?: "eu_eea" | "other" | "unknown" | null;
   citizenship_country?: string | null;
   permit_type?: string | null;

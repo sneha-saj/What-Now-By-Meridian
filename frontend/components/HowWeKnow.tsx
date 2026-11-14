@@ -1,7 +1,7 @@
 "use client";
 // The "How we know this" content, shared by this page and the tab on /start.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SyntheticEvent } from "react";
 import { api, type RulesResponse } from "@/lib/api";
 
 function groupBy<T>(items: T[], key: (t: T) => string): Record<string, T[]> {
@@ -16,18 +16,28 @@ function checkedTime(value: string) {
 export function HowWeKnow({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<RulesResponse | null>(null);
   const [error, setError] = useState(false);
-  useEffect(() => { api.rules().then(setData).catch(() => setError(true)); }, []);
+  const [loadLive, setLoadLive] = useState(false);
+  useEffect(() => {
+    if (loadLive) api.rules().then(setData).catch(() => setError(true));
+  }, [loadLive]);
+  const load = (event: SyntheticEvent<HTMLDetailsElement>) => {
+    if (event.currentTarget.open) setLoadLive(true);
+  };
   return (
-    <div className={embedded ? "space-y-8" : "mx-auto max-w-5xl space-y-8 px-5 py-12 sm:px-8"}>
+    <div className={embedded ? "space-y-4" : "mx-auto max-w-3xl space-y-4 px-5 py-10 sm:px-8"}>
       <header className="space-y-2">
-                {embedded ? <h2 className="font-serif text-3xl font-semibold">How we know this</h2>
+        {embedded ? <h2 className="font-serif text-3xl font-semibold">How we know this</h2>
           : <h1 className="font-serif text-4xl font-semibold sm:text-5xl">How we know this</h1>}
-        <p className="text-calm-700">We store each rule with its official source. Once a day, Exa reads the official Migri page and Gemini checks that it still says the same thing. If something looks different, we warn you instead of guessing.</p>
+        <p className="text-ink-soft">We link to official sources and check key rules daily. Open a section if you want the details.</p>
       </header>
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">How long you can stay: Finland's rules</h2>
-        {error && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">We couldn’t load the latest rule checks. Please check Migri directly.</p>}
-        <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-calm-100">
+      <details className="group rounded-2xl bg-white shadow-sm ring-1 ring-calm-100" onToggle={load}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-5 py-4 hover:bg-calm-50 [&::-webkit-details-marker]:hidden">
+          <span><span className="block text-lg font-semibold">Permit rules</span><span className="text-sm text-ink-soft">Sources and checks behind the dates we show</span></span>
+          <span aria-hidden="true" className="text-xl text-ink-soft group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="space-y-3 border-t border-calm-100 p-4">
+        {error && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">We couldn’t load the latest rule checks. Please check <a href="https://migri.fi/en" target="_blank" rel="noreferrer" className="underline">Migri</a> directly.</p>}
+        {!error && <div className="overflow-x-auto rounded-xl ring-1 ring-calm-100">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-calm-50 text-calm-700"><tr>
               <th className="p-3 font-semibold">Rule</th><th className="p-3 font-semibold">What it says</th><th className="p-3 font-semibold">Source</th><th className="p-3 font-semibold">In force since</th><th className="p-3 font-semibold">Live check</th>
@@ -41,28 +51,47 @@ export function HowWeKnow({ embedded = false }: { embedded?: boolean }) {
             </tr>)}</tbody>
           </table>
           {!data && !error && <p className="p-4 text-sm text-calm-500">Loading latest checks…</p>}
+        </div>}
         </div>
-      </section>
-      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-calm-100">
-        <h2 className="mb-2 text-xl font-semibold">How we read official pages</h2>
+      </details>
+      <details className="group rounded-2xl bg-white shadow-sm ring-1 ring-calm-100">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-5 py-4 hover:bg-calm-50 [&::-webkit-details-marker]:hidden">
+          <span><span className="block text-lg font-semibold">How the checks work</span><span className="text-sm text-ink-soft">How Exa, Context.dev and Gemini help</span></span>
+          <span aria-hidden="true" className="text-xl text-ink-soft group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="border-t border-calm-100 p-5 text-sm">
         <ul className="list-inside list-disc space-y-1 text-calm-700">
           <li><strong>Exa</strong> finds the right official pages and the sentences that matter.</li>
           <li><strong>Context.dev</strong> opens the whole page when exact details matter: Migri&apos;s rule page for the daily rule check, and the top page for each perk (the job search certificate, discounts with their price and the proof you need, employer incentives with their conditions). Items read this way are marked “Read from the page by Context.dev”.</li>
+          <li><strong>Gemini</strong> checks whether Migri&apos;s page still supports the rule we show.</li>
           <li>Only the public page address is sent to them, never your answers. If a page can&apos;t be read, we use Exa&apos;s summary instead.</li>
         </ul>
-      </section>
-      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-calm-100">
-        <h2 className="mb-2 text-xl font-semibold">Trusted websites</h2>
+        </div>
+      </details>
+      <details className="group rounded-2xl bg-white shadow-sm ring-1 ring-calm-100">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-5 py-4 hover:bg-calm-50 [&::-webkit-details-marker]:hidden">
+          <span><span className="block text-lg font-semibold">Trusted websites</span><span className="text-sm text-ink-soft">Official sites we rely on</span></span>
+          <span aria-hidden="true" className="text-xl text-ink-soft group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="border-t border-calm-100 p-5 text-sm">
         <ul className="list-inside list-disc space-y-1 text-calm-700">{(data?.trusted_domains ?? ["migri.fi", "kela.fi", "infofinland.fi", "tyomarkkinatori.fi"]).map((domain) => <li key={domain}>{domain}</li>)}</ul>
-      </section>
-      {!!data?.sources_used?.length && (
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Every page Exa used</h2>
-          <p className="text-sm text-ink-soft">Public pages only. We never store your answers.</p>
-          {Object.entries(groupBy(data.sources_used, (s) => s.step)).map(([step, rows]) => (
-            <div key={step} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-calm-100">
-              <h3 className="font-bold">{step}</h3>
-              <ul className="mt-2 space-y-1 text-sm">
+        </div>
+      </details>
+      <details className="group rounded-2xl bg-white shadow-sm ring-1 ring-calm-100" onToggle={load}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-5 py-4 hover:bg-calm-50 [&::-webkit-details-marker]:hidden">
+          <span><span className="block text-lg font-semibold">Source pages</span><span className="text-sm text-ink-soft">Recent public pages behind steps and support</span></span>
+          <span aria-hidden="true" className="text-xl text-ink-soft group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="space-y-3 border-t border-calm-100 p-5">
+          {!data && !error && <p className="text-sm text-ink-soft">Loading source pages…</p>}
+          {error && <p className="text-sm text-warn">Couldn&apos;t load source pages right now.</p>}
+          {data && (!data.sources_used?.length ? <p className="text-sm text-ink-soft">No source pages recorded yet.</p> : Object.entries(groupBy(data.sources_used, (s) => s.step)).map(([step, rows]) => (
+            <details key={step} className="group/step rounded-xl ring-1 ring-calm-100">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">
+                <span>{step} <span className="font-normal text-ink-soft">· {rows.length} {rows.length === 1 ? "page" : "pages"}</span></span>
+                <span aria-hidden="true" className="text-xl text-ink-soft group-open/step:rotate-180">⌄</span>
+              </summary>
+              <ul className="space-y-2 border-t border-calm-100 p-4 text-sm">
                 {rows.slice(0, 12).map((s) => (
                   <li key={s.url} className="flex flex-wrap gap-x-2">
                     <a className="underline" href={s.url} target="_blank" rel="noreferrer">{s.title}</a>
@@ -70,10 +99,10 @@ export function HowWeKnow({ embedded = false }: { embedded?: boolean }) {
                   </li>
                 ))}
               </ul>
-            </div>
-          ))}
-        </section>
-      )}
+            </details>
+          )))}
+        </div>
+      </details>
       <p className="text-sm text-calm-700">Guidance, not legal advice. For permit decisions, contact Migri or your union.</p>
     </div>
   );

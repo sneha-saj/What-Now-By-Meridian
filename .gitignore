@@ -28,3 +28,4 @@ next-env.d.ts
 .vscode/
 .idea/
 .claude/settings.local.json
+.tts_cache/

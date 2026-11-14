@@ -1,4 +1,4 @@
-"""Tests never call real Gemini, Exa or Context.dev, and never touch the real cache files.
+"""Tests never call real Gemini, Exa, Context.dev or ElevenLabs, and never touch the real cache files.
 
 FORCE_MOCKS makes config return no API keys, so no real client can be created. Tests that need a
 "live" path monkeypatch the client or service functions explicitly.
@@ -26,6 +26,8 @@ def _isolated_caches_and_limits(monkeypatch, tmp_path):
     monkeypatch.setattr(live_check, "PAGE_CACHE_PATH", tmp_path / "pages.json")
     monkeypatch.setattr(sources_log, "PATH", tmp_path / "sources.json")
     monkeypatch.setattr(context_dev, "CACHE_PATH", tmp_path / "context_dev.json")
+    from integrations import elevenlabs
+    monkeypatch.setattr(elevenlabs, "CACHE_DIR", tmp_path / "tts")
     limits.reset()
     yield
     limits.reset()

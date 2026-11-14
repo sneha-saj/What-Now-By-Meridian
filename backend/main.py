@@ -7,8 +7,9 @@ import logging
 import queue
 import threading
 
-from fastapi import Body, FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi import Body, FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
+from fastapi.responses import Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import activity
@@ -26,6 +27,7 @@ from rules import calculate_deadline
 from countries.finland import (DEADLINE_RULES, MAX_PERSONAL, PERSONAL_QUESTIONS, SOURCE_TITLE, SOURCE_URL,
                                TRUSTED_DOMAINS)
 from live_check import check_all_rules, get_live_check
+from integrations import elevenlabs
 from services import exa_search, gemini, mocks
 
 app = FastAPI(title="What Now? by Meridian", description="Calm next steps for people who lost their job in Finland. See docs/api.md.")
@@ -36,7 +38,7 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS,
 @app.get("/health")
 def health():
     return {"ok": True, "gemini": bool(config.gemini_key()), "exa": bool(config.exa_key()),
-            "elevenlabs": config.ENABLE_ELEVENLABS}
+            "context_dev": bool(config.context_key()), "voice": elevenlabs.available()}
 
 
 @app.get("/rules", summary="Deadline rules, their latest live check and trusted domains")
@@ -620,3 +622,33 @@ def opportunities_stream(req: OpportunitiesRequest):
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ---------- voice (ElevenLabs) ----------
+
+@app.post("/voice/transcribe", summary="Voice typing: a short recording in, its text out")
+async def voice_transcribe(request: Request):
+    """Send the raw recording as the body (e.g. Content-Type: audio/webm from the browser's MediaRecorder), max 5 MB.
+    Returns {"text": ...}. 503 when voice isn't set up, so the app can hide the mic. Nothing is stored here."""
+    if not elevenlabs.available():
+        raise HTTPException(503, "Voice typing isn't available right now.")
+    audio = await request.body()
+    if not audio or len(audio) > elevenlabs.MAX_AUDIO_BYTES:
+        raise HTTPException(413 if audio else 422, "Please record a shorter message (up to about a minute).")
+    text = elevenlabs.transcribe(audio, request.headers.get("content-type", "audio/webm"))
+    if not text:
+        raise HTTPException(502, "Couldn't understand that recording. Please try again or type instead.")
+    return {"text": text}
+
+
+class SpeakRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=elevenlabs.MAX_TTS_CHARS)
+
+
+@app.post("/voice/speak", summary="Listen: text in, MP3 out (cached 7 days)")
+def voice_speak(req: SpeakRequest):
+    audio = elevenlabs.speak(req.text)
+    if audio is None:
+        raise HTTPException(503, "Listening isn't available right now.")
+    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=86400"})
+

@@ -37,11 +37,19 @@ export function HowWeKnow({ embedded = false }: { embedded?: boolean }) {
               <td className="p-3 text-calm-700">{rule.description}<p className="mt-1 text-xs text-calm-500">Applies to: {rule.applies_to.join(", ")}</p></td>
               <td className="p-3"><a className="text-calm-700 underline" href={rule.source_url} target="_blank" rel="noreferrer">Migri</a></td>
               <td className="p-3">{rule.in_force_since}</td>
-              <td className="p-3"><span className={rule.live_check.status === "verified" ? "font-bold text-verified" : rule.live_check.status === "mismatch" ? "font-bold text-warn" : "text-ink-soft"}>{rule.live_check.status === "verified" ? "✓ Matches Migri today" : rule.live_check.status === "mismatch" ? "May have changed" : "Couldn't check right now"}</span><p className="mt-1 text-xs text-calm-500">{checkedTime(rule.live_check.checked_at)}</p>{rule.live_check.evidence_snippet && <p className="mt-1 max-w-xs text-xs text-calm-700">{rule.live_check.evidence_snippet}</p>}</td>
+              <td className="p-3"><span className={rule.live_check.status === "verified" ? "font-bold text-verified" : rule.live_check.status === "mismatch" ? "font-bold text-warn" : "text-ink-soft"}>{rule.live_check.status === "verified" ? "✓ Matches Migri today" : rule.live_check.status === "mismatch" ? "May have changed" : "Couldn't check right now"}</span><p className="mt-1 text-xs text-calm-500">{checkedTime(rule.live_check.checked_at)}</p>{rule.live_check.evidence_snippet && <p className="mt-1 max-w-xs text-xs text-calm-700">{rule.live_check.evidence_snippet}</p>}{rule.live_check.read_by && rule.live_check.status !== "error" && <p className="mt-1 text-xs font-bold text-ink">{rule.live_check.read_by === "context.dev" ? "▤ Page read by Context.dev" : "Page read by Exa"}</p>}</td>
             </tr>)}</tbody>
           </table>
           {!data && !error && <p className="p-4 text-sm text-calm-500">Loading latest checks…</p>}
         </div>
+      </section>
+      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-calm-100">
+        <h2 className="mb-2 text-xl font-semibold">How we read official pages</h2>
+        <ul className="list-inside list-disc space-y-1 text-calm-700">
+          <li><strong>Exa</strong> finds the right official pages and the sentences that matter.</li>
+          <li><strong>Context.dev</strong> opens the whole page when exact details matter: Migri&apos;s rule page for the daily rule check, and the top page for each perk (the job search certificate, discounts with their price and the proof you need, employer incentives with their conditions). Items read this way are marked “Read from the page by Context.dev”.</li>
+          <li>Only the public page address is sent to them, never your answers. If a page can&apos;t be read, we use Exa&apos;s summary instead.</li>
+        </ul>
       </section>
       <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-calm-100">
         <h2 className="mb-2 text-xl font-semibold">Trusted websites</h2>

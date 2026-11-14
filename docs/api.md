@@ -765,5 +765,11 @@ invented. Without Exa it comes back empty with `mock: true`.
 | `perks_and_support.incentives` | Employer hiring incentives: `name`, `what_it_is`, `conditions_plain`, `may_apply`, `caveat`, `source_url`, `source_date` | Never claims eligibility ("may apply"); conditions like "3 months unemployed" that clash with the permit deadline get a plain caveat |
 | `counts` | `certificate`, `discounts`, `incentives`, `total` | |
 
+**Context.dev** (optional, `CONTEXT_DEV_API_KEY`): before Gemini runs, the top page Exa found for each perk is read in
+full with `POST /v1/web/scrape` (`formats.json` with a schema per perk, `mainContentOnly`), up to 3 pages per city,
+cached 24h. Certificate steps and discounts then come straight from the page; incentive pages are given to Gemini as
+the page's full details so it can judge "may apply". Those items have `read_by: "context.dev"`. If Context.dev is
+not set up or fails, everything comes from Exa + Gemini as before.
+
 The stream sends the same events as `/chat/stream`, with the partial `perks_and_support`.
 Example: `backend/mocks/opportunities.json` (used for `USE_MOCK=true`).

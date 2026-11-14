@@ -49,7 +49,7 @@ export type Deadline = {
   warning?: string | null;
   warning_link?: string | null;
 };
-export type LiveCheck = { status: "verified" | "mismatch" | "error"; checked_at: string; evidence_snippet: string };
+export type LiveCheck = { status: "verified" | "mismatch" | "error"; checked_at: string; evidence_snippet: string; read_by?: "context.dev" | "exa" | null };
 export type Rule = { id: string; description: string; months: number | null; applies_to: string[]; source_url: string; in_force_since: string; last_verified: string; live_check: LiveCheck };
 export type UsedSource = { url: string; title: string; domain: string; date?: string | null; step: string; used_at: string };
 export type RulesResponse = { rules: Rule[]; trusted_domains: string[]; sources_used?: UsedSource[] };
@@ -130,8 +130,10 @@ export type ExaEvent = {
 };
 export type GeminiEvent = { type: "gemini"; status: "working" | "done" | "cached"; purpose: string };
 export type AppEvent = { type: "app"; who: "gemini" | "code" | "app"; text: string };
+export type ContextEvent = { type: "context"; status: "reading" | "read" | "cached" | "failed"; purpose: string; url: string; partial?: boolean };
 export type StreamEvent =
   | { type: "progress"; stage: ProgressStage }
+  | ContextEvent
   | ExaEvent
   | GeminiEvent
   | AppEvent
@@ -203,9 +205,9 @@ export async function opportunitiesStream(facts: Facts, onEvent: (e: StreamEvent
   }
 }
 
-export type Certificate = Short & { name: string; how_to_get: string; source_url: string; source_date?: string | null };
-export type Discount = Short & { name: string; discount: string; proof_needed: string; city: string; source_url: string; source_date?: string | null };
-export type Incentive = Short & { name: string; what_it_is: string; conditions_plain: string; may_apply: boolean; caveat: string; source_url: string; source_date?: string | null };
+export type Certificate = Short & { name: string; how_to_get: string; source_url: string; source_date?: string | null; read_by?: "context.dev" | null };
+export type Discount = Short & { name: string; discount: string; proof_needed: string; city: string; source_url: string; source_date?: string | null; read_by?: "context.dev" | null };
+export type Incentive = Short & { name: string; what_it_is: string; conditions_plain: string; may_apply: boolean; caveat: string; source_url: string; source_date?: string | null; read_by?: "context.dev" | null };
 export type PerksAndSupport = { certificate?: Certificate | null; discounts: Discount[]; incentives: Incentive[] };
 export type OpportunitiesResponse = {
   perks_and_support: PerksAndSupport;

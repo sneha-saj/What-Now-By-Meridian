@@ -17,6 +17,23 @@ function More({ more, all, toggle }: { more: number; all: boolean; toggle: () =>
   return more > 0 ? <Button variant="quiet" onClick={toggle}>{all ? "Show fewer" : `Show ${more} more`}</Button> : null;
 }
 
+/** Shown on items whose details Context.dev read from the page itself, with why that matters. */
+function ReadBy({ by }: { by?: "context.dev" | null }) {
+  if (by !== "context.dev") return null;
+  const why = "Context.dev opened this official page and pulled out these exact details, so they're the page's own words, not a search snippet.";
+  return (
+    <span className="group relative inline-flex">
+      <span tabIndex={0} title={why}
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-ink/20 bg-card px-3 py-1 text-sm font-bold text-ink">
+        <span aria-hidden>▤</span> Read from the page by Context.dev<span className="sr-only">. {why}</span>
+      </span>
+      <span role="tooltip" aria-hidden className="pointer-events-none invisible absolute bottom-full left-0 z-20 mb-2 w-[min(20rem,80vw)] rounded-xl border border-rule bg-card p-3 text-sm font-normal opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+        {why}
+      </span>
+    </span>
+  );
+}
+
 function Src({ url, title, date }: { url: string; title: string; date?: string | null }) {
   return <SourceChip live={!isSample(url)} source={{ title, url, published: date }} />;
 }
@@ -63,7 +80,7 @@ export function Opportunities({
             <div className="rounded-2xl border border-verified/30 bg-verified-soft/50 p-4">
               <p className="font-bold">Start here: {perks.certificate.name}</p>
               <p className="mt-1">{perks.certificate.how_to_get}</p>
-              <div className="mt-2"><Src url={perks.certificate.source_url} title="How to get it" date={perks.certificate.source_date} /></div>
+              <div className="mt-2 flex flex-wrap gap-2"><Src url={perks.certificate.source_url} title="How to get it" date={perks.certificate.source_date} /><ReadBy by={perks.certificate.read_by} /></div>
             </div>
           )}
           {discounts.shown.length > 0 && (
@@ -72,7 +89,7 @@ export function Opportunities({
                 <li key={i}>
                   <p><strong>{d.name}</strong> · {d.discount}</p>
                   <p className="text-sm text-ink-soft">Proof needed: {d.proof_needed}</p>
-                  <div className="mt-1"><Src url={d.source_url} title={d.city} date={d.source_date} /></div>
+                  <div className="mt-1 flex flex-wrap gap-2"><Src url={d.source_url} title={d.city} date={d.source_date} /><ReadBy by={d.read_by} /></div>
                 </li>
               ))}
               <More {...discounts} />
@@ -86,7 +103,7 @@ export function Opportunities({
               <p className={cx("mt-2 rounded-lg px-3 py-2", inc.may_apply ? "bg-verified-soft text-verified" : "bg-warn-soft text-warn")}>
                 {inc.may_apply ? "May apply to you. " : "Probably doesn't apply right now. "}{inc.caveat}
               </p>
-              <div className="mt-2"><Src url={inc.source_url} title="Conditions" date={inc.source_date} /></div>
+              <div className="mt-2 flex flex-wrap gap-2"><Src url={inc.source_url} title="Conditions" date={inc.source_date} /><ReadBy by={inc.read_by} /></div>
             </div>
           ))}
         </div>

@@ -28,7 +28,11 @@ That one command installs everything on the first run (Python 3.11 venv + npm), 
 
 **No API keys? It still runs.** Every service falls back to mock data, and the UI shows a "Demo mode" note. Add `EXA_API_KEY` and `GEMINI_API_KEY` to `.env` for live mode.
 
-Optional: add `CONTEXT_DEV_API_KEY` to `.env` to fetch the exact Migri rule page through Context.dev's Scrape API. The rule check runs at most once per day per page, shares the page across rules, and uses Exa if Context.dev fails. The key stays on the backend; no personal answers are sent in the scrape request. Exa is still needed for steps, perks, and Ask.
+Optional: add `CONTEXT_DEV_API_KEY` to `.env` (get one at context.dev/dashboard/api-keys) so Context.dev's Scrape API reads whole official pages where exact details matter:
+- **Migri's rule page** for the daily live rule check (shared across rules, once a day).
+- **Perks and support**: the top page for each perk is read with a JSON Schema, so the certificate steps, each discount with its price and the proof you need, and each incentive's conditions come from the page itself. These items show "Read from the page by Context.dev".
+
+It's called with plain HTTP from `backend/integrations/context_dev.py`: cached 24h, `maxAgeMs` 1 day, 30 s deadline with partial results, no retries, paused on 429/402. Only the public page URL is sent, never your answers. If it fails, Exa's summary is used. Try one page by hand (one live call): `cd backend && .venv/bin/python -m integrations.context_dev https://migri.fi/en/home`
 
 Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make test`, `make backend`, `make frontend`, `make clean`.
 
@@ -93,7 +97,7 @@ frontend/
 ## Tech challenges
 - [ ] **Gemini API (Google DeepMind)**: (in progress) understands the user's sentence, writes the plan with sources and sorts perks and support. Also confirms live that Migri's page still matches our stored rules.
 - [x] **OpenAI Codex**: used to build the Finland country config, rules engine + tests, live rule check and the "How we know this" page (see commits marked "codex:" or "[codex]" and the related pull requests).
-- [x] **Context.dev**: optional official Migri page retrieval for the cached live rule check; Exa remains the fallback.
+- [x] **Context.dev**: reads whole official pages for exact details: Migri's rule page for the live rule check, and the perk pages (certificate, discounts, incentives) with a JSON Schema. Shown in the app as "Read from the page by Context.dev"; Exa remains the fallback.
 - [ ] **Oxylabs Web API**: not used. It was planned for company career pages, which went away with job search.
 - [ ] **ElevenLabs**: (planned) read the plan aloud / voice input for accessibility.
 - [ ] **Gemma (Google DeepMind)**: (idea) strip personal details before data leaves the device.

@@ -66,6 +66,7 @@ function Added({ items }: { items?: AddedItem[] }) {
 
 /** How long you can stay, said gently (no "deadline"). The date always comes from the rules engine. */
 function StayHeader({ d, note, onPickExactDate }: { d: Deadline; note?: string | null; onPickExactDate: () => void }) {
+  const byContext = (d.live_checks as { read_by?: string | null }[]).some((c) => c.read_by === "context.dev");
   const date = d.deadline_date ? `${d.deadline_is_approximate ? "around " : ""}${formatDate(d.deadline_date)}` : null;
   return (
     <section id="step-deadline" aria-label="How long you can stay" className="scroll-mt-24 space-y-3 rounded-3xl border border-rule bg-card p-5 sm:p-7">
@@ -106,6 +107,12 @@ function StayHeader({ d, note, onPickExactDate }: { d: Deadline; note?: string |
             <CheckIcon /> Checked against migri.fi today{d.rule_in_force_since && <span className="font-normal">· rule since {formatDate(d.rule_in_force_since)}</span>}
           </a>
         )}
+        {byContext && (
+          <span title="Context.dev read Migri's page today, and Gemini compared it with this rule."
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-ink/20 bg-card px-3 py-1 text-sm font-bold text-ink">
+            <span aria-hidden>▤</span> Migri&apos;s page read by Context.dev
+          </span>
+        )}
         {d.check_status === "error" && (
           <p className="inline-flex min-h-9 items-center gap-2 rounded-full bg-paper-deep px-3 py-1 text-ink-soft">
             Couldn&apos;t check migri.fi right now · <a href="/how-we-know" className="underline">how we check</a>
@@ -118,6 +125,12 @@ function StayHeader({ d, note, onPickExactDate }: { d: Deadline; note?: string |
       <details className="text-ink-soft">
         <summary className="min-h-9 cursor-pointer font-bold text-ink">Why this date?</summary>
         <p className="mt-2">{d.explanation}</p>
+        {d.check_status !== "none" && (
+          <p className="mt-2">
+            How we checked: {byContext ? "Context.dev read Migri's page today" : "Exa read Migri's page today"}, and Gemini
+            compared it with this rule. The date itself always comes from our rules, not from AI.
+          </p>
+        )}
         <Quotes sources={[d.source]} live={d.check_status === "verified"} />
       </details>
       {note && <p className="text-ink-soft">{note}</p>}

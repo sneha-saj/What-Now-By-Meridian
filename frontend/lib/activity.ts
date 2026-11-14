@@ -1,7 +1,7 @@
 import type { StreamEvent } from "./api";
 import { hostOf } from "@/components/primitives";
 
-export type Who = "gemini" | "exa" | "code";
+export type Who = "gemini" | "exa" | "context" | "code";
 export type LogLine = { id: number; who: Who; text: string; at: string };
 
 const PURPOSE_LABEL: Record<string, string> = {
@@ -20,6 +20,13 @@ export function toLogLine(e: StreamEvent): LogLine | null {
     if (e.status === "working") return line("gemini", `is ${e.purpose}…`);
     if (e.status === "cached") return line("gemini", `reused today's answer (${e.purpose})`);
     return null;
+  }
+  if (e.type === "context") {
+    const where = hostOf(e.url);
+    if (e.status === "reading") return line("context", `is reading the whole page on ${where} for ${e.purpose}…`);
+    if (e.status === "read") return line("context", `read ${where} and pulled out the exact details${e.partial ? " (part of the page)" : ""}`);
+    if (e.status === "cached") return line("context", `reused today's read of ${where}`);
+    return line("context", `couldn't read ${where}; using Exa's summary instead`);
   }
   if (e.type === "exa") {
     const what = PURPOSE_LABEL[e.purpose] ?? e.purpose;

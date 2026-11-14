@@ -8,12 +8,14 @@ import { cx } from "./primitives";
 const WHO: Record<Who, { label: string; className: string }> = {
   gemini: { label: "Gemini", className: "text-accent-ink" },
   exa: { label: "Exa", className: "text-verified" },
+  context: { label: "Context.dev", className: "text-ink" },
   code: { label: "Rules", className: "text-ink" },
 };
 
 function Mark({ who }: { who: Who }) {
   if (who === "exa") return <GlobeIcon className="h-3.5 w-3.5 text-verified" />;
   if (who === "gemini") return <span aria-hidden className="text-accent-ink">✦</span>;
+  if (who === "context") return <span aria-hidden className="text-ink">▤</span>;
   return <span aria-hidden className="text-ink">⚙</span>;
 }
 

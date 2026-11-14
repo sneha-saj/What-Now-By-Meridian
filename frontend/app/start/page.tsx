@@ -231,7 +231,7 @@ export default function StartPage() {
   const editFact = (field: Field, value: Facts[Field]) => send({ edited_facts: { [field]: value } as Partial<Facts> });
   const tab: Tab = (TABS.some((t) => t.id === s.tab) ? s.tab : "roadmap") as Tab;
 
-  // Ask lives inside the Roadmap and Opportunities tabs, so answers appear where you are.
+  // Ask lives on the Steps tab (the Opportunities tab links to it).
   const ask = (
     <AskPanel facts={s.facts} entries={s.asks}
       onEntry={(e) => {
@@ -442,7 +442,6 @@ export default function StartPage() {
               )}
               {tab === "opportunities" && (
                 <div className="space-y-6">
-                  {ask}
                   {!s.facts.city ? (
                     <section className="rounded-2xl border border-rule bg-card px-5 py-5">
                       <h2 className="font-serif text-3xl font-semibold">Perks and support where you live</h2>
@@ -457,6 +456,14 @@ export default function StartPage() {
                       <Opportunities data={s.opp ?? {}} loading={oppLoading} />
                     </>
                   )}
+                  {/* Ask lives on the Steps tab only; this just takes you there. */}
+                  <p className="border-t border-rule pt-4 text-ink-soft">
+                    Have a question about a perk?{" "}
+                    <button className="min-h-9 font-bold text-ink underline"
+                      onClick={() => { goTab("roadmap"); setTimeout(() => document.getElementById("ask-input")?.focus(), 150); }}>
+                      Ask on the Steps tab →
+                    </button>
+                  </p>
                 </div>
               )}
               {tab === "how" && <HowWeKnow embedded />}

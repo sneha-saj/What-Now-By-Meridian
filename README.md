@@ -4,9 +4,9 @@
 
 **[Try the demo](https://what-now-by-meridian--site.us-east.modal.run/start)** · **[Watch the video](https://www.youtube.com/watch?v=WzL7ztPKrpU)**
 
-You're a non-EU worker in Finland and you just lost your job. You type one sentence. *What Now?* asks you 2–3 quick tap-to-answer questions, then shows you, in calm, plain language, one thing at a time:
+You're a non-EU worker in Finland and you just lost your job. You type one sentence. *What Now?* asks only what it still needs, one tap-to-answer question at a time: first what the date depends on (like your permit and last day of work), then up to 3 that make your steps specific. Then it shows you, in calm, plain language, one thing at a time:
 
-1. **What we know so far**: the facts we know about you, filled in as you answer, editable any time. Gemini picks up to 3 extra questions that make your steps specific.
+1. **What we know so far**: the facts we know about you, filled in as you answer, editable any time.
 2. **How long you can stay** to look for work. A plain rules engine works this out, not AI, and the rule is checked live against Migri's page.
 3. **Your steps, in order** (Step 1, 2, 3…): the first 3 things to do now, then later steps, then backup permits that could let you stay (Plan B). Each step has a source from migri.fi, kela.fi, infofinland.fi or tyomarkkinatori.fi. Add info to any step and Exa and Gemini update that step and the ones after it.
 4. **Perks and support** picked for your situation by plain rules: always the job search certificate, city discounts and employer hiring incentives (they only "may apply"); then, depending on your answers, your unemployment fund or other Kela support, free language courses and cheaper travel. Each item links to its source, with the page date, and "Why you see these" explains each pick.

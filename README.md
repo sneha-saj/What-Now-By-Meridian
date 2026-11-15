@@ -67,15 +67,17 @@ Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make
 | `POST /voice/speak` | Listen: text in, MP3 out (ElevenLabs, cached 7 days). |
 | `GET /health` | Health check. |
 
-### Deadline rules (`backend/rules.py`)
+### Deadline rules
 
-| Situation | Job-seeking period |
+The rules are data in `backend/countries/finland.py`, and `backend/rules.py` applies them. Both are plain code, no AI.
+
+| Situation | Time to find a new job |
 |---|---|
-| Work-based permit | 3 months from the last day of work |
-| Specialist / EU Blue Card, or >2 years on a work-based permit | 6 months |
-| Permanent resident, student, family-based permit, EU/Finnish citizen | Not applicable |
+| Work-based permit, 2 years or less | 3 months from the last day of work |
+| Specialist / EU Blue Card, or more than 2 years on a work-based permit | 6 months from the last day of work |
+| Permanent, student or family-based permit, EU/EEA citizen | Not applicable |
 
-Simplified for the hackathon. This is not legal advice, and the UI always links to Migri.
+Source: [Migri – Changes to work-based residence permits](https://migri.fi/en/-/changes-to-work-based-residence-permits-protection-period-for-unemployment-and-new-notification-obligation-for-employers?languageId=en_US) (in force since 11 June 2025). The rule is checked daily against this page. Simplified for the hackathon: this is not legal advice, and the app always links to Migri.
 
 ### Layout
 

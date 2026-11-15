@@ -45,19 +45,24 @@ export function AccessCode({ className, initiallyOpen = false, onCancel }: {
     setState("wrong");
   }
 
+  const creditNote = (
+    <div role="note" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-900">
+      <p className="font-bold">A note about live mode</p>
+      <p>Live search and voice use limited API credits. Please keep your test brief so others can try it too.</p>
+    </div>
+  );
+
   return (
     <div className={cx("text-sm", className)}>
       {!open ? (
         <div className="space-y-2">
           <p className="text-ink-soft">You&apos;re in demo mode. Live search and voice are off.</p>
+          {creditNote}
           <button type="button" className="min-h-9 font-bold text-ink underline" onClick={() => setOpen(true)}>Try the live version</button>
         </div>
       ) : (
         <div className="space-y-3">
-          <div role="note" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-900">
-            <p className="font-bold">A note about live mode</p>
-            <p>Live search and voice use limited API credits. Please keep your test brief so others can try it too.</p>
-          </div>
+          {creditNote}
           <form onSubmit={check} className="flex flex-wrap items-center gap-2">
             <label htmlFor={inputId} className="font-bold">Access code</label>
             <input id={inputId} value={text} autoFocus autoComplete="off" onChange={(e) => { setText(e.target.value); setState("idle"); }}

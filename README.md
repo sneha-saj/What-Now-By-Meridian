@@ -2,19 +2,19 @@
 
 **Junction 2026 · Exa challenge**
 
-You're a non-EU worker in Finland and you just lost your job. You type one sentence. *What Now?* asks you 2–3 quick tap-to-answer questions, then shows you:
+**[Try the demo](https://what-now-by-meridian--site.us-east.modal.run/start)** · **[Watch the video](https://www.youtube.com/watch?v=WzL7ztPKrpU)**
+
+You're a non-EU worker in Finland and you just lost your job. You type one sentence. *What Now?* asks you 2–3 quick tap-to-answer questions, then shows you, in calm, plain language, one thing at a time:
 
 1. **What we know so far**: the facts we know about you, filled in as you answer, editable any time. Gemini picks up to 3 extra questions that make your steps specific.
 2. **How long you can stay** to look for work. A plain rules engine works this out, not AI, and the rule is checked live against Migri's page.
-3. **Your steps, in order** (Step 1, 2, 3…), each with a source from migri.fi, kela.fi, infofinland.fi or tyomarkkinatori.fi. Add info to any step and Exa and Gemini update that step and the ones after it.
+3. **Your steps, in order** (Step 1, 2, 3…): the first 3 things to do now, then later steps, then backup permits that could let you stay (Plan B). Each step has a source from migri.fi, kela.fi, infofinland.fi or tyomarkkinatori.fi. Add info to any step and Exa and Gemini update that step and the ones after it.
 4. **Perks and support** picked for your situation by plain rules: always the job search certificate, city discounts and employer hiring incentives (they only "may apply"); then, depending on your answers, your unemployment fund or other Kela support, free language courses and cheaper travel. Each item links to its source, with the page date, and "Why you see these" explains each pick.
 5. **How we know this**: every rule, source and live check in one place.
 6. **Ask**: ask a question in your own words; Exa answers from live sources, official ones for rules.
 7. **Voice**: 🎤 talk instead of typing in any text box, and 🔊 "Listen" to the date and each step.
 
-*Coming soon: **Find your way in**, growing companies and the people who can refer you, with a message ready to send.*
-
-Calm, plain language, one thing at a time.
+*Finland for now. Other countries coming soon.*
 
 ## Run it
 
@@ -57,9 +57,9 @@ Port busy? `make dev FRONTEND_PORT=3100 BACKEND_PORT=8100`. Other targets: `make
 | Endpoint | What it does |
 |---|---|
 | `POST /intake` | Gemini pulls facts out of the sentence. Code works out which facts are still missing and returns up to 3 questions. |
-| `POST /plan` | The rules engine computes the deadline. Exa searches the 4 official domains. Gemini writes 3 steps that cite only those results, and any step without a real source is dropped. Also returns the timeline and Plan B permits. |
+| `POST /plan` | The rules engine computes the deadline. Exa searches the 4 official domains. Gemini writes the steps (first 3 actions, later steps, Plan B permits), citing only those results; any step without a real source is dropped. |
 | `POST /steps/update` (+ `/stream`) | You add info to a step; Exa and Gemini rewrite that step and the ones after it. |
-| `POST /chat` (+ `/stream`) | The guided flow: questions one at a time, then the deadline, then this week's 3 steps. |
+| `POST /chat` (+ `/stream`) | The guided flow: questions one at a time, then the deadline, then your steps. |
 | `POST /opportunities` (+ `/stream`) | Perks and support: Exa searches official and city sites, Gemini sorts the results, code keeps only sourced items. |
 | `POST /ask` | Exa answers a question with citations; rules questions use only the official domains. |
 | `GET /rules` | The deadline rules, their latest live check against Migri, and the sources used. |
